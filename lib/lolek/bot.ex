@@ -28,11 +28,10 @@ defmodule Lolek.Bot do
     answer(context, "Hi! Send me an url and I will try to show media from it.")
   end
 
-  def handle({:text, text, %ExGram.Model.Message{chat: %ExGram.Model.Chat{id: chat_id}}}, context) do
+  def handle({:text, text, %ExGram.Model.Message{chat: %ExGram.Model.Chat{id: chat_id}}}, _context) do
     with {:ok, url} <- Lolek.Url.extract_url(text),
          {:ok, file_path} <- Lolek.Downloader.download(url) do
-      ExGram.send_video!(chat_id, {:file, file_path})
-      answer(context, "Url found: #{url}")
+      send_file(chat_id, file_path)
     else
       {:error, :no_url} ->
         :ok
@@ -40,5 +39,39 @@ defmodule Lolek.Bot do
       {:error, reason} ->
         Logger.warning("Error when downloading: #{inspect(reason)}")
     end
+  end
+
+  defp send_file(chat_id, {:existed, file_path}) do
+    extname = Path.extname(file_path)
+    file_id = Path.basename(file_path, extname)
+
+    case extname do
+      ".mp4" ->
+        ExGram.send_video!(chat_id, file_id)
+
+      _ ->
+        ExGram.send_document!(chat_id, file_id)
+    end
+  end
+
+  defp send_file(chat_id, file_path) do
+    file_id =
+      case Path.extname(file_path) do
+        ".mp4" ->
+          %ExGram.Model.Message{video: %ExGram.Model.Video{file_id: file_id}} =
+            ExGram.send_video!(chat_id, {:file, file_path})
+
+          file_id
+
+        _ ->
+          %ExGram.Model.Message{document: %ExGram.Model.Document{file_id: file_id}} =
+            ExGram.send_document!(chat_id, {:file, file_path})
+
+          file_id
+      end
+
+    file_extension = Path.extname(file_path)
+    new_file_path = file_path |> Path.dirname() |> Path.join(file_id <> file_extension)
+    File.rename(file_path, new_file_path)
   end
 end

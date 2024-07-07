@@ -26,7 +26,8 @@ defmodule Lolek.MixProject do
       {:tesla, "~> 1.11"},
       {:hackney, "~> 1.20"},
       {:jason, ">= 1.4.0"},
-      {:dotenv_config, "~> 2.3"}
+      {:dotenv_config, "~> 2.3"},
+      {:exyt_dlp, "~> 0.1.2"}
     ]
   end
 end

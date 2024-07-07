@@ -27,3 +27,6 @@ lolek-*.tar
 
 # local config
 config/.env
+
+# downloads dev
+downloads/

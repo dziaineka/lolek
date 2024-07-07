@@ -1,6 +1,8 @@
 defmodule Lolek.Bot do
   @bot :lolek
 
+  require Logger
+
   use ExGram.Bot,
     name: @bot,
     setup_commands: true
@@ -26,13 +28,17 @@ defmodule Lolek.Bot do
     answer(context, "Hi! Send me an url and I will try to show media from it.")
   end
 
-  def handle({:text, text, _message}, context) do
-    case Lolek.Url.extract_url(text) do
-      nil ->
+  def handle({:text, text, %ExGram.Model.Message{chat: %ExGram.Model.Chat{id: chat_id}}}, context) do
+    with {:ok, url} <- Lolek.Url.extract_url(text),
+         {:ok, file_path} <- Lolek.Downloader.download(url) do
+      ExGram.send_video!(chat_id, {:file, file_path})
+      answer(context, "Url found: #{url}")
+    else
+      {:error, :no_url} ->
         :ok
 
-      url ->
-        answer(context, "Url found: #{url}")
+      {:error, reason} ->
+        Logger.warning("Error when downloading: #{inspect(reason)}")
     end
   end
 end

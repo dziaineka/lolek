@@ -5,6 +5,10 @@ import Config
   ["config/.env.default", "config/.env"]
 )
 
-config :lolek, :bot_token, :dotenv_config.fetch("LOLEK_BOT_TOKEN")
+config :ex_gram, token: :dotenv_config.get("LOLEK_BOT_TOKEN")
+
+config :lolek, :bot_token, :dotenv_config.get("LOLEK_BOT_TOKEN")
+
+config :lolek, :download_path, :dotenv_config.get("LOLEK_DOWNLOAD_DIR_PATH")
 
 :dotenv_config.stop()

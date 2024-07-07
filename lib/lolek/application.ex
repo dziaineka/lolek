@@ -8,7 +8,7 @@ defmodule Lolek.Application do
   @impl true
   @spec start(any(), any()) :: Supervisor.on_start()
   def start(_type, _args) do
-    {:ok, token} = Application.fetch_env!(:lolek, :bot_token)
+    token = Application.fetch_env!(:lolek, :bot_token)
 
     children = [
       ExGram,

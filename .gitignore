@@ -24,3 +24,6 @@ lolek-*.tar
 
 # Temporary files, for example, from tests.
 /tmp/
+
+# local config
+config/.env

@@ -6,7 +6,10 @@ defmodule Lolek.Application do
   use Application
 
   @impl true
+  @spec start(any(), any()) :: Supervisor.on_start()
   def start(_type, _args) do
+    {:ok, token} = Application.fetch_env!(:lolek, :bot_token)
+
     children = [
       ExGram,
       {Lolek.Bot, [method: :polling, token: token]}

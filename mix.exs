@@ -25,7 +25,8 @@ defmodule Lolek.MixProject do
       {:ex_gram, "~> 0.53"},
       {:tesla, "~> 1.11"},
       {:hackney, "~> 1.20"},
-      {:jason, ">= 1.4.0"}
+      {:jason, ">= 1.4.0"},
+      {:dotenv_config, "~> 2.3"}
     ]
   end
 end

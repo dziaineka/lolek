@@ -8,8 +8,8 @@ defmodule Lolek.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      # Starts a worker by calling: Lolek.Worker.start_link(arg)
-      # {Lolek.Worker, arg}
+      ExGram,
+      {Lolek.Bot, [method: :polling, token: token]}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

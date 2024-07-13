@@ -1,5 +1,6 @@
 defmodule Lolek.Url do
   @url_regex ~r/(:?https|http):\/\/\S+/
+  @allowed_urls ["tiktok.com", "twitter.com", "instagram.com", "coub.com", "x.com"]
 
   @spec extract_url(String.t()) :: {:ok, String.t()} | {:error, atom()}
   def extract_url(text) do
@@ -8,7 +9,13 @@ defmodule Lolek.Url do
         {:error, :no_url}
 
       urls ->
-        {:ok, urls |> List.first() |> List.first()}
+        url = urls |> List.first() |> List.first()
+
+        if Enum.any?(@allowed_urls, &String.contains?(url, &1)) do
+          {:ok, url}
+        else
+          {:error, :no_url}
+        end
     end
   end
 

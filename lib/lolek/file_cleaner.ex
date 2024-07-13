@@ -1,5 +1,6 @@
 defmodule Lolek.FileCleaner do
   use GenServer
+  require Logger
 
   @spec start_link() :: GenServer.on_start()
   def start_link do
@@ -25,7 +26,6 @@ defmodule Lolek.FileCleaner do
     {:noreply, state}
   end
 
-
   defp cleanup_downloads_directory do
     downloads_dir = "/path/to/downloads"
     # 5 GB in bytes
@@ -33,11 +33,11 @@ defmodule Lolek.FileCleaner do
 
     case File.stat(downloads_dir) do
       {:ok, %File.Stat{size: size}} when size > max_size ->
-        IO.puts("Cleaning downloads directory...")
+        Logger.info("Cleaning downloads directory...")
         cleanup_oldest_files(downloads_dir, max_size - size)
 
       _ ->
-        IO.puts("Downloads directory is within the size limit.")
+        Logger.info("Downloads directory is within the size limit.")
     end
   end
 
@@ -55,11 +55,11 @@ defmodule Lolek.FileCleaner do
 
       case File.rm(file_path) do
         :ok ->
-          IO.puts("Removed #{file} (#{file_size} bytes)")
+          Logger.info("Removed #{file} (#{file_size} bytes)")
           acc - file_size
 
         _ ->
-          IO.puts("Failed to remove #{file}")
+          Logger.warning("Failed to remove #{file}")
           acc
       end
     end)

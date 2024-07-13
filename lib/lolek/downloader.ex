@@ -1,47 +1,27 @@
 defmodule Lolek.Downloader do
-  @formats ["mp4", "webm", "m4a"]
+  @downloaded_name "downloaded"
 
-  @spec download(String.t()) ::
-          {:ok, file_path :: String.t() | {:existed, file_path :: String.t()}}
-          | {:error, String.t()}
-  def download(url) do
-    download_path = Application.get_env(:lolek, :download_path)
-    folder_name = Lolek.Url.to_folder_name(url)
-    output_path = Path.join(download_path, folder_name)
-
-    case check_if_already_downloaded(output_path) do
-      {:ok, file_path} ->
-        {:ok, {:existed, file_path}}
-
-      {:error, _} ->
-        download(url, @formats, output_path, nil)
-    end
+  @spec download(String.t(), Lolek.File.file_state()) ::
+          {:ok, Lolek.File.file_state()} | {:error, String.t()}
+  def download(url, {:new_file, output_path}) do
+    download(url, output_path, nil)
   end
 
-  defp check_if_already_downloaded(output_path) do
-    case File.ls(output_path) do
-      {:ok, [file_path | _]} ->
-        {:ok, Path.join(output_path, file_path)}
+  def download(_url, another_file_state) do
+    {:ok, another_file_state}
+  end
 
-      {:ok, []} ->
-        {:error, :empty}
+  defp download(url, output_path, _) do
+    output_file_path = Path.join(output_path, @downloaded_name)
+    command = ~c"yt-dlp -o \"#{output_file_path}\" \"#{url}\""
+
+    case :exec.run(command, [:sync, :stdout, :stderr]) do
+      {:ok, _} ->
+        {:ok, file_path} = Lolek.File.get_file_path_by_pattern(output_path, @downloaded_name)
+        {:ok, {:downloaded, file_path}}
 
       {:error, reason} ->
-        {:error, reason}
+        raise("Error when downloading: #{inspect(reason)}")
     end
-  end
-
-  defp download(url, [format | rest], output_path, _) do
-    case Exyt.download_getting_filename(url, %{output_path: output_path, format: format}) do
-      {:ok, file_path} ->
-        {:ok, file_path}
-
-      {:error, reason} ->
-        download(url, rest, output_path, reason)
-    end
-  end
-
-  defp download(url, [], _, reason) do
-    {:error, "All formats are tried for url: #{url}. Reason: #{reason}"}
   end
 end

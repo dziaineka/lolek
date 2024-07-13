@@ -28,50 +28,61 @@ defmodule Lolek.Bot do
     answer(context, "Hi! Send me an url and I will try to show media from it.")
   end
 
-  def handle({:text, text, %ExGram.Model.Message{chat: %ExGram.Model.Chat{id: chat_id}}}, _context) do
+  def handle(
+        {:text, text, %ExGram.Model.Message{chat: %ExGram.Model.Chat{id: chat_id}}},
+        _context
+      ) do
     with {:ok, url} <- Lolek.Url.extract_url(text),
-         {:ok, file_path} <- Lolek.Downloader.download(url) do
-      send_file(chat_id, file_path)
+         {:ok, folder_path} <- Lolek.File.get_folder_path(url),
+         {:ok, file_state} <- Lolek.File.get_file_state(folder_path),
+         {:ok, file_state} <- Lolek.Downloader.download(url, file_state),
+         {:ok, file_state} <- Lolek.Converter.adapt_to_telegram(file_state),
+         {:ok, file_state} <- send_file(chat_id, file_state) do
+      Lolek.File.move_to_ready_to_telegram(file_state)
     else
       {:error, :no_url} ->
         :ok
 
-      {:error, reason} ->
-        Logger.warning("Error when downloading: #{inspect(reason)}")
+      error ->
+        stacktrace = Process.info(self(), :current_stacktrace)
+
+        Logger.warning(
+          "Error when processing: #{inspect(error)}, stacktrace: #{inspect(stacktrace)}"
+        )
     end
   end
 
-  defp send_file(chat_id, {:existed, file_path}) do
-    extname = Path.extname(file_path)
+  defp send_file(chat_id, {:ready_to_telegram, file_path}) do
+    extname = Path.extname(file_path) |> String.downcase()
     file_id = Path.basename(file_path, extname)
 
     case extname do
       ".mp4" ->
-        ExGram.send_video!(chat_id, file_id)
+        ExGram.send_video!(chat_id, file_id, supports_streaming: true, disable_notification: true)
 
       _ ->
         ExGram.send_document!(chat_id, file_id)
     end
+
+    {:ok, {:ready_to_telegram, file_path}}
   end
 
-  defp send_file(chat_id, file_path) do
-    file_id =
-      case Path.extname(file_path) do
-        ".mp4" ->
-          %ExGram.Model.Message{video: %ExGram.Model.Video{file_id: file_id}} =
-            ExGram.send_video!(chat_id, {:file, file_path})
+  defp send_file(chat_id, {:compressed, file_path}) do
+    case Path.extname(file_path) |> String.downcase() do
+      ".mp4" ->
+        %ExGram.Model.Message{video: %ExGram.Model.Video{file_id: file_id}} =
+          ExGram.send_video!(chat_id, {:file, file_path},
+            supports_streaming: true,
+            disable_notification: true
+          )
 
-          file_id
+        {:ok, {:sent_to_telegram_at_first, file_path, file_id}}
 
-        _ ->
-          %ExGram.Model.Message{document: %ExGram.Model.Document{file_id: file_id}} =
-            ExGram.send_document!(chat_id, {:file, file_path})
+      _ ->
+        %ExGram.Model.Message{document: %ExGram.Model.Document{file_id: file_id}} =
+          ExGram.send_document!(chat_id, {:file, file_path})
 
-          file_id
-      end
-
-    file_extension = Path.extname(file_path)
-    new_file_path = file_path |> Path.dirname() |> Path.join(file_id <> file_extension)
-    File.rename(file_path, new_file_path)
+        {:ok, {:sent_to_telegram_at_first, file_path, file_id}}
+    end
   end
 end

@@ -22,14 +22,17 @@ RUN MIX_ENV=prod mix release
 # Main Docker Image
 FROM alpine:3.20.1
 
+ENV SHELL=sh
+
 RUN adduser -S -H -u 999 -G nogroup lolek
 
 RUN apk upgrade --no-cache
+RUN apk add --no-cache openssl ncurses libstdc++ libgcc ca-certificates
 
 COPY --from=buildcontainer --chmod=a+rX /app/_build/prod/rel/lolek /app
 
 USER 999
 WORKDIR /app
 
-ENTRYPOINT ["/bin/lolek"]
+ENTRYPOINT ["./bin/lolek"]
 CMD ["start"]

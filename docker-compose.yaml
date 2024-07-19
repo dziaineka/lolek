@@ -1,0 +1,6 @@
+services:
+  lolek:
+    build: .
+    env_file:
+      - config/.env.default
+      - config/.env

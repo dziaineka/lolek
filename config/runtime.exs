@@ -1,9 +1,7 @@
 import Config
 
-:dotenv_config.init(
-  Lolek.Config,
-  ["config/.env.default", "config/.env"]
-)
+files = ["config/.env.default", "config/.env"] |> Enum.filter(&File.exists?/1)
+:dotenv_config.init(Lolek.Config, files)
 
 config :ex_gram, token: :dotenv_config.get("LOLEK_BOT_TOKEN")
 

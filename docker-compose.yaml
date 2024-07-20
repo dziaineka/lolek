@@ -1,6 +1,9 @@
 services:
   lolek:
+    container_name: lolek
     build: .
     env_file:
       - config/.env.default
       - config/.env
+    volumes:
+      - ./downloads:/downloads

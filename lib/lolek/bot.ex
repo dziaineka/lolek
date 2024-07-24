@@ -52,6 +52,10 @@ defmodule Lolek.Bot do
     end
   end
 
+  def handle(_, _context) do
+    :ok
+  end
+
   defp send_file(chat_id, {:ready_to_telegram, file_path}) do
     extname = Path.extname(file_path) |> String.downcase()
     file_id = Path.basename(file_path, extname)

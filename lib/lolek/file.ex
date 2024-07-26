@@ -1,4 +1,6 @@
 defmodule Lolek.File do
+  require Logger
+
   @ready_to_telegram "ready_to_telegram"
   @compressed_name "compressed.mp4"
   @downloaded_name "downloaded"
@@ -9,6 +11,37 @@ defmodule Lolek.File do
           | {:downloaded, String.t()}
           | {:new_file, String.t()}
           | {:sent_to_telegram_at_first, file_path :: String.t(), tg_file_id :: String.t()}
+
+  def get_video_width_and_height(file_path) do
+    command =
+      ~c"ffprobe -v error -select_streams v -show_entries stream=width,height -of csv=p=0:s=x #{file_path}"
+
+    case :exec.run(command, [:sync, :stdout, :stderr]) do
+      {:ok, [stdout: [dimensions]]} ->
+        [width, height] =
+          dimensions |> String.trim() |> String.split("x") |> Enum.map(&String.to_integer/1)
+
+        {:ok, {width, height}}
+
+      {:error, reason} ->
+        Logger.warning("Error when determining dimensions: #{inspect(reason)}")
+        :error
+    end
+  end
+
+  def get_video_duration(file_path) do
+    command =
+      ~c"ffprobe -v error -select_streams v:0 -show_entries stream=duration -of default=noprint_wrappers=1:nokey=1 #{file_path}"
+
+    case :exec.run(command, [:sync, :stdout, :stderr]) do
+      {:ok, [stdout: [duration]]} ->
+        duration |> String.trim() |> String.to_float() |> round()
+
+      {:error, reason} ->
+        Logger.warning("Error when determining duration: #{inspect(reason)}")
+        :error
+    end
+  end
 
   def get_file_path_by_pattern(output_path, pattern) do
     case File.ls(output_path) do

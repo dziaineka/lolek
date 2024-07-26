@@ -62,7 +62,7 @@ defmodule Lolek.Bot do
 
     case extname do
       ".mp4" ->
-        ExGram.send_video!(chat_id, file_id, supports_streaming: true, disable_notification: true)
+        ExGram.send_video!(chat_id, file_id, disable_notification: true)
 
       _ ->
         ExGram.send_document!(chat_id, file_id)
@@ -74,11 +74,10 @@ defmodule Lolek.Bot do
   defp send_file(chat_id, {:compressed, file_path}) do
     case Path.extname(file_path) |> String.downcase() do
       ".mp4" ->
+        options = get_options(file_path)
+
         %ExGram.Model.Message{video: %ExGram.Model.Video{file_id: file_id}} =
-          ExGram.send_video!(chat_id, {:file, file_path},
-            supports_streaming: true,
-            disable_notification: true
-          )
+          ExGram.send_video!(chat_id, {:file, file_path}, options)
 
         {:ok, {:sent_to_telegram_at_first, file_path, file_id}}
 
@@ -87,6 +86,27 @@ defmodule Lolek.Bot do
           ExGram.send_document!(chat_id, {:file, file_path})
 
         {:ok, {:sent_to_telegram_at_first, file_path, file_id}}
+    end
+  end
+
+  defp get_options(file_path) do
+    options = [supports_streaming: true, disable_notification: true]
+
+    options =
+      case Lolek.File.get_video_width_and_height(file_path) do
+        {:ok, {width, height}} ->
+          options ++ [width: width, height: height]
+
+        _ ->
+          options
+      end
+
+    case Lolek.File.get_video_duration(file_path) do
+      duration when is_integer(duration) ->
+        options ++ [duration: duration]
+
+      _ ->
+        options
     end
   end
 end

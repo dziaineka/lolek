@@ -1,4 +1,7 @@
 defmodule Lolek.Config do
+  @moduledoc """
+  This module is responsible for providing configuration parser for the dotenv_config library.
+  """
   @behaviour :dotenv_config_parser
 
   @impl true

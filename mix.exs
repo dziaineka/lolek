@@ -27,7 +27,14 @@ defmodule Lolek.MixProject do
       {:hackney, "~> 1.20"},
       {:jason, ">= 1.4.0"},
       {:dotenv_config, "~> 2.3"},
-      {:erlexec, "~> 2.0"}
+      {:erlexec, "~> 2.0"},
+      {:ex_check, "~> 0.16.0", only: [:dev, :test], runtime: false},
+      {:credo, ">= 0.0.0", only: [:dev, :test], runtime: false},
+      {:dialyxir, ">= 0.0.0", only: [:dev, :test], runtime: false},
+      {:doctor, ">= 0.0.0", only: [:dev, :test], runtime: false},
+      {:ex_doc, ">= 0.0.0", only: [:dev, :test], runtime: false},
+      {:gettext, ">= 0.0.0", only: [:dev, :test], runtime: false},
+      {:mix_audit, ">= 0.0.0", only: [:dev, :test], runtime: false}
     ]
   end
 end

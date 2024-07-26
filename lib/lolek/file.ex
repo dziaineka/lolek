@@ -1,4 +1,7 @@
 defmodule Lolek.File do
+  @moduledoc """
+  This module is responsible for file operations.
+  """
   require Logger
 
   @ready_to_telegram "ready_to_telegram"
@@ -12,6 +15,7 @@ defmodule Lolek.File do
           | {:new_file, String.t()}
           | {:sent_to_telegram_at_first, file_path :: String.t(), tg_file_id :: String.t()}
 
+  @spec get_video_width_and_height(String.t()) :: :error | {:ok, {integer(), integer()}}
   def get_video_width_and_height(file_path) do
     command =
       ~c"ffprobe -v error -select_streams v -show_entries stream=width,height -of csv=p=0:s=x #{file_path}"
@@ -29,13 +33,15 @@ defmodule Lolek.File do
     end
   end
 
+  @spec get_video_duration(String.t()) :: :error | {:ok, integer()}
   def get_video_duration(file_path) do
     command =
       ~c"ffprobe -v error -select_streams v:0 -show_entries stream=duration -of default=noprint_wrappers=1:nokey=1 #{file_path}"
 
     case :exec.run(command, [:sync, :stdout, :stderr]) do
-      {:ok, [stdout: [duration]]} ->
-        duration |> String.trim() |> String.to_float() |> round()
+      {:ok, [stdout: [raw_duration]]} ->
+        duration = raw_duration |> String.trim() |> String.to_float() |> round()
+        {:ok, duration}
 
       {:error, reason} ->
         Logger.warning("Error when determining duration: #{inspect(reason)}")
@@ -43,6 +49,8 @@ defmodule Lolek.File do
     end
   end
 
+  @spec get_file_path_by_pattern(String.t(), String.t()) ::
+          {:ok, String.t()} | {:error, String.t()}
   def get_file_path_by_pattern(output_path, pattern) do
     case File.ls(output_path) do
       {:ok, files} -> files
@@ -55,6 +63,7 @@ defmodule Lolek.File do
     end
   end
 
+  @spec move_to_ready_to_telegram(Lolek.File.file_state()) :: :ok | {:error, File.posix()}
   def move_to_ready_to_telegram({:sent_to_telegram_at_first, file_path, file_id}) do
     file_extension = Path.extname(file_path)
 
@@ -75,12 +84,14 @@ defmodule Lolek.File do
     :ok
   end
 
+  @spec get_folder_path(String.t()) :: {:ok, String.t()}
   def get_folder_path(url) do
     download_path = Application.get_env(:lolek, :download_path)
     folder_name = Lolek.Url.to_folder_name(url)
     {:ok, Path.join(download_path, folder_name)}
   end
 
+  @spec get_file_state(String.t()) :: {:ok, Lolek.File.file_state()}
   def get_file_state(folder_path) do
     with :not_ready <- check_if_ready_to_tg(folder_path),
          :not_compressed <- check_if_compressed(folder_path),
@@ -92,32 +103,35 @@ defmodule Lolek.File do
     end
   end
 
+  @spec check_if_ready_to_tg(String.t()) :: :not_ready | {:exists, Lolek.File.file_state()}
   defp check_if_ready_to_tg(folder_path) do
-    with {:ok, [file_name | _]} <- Path.join(folder_path, @ready_to_telegram) |> File.ls() do
-      {
-        :exists,
-        {:ready_to_telegram, Path.join(folder_path, file_name)}
-      }
-    else
+    case Path.join(folder_path, @ready_to_telegram) |> File.ls() do
+      {:ok, [file_name | _]} ->
+        {
+          :exists,
+          {:ready_to_telegram, Path.join(folder_path, file_name)}
+        }
+
       _ ->
         :not_ready
     end
   end
 
+  @spec check_if_compressed(String.t()) :: :not_compressed | {:exists, Lolek.File.file_state()}
   defp check_if_compressed(folder_path) do
     file_path = Path.join(folder_path, @compressed_name)
 
-    with true <- file_path |> File.exists?() do
+    if file_path |> File.exists?() do
       {
         :exists,
         {:compressed, file_path}
       }
     else
-      _ ->
-        :not_compressed
+      :not_compressed
     end
   end
 
+  @spec check_if_downloaded(String.t()) :: :not_downloaded | {:exists, Lolek.File.file_state()}
   defp check_if_downloaded(folder_path) do
     case get_file_path_by_pattern(folder_path, @downloaded_name) do
       {:ok, file_path} ->

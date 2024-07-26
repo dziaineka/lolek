@@ -1,4 +1,7 @@
 defmodule Lolek.Url do
+  @moduledoc """
+  This module is responsible for operations with URLs.
+  """
   @url_regex ~r/(:?https|http):\/\/\S+/
   @allowed_urls ["tiktok.com", "twitter.com", "instagram.com", "coub.com", "x.com"]
 

@@ -1,19 +1,18 @@
 defmodule Lolek.Converter do
+  @moduledoc """
+  This module is responsible for converting files to the required by telegram format.
+  """
   require Logger
   @compressed_name "compressed.mp4"
 
+  @spec adapt_to_telegram(Lolek.File.file_state()) :: {:ok, Lolek.File.file_state()}
   def adapt_to_telegram({:downloaded, file_path}) do
     extname = Path.extname(file_path)
 
     case extname do
       ".mp4" ->
-        case compress_video_to_telegram_size(file_path) do
-          :ok ->
-            delete_original_file(file_path)
-
-          error ->
-            error
-        end
+        :ok = compress_video_to_telegram_size(file_path)
+        delete_original_file(file_path)
 
       _ ->
         delete_original_file(file_path)
@@ -24,6 +23,7 @@ defmodule Lolek.Converter do
     {:ok, another_file_state}
   end
 
+  @spec compress_video_to_telegram_size(String.t()) :: :ok | no_return()
   defp compress_video_to_telegram_size(file_path) do
     file_size = File.stat!(file_path).size
 
@@ -37,6 +37,7 @@ defmodule Lolek.Converter do
     end
   end
 
+  @spec compress_video(String.t()) :: :ok | no_return()
   defp compress_video(file_path) do
     new_file_path = get_compressed_file_path(file_path)
     {video_bitrate, audio_bitrate} = calculate_target_bitrates(file_path)
@@ -60,10 +61,11 @@ defmodule Lolek.Converter do
     end
   end
 
+  @spec calculate_target_bitrates(String.t()) :: {String.t(), String.t()}
   defp calculate_target_bitrates(file_path) do
     max_video_size = Application.fetch_env!(:lolek, :max_video_size_to_send_to_telegram)
     max_audio_size = Application.fetch_env!(:lolek, :max_audio_size_to_send_to_telegram)
-    duration = get_duration(file_path)
+    {:ok, duration} = Lolek.File.get_video_duration(file_path)
 
     video_bitrate = (max_video_size * 8 / duration / 1000) |> round()
     audio_bitrate = (max_audio_size * 8 / duration / 1000) |> round()
@@ -71,10 +73,12 @@ defmodule Lolek.Converter do
     {"#{video_bitrate}k", "#{audio_bitrate}k"}
   end
 
+  @spec get_compressed_file_path(String.t()) :: String.t()
   defp get_compressed_file_path(file_path) do
     file_path |> Path.dirname() |> Path.join(@compressed_name)
   end
 
+  @spec delete_original_file(String.t()) :: {:ok, Lolek.File.file_state()}
   defp delete_original_file(file_path) do
     new_file_path = get_compressed_file_path(file_path)
 
@@ -84,20 +88,6 @@ defmodule Lolek.Converter do
     else
       File.rename(file_path, new_file_path)
       {:ok, {:compressed, new_file_path}}
-    end
-  end
-
-  defp get_duration(file_path) do
-    command =
-      ~c"ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 \"#{file_path}\""
-
-    case :exec.run(command, [:sync, :stdout, :stderr]) do
-      {:ok, [stdout: [raw_duration]]} ->
-        raw_duration |> String.trim() |> String.to_float()
-
-      {:error, error} ->
-        Logger.error("Error when getting duration: #{inspect(error)}")
-        raise("Error when getting duration: #{inspect(error)}")
     end
   end
 end

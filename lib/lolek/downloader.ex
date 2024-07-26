@@ -1,4 +1,7 @@
 defmodule Lolek.Downloader do
+  @moduledoc """
+  This module is responsible for downloading media from the internet.
+  """
   @downloaded_name "downloaded"
 
   @spec download(String.t(), Lolek.File.file_state()) ::

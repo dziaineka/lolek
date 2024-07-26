@@ -1,4 +1,7 @@
 defmodule Lolek.FileCleaner do
+  @moduledoc """
+  This module is responsible for cleaning the downloads directory.
+  """
   use GenServer
   require Logger
 
@@ -7,6 +10,7 @@ defmodule Lolek.FileCleaner do
     GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
   end
 
+  @spec child_spec(any()) :: Supervisor.child_spec()
   def child_spec(_args) do
     %{
       id: __MODULE__,
@@ -26,6 +30,7 @@ defmodule Lolek.FileCleaner do
     {:noreply, state}
   end
 
+  @spec cleanup_downloads_directory() :: :ok
   defp cleanup_downloads_directory do
     downloads_dir = "/path/to/downloads"
     # 5 GB in bytes
@@ -35,12 +40,14 @@ defmodule Lolek.FileCleaner do
       {:ok, %File.Stat{size: size}} when size > max_size ->
         Logger.info("Cleaning downloads directory...")
         cleanup_oldest_files(downloads_dir, max_size - size)
+        :ok
 
       _ ->
         Logger.info("Downloads directory is within the size limit.")
     end
   end
 
+  @spec cleanup_oldest_files(String.t(), integer()) :: integer()
   defp cleanup_oldest_files(dir, space_to_free) do
     files =
       dir

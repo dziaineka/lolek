@@ -12,7 +12,7 @@ defmodule Lolek.Application do
 
     children = [
       ExGram,
-      {Lolek.Bot, [method: :polling, token: token]},
+      {Lolek.Handler, [method: :polling, token: token]},
       Lolek.FileCleaner
     ]
 

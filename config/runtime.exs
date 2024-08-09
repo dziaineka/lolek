@@ -21,4 +21,12 @@ config :lolek,
        :max_audio_size_to_send_to_telegram,
        :dotenv_config.get("LOLEK_MAX_AUDIO_SIZE_TO_SEND_TO_TELEGRAM")
 
+config :lolek,
+       :max_file_size_to_compress,
+       :dotenv_config.get("LOLEK_MAX_FILE_SIZE_TO_COMPRESS")
+
+config :lolek,
+       :max_duration_to_compress,
+       :dotenv_config.get("LOLEK_MAX_DURATION_TO_COMPRESS")
+
 :dotenv_config.stop()

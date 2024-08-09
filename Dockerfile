@@ -1,5 +1,5 @@
 #### Builder
-FROM hexpm/elixir:1.17.2-erlang-27.0-alpine-3.20.1 as buildcontainer
+FROM hexpm/elixir:1.17.2-erlang-27.0-alpine-3.20.1 AS buildcontainer
 
 RUN mkdir /ytdlp
 WORKDIR /ytdlp

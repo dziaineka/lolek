@@ -3,7 +3,6 @@ defmodule Lolek.Url do
   This module is responsible for operations with URLs.
   """
   @url_regex ~r/(:?https|http):\/\/\S+/
-  @allowed_urls ["tiktok.com", "twitter.com", "instagram.com", "coub.com", "x.com"]
 
   @spec extract_url(String.t()) :: {:ok, String.t()} | {:error, atom()}
   def extract_url(text) do
@@ -14,7 +13,9 @@ defmodule Lolek.Url do
       urls ->
         url = urls |> List.first() |> List.first()
 
-        if Enum.any?(@allowed_urls, &String.contains?(url, &1)) do
+        allowed_urls_regex = Application.fetch_env!(:lolek, :allowed_urls_regex)
+
+        if Regex.match?(~r/#{allowed_urls_regex}/, url) do
           {:ok, url}
         else
           {:error, :no_url}

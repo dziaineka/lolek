@@ -29,4 +29,8 @@ config :lolek,
        :max_duration_to_compress,
        :dotenv_config.get("LOLEK_MAX_DURATION_TO_COMPRESS")
 
+config :lolek,
+       :allowed_urls_regex,
+       :dotenv_config.get("LOLEK_ALLOWED_URLS_REGEX")
+
 :dotenv_config.stop()

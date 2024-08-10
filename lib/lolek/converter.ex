@@ -5,7 +5,8 @@ defmodule Lolek.Converter do
   require Logger
   @compressed_name "compressed.mp4"
 
-  @spec adapt_to_telegram(Lolek.File.file_state()) :: {:ok, Lolek.File.file_state()} | {:error, atom()}
+  @spec adapt_to_telegram(Lolek.File.file_state()) ::
+          {:ok, Lolek.File.file_state()} | {:error, atom()}
   def adapt_to_telegram({:downloaded, file_path}) do
     with :ok <- compress_video_to_telegram_size(file_path) do
       replace_original_file_with_compressed(file_path)

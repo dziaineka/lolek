@@ -46,10 +46,7 @@ defmodule Lolek.Handler do
          {:ok, file_state} <- Lolek.send_file(chat_id, file_state) do
       Lolek.File.move_to_ready_to_telegram(file_state)
     else
-      {:error, :too_big_media} ->
-        :ok
-
-      {:error, :no_url} ->
+      {:error, _} ->
         :ok
     end
   end

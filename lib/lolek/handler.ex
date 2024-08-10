@@ -34,9 +34,9 @@ defmodule Lolek.Handler do
         {
           :text,
           text,
-          %ExGram.Model.Message{chat: %ExGram.Model.Chat{id: chat_id}, message_id: message_id}
+          %ExGram.Model.Message{chat: %ExGram.Model.Chat{id: chat_id}}
         },
-        %ExGram.Cnt{} = context
+        _context
       ) do
     with {:ok, url} <- Lolek.Url.extract_url(text),
          {:ok, folder_path} <- Lolek.File.get_folder_path(url),
@@ -47,22 +47,10 @@ defmodule Lolek.Handler do
       Lolek.File.move_to_ready_to_telegram(file_state)
     else
       {:error, :too_big_media} ->
-        answer(
-          context,
-          "The file is too big to be sent to Telegram.",
-          reply_to_message_id: message_id,
-          disable_notification: true
-        )
+        :ok
 
       {:error, :no_url} ->
         :ok
-
-        # error ->
-        #   stacktrace = Process.info(self(), :current_stacktrace)
-
-        #   Logger.warning(
-        #     "Error when processing: #{inspect(error)}, stacktrace: #{inspect(stacktrace)}"
-        #   )
     end
   end
 

@@ -1,5 +1,5 @@
 #### Builder
-FROM hexpm/elixir:1.17.2-erlang-27.0-alpine-3.20.1 AS buildcontainer
+FROM hexpm/elixir:1.17.3-erlang-27.1-alpine-3.20.3 AS buildcontainer
 
 RUN mkdir /ytdlp
 WORKDIR /ytdlp
@@ -50,7 +50,7 @@ COPY lib ./lib
 RUN MIX_ENV=prod mix release
 
 # Main Docker Image
-FROM alpine:3.20.1
+FROM alpine:3.20.3
 
 ENV SHELL=/bin/sh
 

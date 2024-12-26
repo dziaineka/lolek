@@ -30,3 +30,6 @@ config/.env
 
 # downloads dev
 downloads/
+
+# vscode settings
+.vscode

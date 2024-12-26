@@ -2,6 +2,7 @@ defmodule Lolek.Downloader do
   @moduledoc """
   This module is responsible for downloading media from the internet.
   """
+  require Logger
   @downloaded_name "downloaded"
 
   @spec download(String.t(), Lolek.File.file_state()) ::
@@ -30,6 +31,7 @@ defmodule Lolek.Downloader do
 
       {:error, reason} ->
         if tries_done < max_tries do
+          Logger.warning("Error when downloading url: #{url}; reason: #{inspect(reason)}. Retrying...")
           Process.sleep(pause)
           download(url, output_path, tries_done + 1, max_tries, pause * 2, max_pause)
         else

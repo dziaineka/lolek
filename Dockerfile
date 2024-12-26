@@ -1,5 +1,5 @@
 #### Builder
-FROM hexpm/elixir:1.17.3-erlang-27.1-alpine-3.20.3 AS buildcontainer
+FROM hexpm/elixir:1.18.0-erlang-27.2-alpine-3.21.0 AS buildcontainer
 
 RUN mkdir /ytdlp
 WORKDIR /ytdlp
@@ -15,7 +15,7 @@ RUN ARCH=$(apk --print-arch) && \
   echo "$ARCH" > /tmp/arch_env
 
 # yt-dlp source (https://github.com/yt-dlp/yt-dlp)
-ENV BUILD_VERSION=2024.08.06
+ENV BUILD_VERSION=2024.12.23
 RUN wget https://github.com/yt-dlp/yt-dlp/releases/download/${BUILD_VERSION}/SHA2-256SUMS \
 && SHA256_SUM=`grep 'yt-dlp$' SHA2-256SUMS` \
 && wget https://github.com/yt-dlp/yt-dlp/releases/download/${BUILD_VERSION}/yt-dlp \
@@ -50,7 +50,7 @@ COPY lib ./lib
 RUN MIX_ENV=prod mix release
 
 # Main Docker Image
-FROM alpine:3.20.3
+FROM alpine:3.21.0
 
 ENV SHELL=/bin/sh
 
@@ -68,7 +68,7 @@ RUN adduser -S -H -u 999 -G nogroup lolek
 RUN apk upgrade --no-cache
 RUN apk add --no-cache openssl ncurses libstdc++ libgcc ca-certificates python3
 
-COPY --from=buildcontainer --chmod=a+rX /app/_build/prod/rel/lolek /app
+COPY --from=buildcontainer --chmod=755 /app/_build/prod/rel/lolek /app
 
 # create downloads directory
 RUN mkdir /downloads && chown -R lolek:nogroup /downloads

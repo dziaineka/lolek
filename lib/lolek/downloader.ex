@@ -7,14 +7,19 @@ defmodule Lolek.Downloader do
   @spec download(String.t(), Lolek.File.file_state()) ::
           {:ok, Lolek.File.file_state()} | {:error, String.t()}
   def download(url, {:new_file, output_path}) do
-    download(url, output_path, nil)
+    max_tries = Application.get_env(:lolek, :max_download_tries)
+    pause = Application.get_env(:lolek, :start_download_pause)
+    max_pause = Application.get_env(:lolek, :max_download_pause)
+    download(url, output_path, 0, max_tries, pause, max_pause)
   end
 
   def download(_url, another_file_state) do
     {:ok, another_file_state}
   end
 
-  defp download(url, output_path, _) do
+  defp download(url, output_path, tries_done, max_tries, pause, max_pause) do
+    pause = min(pause, max_pause)
+
     output_file_path = Path.join(output_path, @downloaded_name)
     command = ~c"yt-dlp -o \"#{output_file_path}\" \"#{url}\""
 
@@ -24,7 +29,12 @@ defmodule Lolek.Downloader do
         {:ok, {:downloaded, file_path}}
 
       {:error, reason} ->
-        raise("Error when downloading: #{inspect(reason)}")
+        if tries_done < max_tries do
+          Process.sleep(pause)
+          download(url, output_path, tries_done + 1, max_tries, pause * 2, max_pause)
+        else
+          raise("Error when downloading url: #{url}; reason: #{inspect(reason)}")
+        end
     end
   end
 end

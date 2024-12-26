@@ -33,4 +33,16 @@ config :lolek,
        :allowed_urls_regex,
        :dotenv_config.get("LOLEK_ALLOWED_URLS_REGEX")
 
+config :lolek,
+       :max_download_tries,
+       :dotenv_config.get("LOLEK_MAX_DOWNLOAD_TRIES")
+
+config :lolek,
+       :start_download_pause,
+       :dotenv_config.get("LOLEK_START_DOWNLOAD_PAUSE")
+
+config :lolek,
+       :max_download_pause,
+       :dotenv_config.get("LOLEK_MAX_DOWNLOAD_PAUSE")
+
 :dotenv_config.stop()

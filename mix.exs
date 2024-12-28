@@ -22,7 +22,7 @@ defmodule Lolek.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:ex_gram, "~> 0.53"},
+      {:ex_gram, "0.54.0"},
       {:tesla, "~> 1.11"},
       {:hackney, "~> 1.20"},
       {:jason, ">= 1.4.0"},

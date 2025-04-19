@@ -1,5 +1,5 @@
 #### Builder
-FROM hexpm/elixir:1.18.1-erlang-27.2-alpine-3.21.0 AS buildcontainer
+FROM hexpm/elixir:1.18.3-erlang-27.3.3-alpine-3.21.3 AS buildcontainer
 
 RUN mkdir /ytdlp
 WORKDIR /ytdlp
@@ -15,7 +15,7 @@ RUN ARCH=$(apk --print-arch) && \
   echo "$ARCH" > /tmp/arch_env
 
 # yt-dlp source (https://github.com/yt-dlp/yt-dlp)
-ENV BUILD_VERSION=2024.12.23
+ENV BUILD_VERSION=2025.03.31
 RUN wget https://github.com/yt-dlp/yt-dlp/releases/download/${BUILD_VERSION}/SHA2-256SUMS \
 && SHA256_SUM=`grep 'yt-dlp$' SHA2-256SUMS` \
 && wget https://github.com/yt-dlp/yt-dlp/releases/download/${BUILD_VERSION}/yt-dlp \
@@ -50,7 +50,7 @@ COPY lib ./lib
 RUN MIX_ENV=prod mix release
 
 # Main Docker Image
-FROM alpine:3.21.0
+FROM alpine:3.21.3
 
 ENV SHELL=/bin/sh
 

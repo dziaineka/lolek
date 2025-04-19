@@ -20,15 +20,25 @@ defmodule Lolek.File do
     command =
       ~c"ffprobe -v error -select_streams v -show_entries stream=width,height -of csv=p=0:s=x #{file_path}"
 
-    case :exec.run(command, [:sync, :stdout, :stderr]) do
-      {:ok, [stdout: [dimensions]]} ->
-        [width, height] =
-          dimensions |> String.trim() |> String.split("x") |> Enum.map(&String.to_integer/1)
-
-        {:ok, {width, height}}
-
+    with {:ok, [stdout: [dimensions]]} <- :exec.run(command, [:sync, :stdout, :stderr]),
+         [_, width_str, height_str] <- Regex.run(~r/(\d+)x(\d+)/, dimensions) do
+      width = String.to_integer(width_str)
+      height = String.to_integer(height_str)
+      {:ok, {width, height}}
+    else
       {:error, reason} ->
-        Logger.warning("Error when determining dimensions: #{inspect(reason)}")
+        Logger.warning("Error running ffprobe: #{inspect(reason)}")
+        :error
+
+      # Regex.run failed
+      nil ->
+        # We don't have `dimensions` here easily, log a general message
+        Logger.warning("Could not parse dimensions from ffprobe output.")
+        :error
+
+      # :exec.run succeeded but output format was unexpected
+      other_exec_ok_result ->
+        Logger.warning("Unexpected ffprobe output format: #{inspect(other_exec_ok_result)}")
         :error
     end
   end

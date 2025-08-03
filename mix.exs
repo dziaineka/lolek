@@ -22,13 +22,13 @@ defmodule Lolek.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:ex_gram, "0.54.0"},
-      {:tesla, "~> 1.11"},
-      {:hackney, "~> 1.20"},
-      {:jason, ">= 1.4.0"},
-      {:dotenv_config, "~> 2.3"},
-      {:erlexec, "~> 2.0"},
-      {:ex_check, "~> 0.16.0", only: [:dev, :test], runtime: false},
+      {:ex_gram, "0.56.0"},
+      {:tesla, "1.15.3"},
+      {:hackney, "1.25.0"},
+      {:jason, "1.4.4"},
+      {:dotenv_config, "2.3.3"},
+      {:erlexec, "2.2.1"},
+      {:ex_check, "0.16.0", only: [:dev, :test], runtime: false},
       {:credo, ">= 0.0.0", only: [:dev, :test], runtime: false},
       {:dialyxir, ">= 0.0.0", only: [:dev, :test], runtime: false},
       {:doctor, ">= 0.0.0", only: [:dev, :test], runtime: false},

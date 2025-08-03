@@ -41,6 +41,10 @@ defmodule Lolek.File do
         Logger.warning("Unexpected ffprobe output format: #{inspect(other_exec_ok_result)}")
         :error
     end
+  rescue
+    error ->
+      Logger.warning("Exception when getting video dimensions: #{inspect(error)}")
+      :error
   end
 
   @spec get_video_duration(String.t()) :: :error | {:ok, integer()}
@@ -57,6 +61,10 @@ defmodule Lolek.File do
         Logger.warning("Error when determining duration: #{inspect(reason)}")
         :error
     end
+  rescue
+    error ->
+      Logger.warning("Exception when determining duration: #{inspect(error)}")
+      :error
   end
 
   @spec get_file_path_by_pattern(String.t(), String.t()) ::

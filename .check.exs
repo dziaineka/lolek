@@ -29,6 +29,6 @@
     # {:my_task, "mix my_task", env: %{"MIX_ENV" => "prod"}},
     # {:my_tool, ["my_tool", "arg with spaces"]},
 
-    {:outdated_deps, "mix hex.outdated", env: %{"MIX_ENV" => "dev"}}
+    {:hex_outdated, "mix hex.outdated", order: 999}
   ]
 ]

@@ -23,7 +23,7 @@ defmodule Lolek.Converter do
 
     case extname do
       ".mp4" ->
-        file_size = File.stat!(file_path).size
+        %File.Stat{size: file_size} = File.stat!(file_path)
         {:ok, duration} = Lolek.File.get_video_duration(file_path)
 
         max_file_size_to_send_to_telegram =

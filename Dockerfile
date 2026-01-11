@@ -15,7 +15,7 @@ RUN ARCH=$(apk --print-arch) && \
   echo "$ARCH" > /tmp/arch_env
 
 # yt-dlp source (https://github.com/yt-dlp/yt-dlp)
-ENV BUILD_VERSION=2025.07.21
+ENV BUILD_VERSION=2025.12.08
 RUN wget https://github.com/yt-dlp/yt-dlp/releases/download/${BUILD_VERSION}/SHA2-256SUMS \
 && SHA256_SUM=`grep 'yt-dlp$' SHA2-256SUMS` \
 && wget https://github.com/yt-dlp/yt-dlp/releases/download/${BUILD_VERSION}/yt-dlp \

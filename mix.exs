@@ -5,7 +5,7 @@ defmodule Lolek.MixProject do
     [
       app: :lolek,
       version: "1.3.2",
-      elixir: "1.18.4",
+      elixir: "1.19.5",
       start_permanent: Mix.env() == :prod,
       deps: deps()
     ]
@@ -22,12 +22,12 @@ defmodule Lolek.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:ex_gram, "0.56.0"},
+      {:ex_gram, "0.57.0"},
       {:tesla, "1.15.3"},
       {:hackney, "1.25.0"},
       {:jason, "1.4.4"},
       {:dotenv_config, "2.3.3"},
-      {:erlexec, "2.2.1"},
+      {:erlexec, "2.2.2"},
       {:ex_check, "0.16.0", only: [:dev, :test], runtime: false},
       {:credo, ">= 0.0.0", only: [:dev, :test], runtime: false},
       {:dialyxir, ">= 0.0.0", only: [:dev, :test], runtime: false},

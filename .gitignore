@@ -33,3 +33,6 @@ downloads/
 
 # vscode settings
 .vscode
+
+# elixir ls
+.expert

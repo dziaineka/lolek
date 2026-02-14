@@ -22,7 +22,9 @@ defmodule Lolek.Downloader do
     pause = min(pause, max_pause)
 
     output_file_path = Path.join(output_path, @downloaded_name)
-    command = ~c"yt-dlp -o \"#{output_file_path}\" \"#{url}\""
+
+    command =
+      ~c"yt-dlp --format-sort '+vcodec:h264,+acodec:aac' --recode-video mp4 -o \"#{output_file_path}\" \"#{url}\""
 
     case :exec.run(command, [:sync, :stdout, :stderr]) do
       {:ok, _} ->

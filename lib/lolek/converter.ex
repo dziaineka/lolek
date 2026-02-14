@@ -35,7 +35,12 @@ defmodule Lolek.Converter do
         max_duration_to_compress =
           Application.fetch_env!(:lolek, :max_duration_to_compress)
 
+        needs_codec_conversion = not h264_codec?(file_path)
+
         cond do
+          needs_codec_conversion and duration <= max_duration_to_compress ->
+            convert_to_h264(file_path)
+
           file_size <= max_file_size_to_send_to_telegram ->
             :ok
 
@@ -61,7 +66,7 @@ defmodule Lolek.Converter do
     log_path = Path.join("/tmp", log_name)
 
     command =
-      ~c"ffmpeg -y -i \"#{file_path}\" -c:v libx264 -b:v \"#{video_bitrate}\" -pass 1 -passlogfile #{log_path} -an -f mp4 /dev/null && ffmpeg -i \"#{file_path}\" -c:v libx264 -b:v \"#{video_bitrate}\" -pass 2 -passlogfile #{log_path} -c:a aac -b:a \"#{audio_bitrate}\" \"#{new_file_path}\""
+      ~c"ffmpeg -y -i \"#{file_path}\" -c:v libx264 -profile:v baseline -level 3.0 -pix_fmt yuv420p -b:v \"#{video_bitrate}\" -pass 1 -passlogfile #{log_path} -an -f mp4 /dev/null && ffmpeg -i \"#{file_path}\" -c:v libx264 -profile:v baseline -level 3.0 -pix_fmt yuv420p -b:v \"#{video_bitrate}\" -pass 2 -passlogfile #{log_path} -c:a aac -b:a \"#{audio_bitrate}\" -movflags +faststart \"#{new_file_path}\""
 
     case :exec.run(command, [:sync, :stdout, :stderr]) do
       {:ok, result} ->
@@ -72,6 +77,39 @@ defmodule Lolek.Converter do
       {:error, error} ->
         Logger.error("Error when compressing video: #{inspect(error)}")
         raise("Error when compressing video: #{inspect(error)}")
+    end
+  end
+
+  @spec convert_to_h264(String.t()) :: :ok | no_return()
+  defp convert_to_h264(file_path) do
+    new_file_path = get_compressed_file_path(file_path)
+
+    command =
+      ~c"ffmpeg -y -i \"#{file_path}\" -c:v libx264 -profile:v baseline -level 3.0 -pix_fmt yuv420p -crf 23 -c:a aac -b:a 128k -movflags +faststart \"#{new_file_path}\""
+
+    case :exec.run(command, [:sync, :stdout, :stderr]) do
+      {:ok, result} ->
+        Logger.info("Converted video to H.264: #{inspect(result)}")
+        :ok
+
+      {:error, error} ->
+        Logger.error("Error when converting video to H.264: #{inspect(error)}")
+        raise("Error when converting video to H.264: #{inspect(error)}")
+    end
+  end
+
+  @spec h264_codec?(String.t()) :: boolean()
+  defp h264_codec?(file_path) do
+    command =
+      ~c"ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 \"#{file_path}\""
+
+    case :exec.run(command, [:sync, :stdout, :stderr]) do
+      {:ok, [{:stdout, codec_output}, {:stderr, _}]} ->
+        codec = codec_output |> to_string() |> String.trim()
+        codec == "h264"
+
+      _ ->
+        false
     end
   end
 

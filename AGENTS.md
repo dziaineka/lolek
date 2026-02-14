@@ -120,13 +120,6 @@ end
 - **Atoms**: snake_case (e.g., `:new_file`, `:downloaded`)
 - **Files**: snake_case matching module name (e.g., `file_cleaner.ex` for `Lolek.FileCleaner`)
 
-### 4. Formatting
-
-- Use `mix format` before committing (configured via `.formatter.exs`)
-- 2-space indentation
-- No trailing whitespace
-- Blank line at end of file
-
 ### 5. Imports & Aliases
 
 - Use `require Logger` for logging functions
@@ -146,50 +139,6 @@ defmodule Lolek.Example do
 end
 ```
 
-### 6. Error Handling
-
-- Use tagged tuples: `{:ok, result}` or `{:error, reason}`
-- Use `with` statements for pipeline error handling
-- Use `case` for branching logic
-- Use pattern matching extensively
-- Use `raise` only for unrecoverable errors
-- Log errors with appropriate level (`Logger.warning/error`)
-
-```elixir
-def handle({:text, text, %{chat: %{id: chat_id}}}, _context) do
-  with {:ok, url} <- Url.extract_url(text),
-       {:ok, folder_path} <- File.get_folder_path(url),
-       {:ok, file_state} <- Downloader.download(url, file_state) do
-    {:ok, file_state}
-  else
-    {:error, _} -> :ok
-  end
-end
-```
-
-### 7. Logging
-
-- Use `Logger.info/1` for normal operations
-- Use `Logger.warning/1` for recoverable errors
-- Use `Logger.error/1` for serious errors
-- Include context in log messages (URLs, file paths, reasons)
-
-```elixir
-Logger.warning("Error when downloading url: #{url}; reason: #{inspect(reason)}. Retrying...")
-```
-
-### 8. Pattern Matching
-
-- Use pattern matching in function heads for state machines
-- Leverage tagged tuples for state transitions
-- Use `_` prefix for unused variables
-
-```elixir
-def download(_url, {:downloaded, _} = file_state), do: {:ok, file_state}
-def download(_url, {:compressed, _} = file_state), do: {:ok, file_state}
-def download(url, {:new_file, output_path}), do: download_impl(url, output_path)
-```
-
 ## Architecture Patterns
 
 ### State Machine Pattern
@@ -199,10 +148,6 @@ File processing uses tagged tuples for state transitions:
 ```
 :new_file → :downloaded → :compressed → :sent_to_telegram_at_first → :ready_to_telegram
 ```
-
-### Pipeline Pattern
-
-Use `with` statements for sequential operations with error handling.
 
 ### Supervised Processes
 
@@ -223,6 +168,7 @@ Key environment variables:
 
 - `LOLEK_BOT_TOKEN` - Telegram bot token (required)
 - `LOLEK_DOWNLOAD_DIR_PATH` - Download directory (default: `./downloads`)
+- `LOLEK_USE_HW_ENCODER` - Enable hardware video encoding (default: `false`)
 - Various size/duration limits for compression logic
 
 ## External Dependencies
@@ -231,25 +177,13 @@ Key environment variables:
 - **ffmpeg/ffprobe**: Video processing and analysis
 - **Python3**: Required by yt-dlp
 
-All available in Docker container; must be installed separately for local development.
+All available in Docker container; local development runs via Docker Compose.
 
 ## Testing Notes
 
-- Tests use ExUnit (Elixir's built-in framework)
-- Doctests are enabled and run with `mix test`
-- Test files end in `_test.exs`
-- Test helper at `test/test_helper.exs`
-
-## Common Pitfalls
-
-1. **Forgetting type specs**: Doctor enforces 100% coverage - add `@spec` to all public functions
-2. **Missing module docs**: All modules need `@moduledoc`
-3. **Not running `mix format`**: Always format before committing
-4. **Ignoring dialyzer warnings**: Run `mix dialyzer` to catch type errors
-5. **Using charlists vs strings**: Erlang commands need charlists (e.g., `~c"command"`)
+No tests currently.
 
 ## Git Workflow
 
 - Run `mix check` before committing to catch issues early
-- First `mix dialyzer` run builds PLT (5-10 min), subsequent runs are fast
 - All checks must pass for clean commits

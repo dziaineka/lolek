@@ -20,25 +20,28 @@ defmodule Lolek.File do
     command =
       ~c"ffprobe -v error -select_streams v -show_entries stream=width,height -of csv=p=0:s=x #{file_path}"
 
-    with {:ok, [stdout: [dimensions]]} <- :exec.run(command, [:sync, :stdout, :stderr]),
-         [_, width_str, height_str] <- Regex.run(~r/(\d+)x(\d+)/, dimensions) do
-      width = String.to_integer(width_str)
-      height = String.to_integer(height_str)
-      {:ok, {width, height}}
-    else
+    case :exec.run(command, [:sync, :stdout, :stderr]) do
+      {:ok, result} ->
+        # Extract stdout regardless of stderr warnings
+        stdout_data = Keyword.get(result, :stdout, [])
+        dimensions = stdout_data |> List.first() |> to_string()
+
+        case Regex.run(~r/(\d+)x(\d+)/, dimensions) do
+          [_, width_str, height_str] ->
+            width = String.to_integer(width_str)
+            height = String.to_integer(height_str)
+            {:ok, {width, height}}
+
+          nil ->
+            Logger.warning(
+              "Could not parse dimensions from ffprobe output: #{inspect(dimensions)}"
+            )
+
+            :error
+        end
+
       {:error, reason} ->
         Logger.warning("Error running ffprobe: #{inspect(reason)}")
-        :error
-
-      # Regex.run failed
-      nil ->
-        # We don't have `dimensions` here easily, log a general message
-        Logger.warning("Could not parse dimensions from ffprobe output.")
-        :error
-
-      # :exec.run succeeded but output format was unexpected
-      other_exec_ok_result ->
-        Logger.warning("Unexpected ffprobe output format: #{inspect(other_exec_ok_result)}")
         :error
     end
   rescue
@@ -53,9 +56,22 @@ defmodule Lolek.File do
       ~c"ffprobe -v error -select_streams v:0 -show_entries stream=duration -of default=noprint_wrappers=1:nokey=1 #{file_path}"
 
     case :exec.run(command, [:sync, :stdout, :stderr]) do
-      {:ok, [stdout: [raw_duration]]} ->
-        duration = raw_duration |> String.trim() |> String.to_float() |> round()
-        {:ok, duration}
+      {:ok, result} ->
+        # Extract stdout regardless of stderr warnings
+        stdout_data = Keyword.get(result, :stdout, [])
+        raw_duration = stdout_data |> List.first() |> to_string() |> String.trim()
+
+        case Float.parse(raw_duration) do
+          {duration_float, _} ->
+            {:ok, round(duration_float)}
+
+          :error ->
+            Logger.warning(
+              "Could not parse duration from ffprobe output: #{inspect(raw_duration)}"
+            )
+
+            :error
+        end
 
       {:error, reason} ->
         Logger.warning("Error when determining duration: #{inspect(reason)}")

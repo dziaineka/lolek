@@ -1,18 +1,13 @@
 #### Builder
-FROM hexpm/elixir:1.19.5-erlang-28.3-alpine-3.23.2 AS buildcontainer
+FROM hexpm/elixir:1.19.5-erlang-28.3-debian-trixie-20260202-slim AS buildcontainer
 
 RUN mkdir /ytdlp
 WORKDIR /ytdlp
 
-# Determine the architecture and set it as an environment variable
-RUN ARCH=$(apk --print-arch) && \
-  case $ARCH in \
-    x86) ARCH=amd64;; \
-    armhf) ARCH=armhf;; \
-    aarch64) ARCH=arm64;; \
-    *) echo "Unsupported architecture: $ARCH"; exit 1;; \
-  esac && \
-  echo "$ARCH" > /tmp/arch_env
+# install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  wget git gnupg make gcc g++ libc-dev \
+  && rm -rf /var/lib/apt/lists/*
 
 # yt-dlp source (https://github.com/yt-dlp/yt-dlp)
 ENV BUILD_VERSION=2025.12.08
@@ -20,19 +15,6 @@ RUN wget https://github.com/yt-dlp/yt-dlp/releases/download/${BUILD_VERSION}/SHA
 && SHA256_SUM=`grep 'yt-dlp$' SHA2-256SUMS` \
 && wget https://github.com/yt-dlp/yt-dlp/releases/download/${BUILD_VERSION}/yt-dlp \
 && echo "${SHA256_SUM}" | sha256sum -c
-
-# ffmpeg static source (https://johnvansickle.com/ffmpeg/)
-RUN ARCH=$(cat /tmp/arch_env) \
-&& wget https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-${ARCH}-static.tar.xz \
-&& wget https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-${ARCH}-static.tar.xz.md5 \
-&& md5sum -c ffmpeg-release-${ARCH}-static.tar.xz.md5 \
-&& tar Jxf ffmpeg-release-${ARCH}-static.tar.xz
-
-# rename extracted ffmpeg directory
-RUN mv ffmpeg-*-static ffmpeg-amd64-static
-
-# install build dependencies
-RUN apk add --no-cache git gnupg make gcc g++ libc-dev
 
 RUN mkdir /app
 WORKDIR /app
@@ -50,23 +32,26 @@ COPY lib ./lib
 RUN MIX_ENV=prod mix release
 
 # Main Docker Image
-FROM alpine:3.23.2
+# Using Debian for better V4L2 hardware encoder support on Raspberry Pi
+FROM debian:trixie-20260202-slim
 
-ENV SHELL=/bin/sh
+ENV SHELL=/bin/bash
 
-# bring in the yt-dlp and ffmpeg
-
-COPY --from=buildcontainer /ytdlp/ffmpeg-amd64-static/ffmpeg /usr/local/bin
-COPY --from=buildcontainer /ytdlp/ffmpeg-amd64-static/ffprobe /usr/local/bin
-# COPY ./yt-dlp.conf /etc/yt-dlp.conf
+# Install ffmpeg with V4L2 M2M support (hardware encoding for RPi)
+# Debian's ffmpeg package includes v4l2_m2m encoder support
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  ffmpeg \
+  python3 \
+  ca-certificates \
+  openssl \
+  libncurses6 \
+  libstdc++6 \
+  && rm -rf /var/lib/apt/lists/*
 
 COPY --from=buildcontainer /ytdlp/yt-dlp /usr/local/bin
 RUN chmod 755 /usr/local/bin/yt-dlp
 
-RUN adduser -S -H -u 999 -G nogroup lolek
-
-RUN apk upgrade --no-cache
-RUN apk add --no-cache openssl ncurses libstdc++ libgcc ca-certificates python3
+RUN useradd -r -u 999 -s /usr/sbin/nologin lolek
 
 COPY --from=buildcontainer --chmod=755 /app/_build/prod/rel/lolek /app
 

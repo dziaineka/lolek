@@ -13,3 +13,6 @@ build:
 push:
 	@docker push ${IMG}
 	@docker push ${LATEST}
+
+check:
+	mix check

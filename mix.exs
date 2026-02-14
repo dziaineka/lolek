@@ -23,8 +23,8 @@ defmodule Lolek.MixProject do
   defp deps do
     [
       {:ex_gram, "0.57.0"},
-      {:tesla, "1.15.3"},
-      {:hackney, "1.25.0"},
+      {:tesla, "1.16.0"},
+      # {:hackney, "1.25.0"},
       {:jason, "1.4.4"},
       {:dotenv_config, "2.3.3"},
       {:erlexec, "2.2.2"},

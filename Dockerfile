@@ -26,8 +26,7 @@ RUN export MIX_OS_DEPS_COMPILE_PARTITION_COUNT=$(($(nproc) / 2)) && \
   export HEX_HTTP_TIMEOUT=120 && \
   mix local.hex --force && \
   mix local.rebar --force && \
-  mix deps.get --only prod && \
-  mix deps.compile
+  mix deps.get --only prod
 
 COPY lib ./lib
 

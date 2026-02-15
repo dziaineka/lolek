@@ -168,11 +168,12 @@ defmodule Lolek.Converter do
          scale: scale
        }) do
     {video_bitrate, audio_bitrate} = calculate_target_bitrates(file_path)
-    scale_filter = build_scale_filter(scale)
+    video_filter = build_hw_video_filter(scale)
 
     # Hardware encoder: single-pass encoding (two-pass not supported by V4L2 M2M)
     # Input flags before -i, output flags after -i to fix timestamp issues
-    ~c"ffmpeg -y -threads 4 #{@hw_input_flags} -i \"#{file_path}\" #{@hw_output_flags} #{scale_filter} -c:v #{codec} #{extra_args} -b:v \"#{video_bitrate}\" -c:a aac -b:a \"#{audio_bitrate}\" -movflags +faststart \"#{new_file_path}\""
+    # Video filter with format=yuv420p ensures proper pixel format from any input codec
+    ~c"ffmpeg -y -threads 4 #{@hw_input_flags} -i \"#{file_path}\" #{@hw_output_flags} #{video_filter} -c:v #{codec} #{extra_args} -b:v \"#{video_bitrate}\" -c:a aac -b:a \"#{audio_bitrate}\" -movflags +faststart \"#{new_file_path}\""
   end
 
   defp build_encode_command(file_path, new_file_path, :convert, %{
@@ -191,11 +192,12 @@ defmodule Lolek.Converter do
          scale: scale
        }) do
     video_bitrate = calculate_conversion_bitrate(file_path, scale)
-    scale_filter = build_scale_filter(scale)
+    video_filter = build_hw_video_filter(scale)
 
     # Hardware encoder: use bitrate-based encoding (CRF not supported)
     # Input flags before -i, output flags after -i to fix timestamp issues
-    ~c"ffmpeg -y -threads 4 #{@hw_input_flags} -i \"#{file_path}\" #{@hw_output_flags} #{scale_filter} -c:v #{codec} #{extra_args} -b:v \"#{video_bitrate}\" -c:a aac -b:a 128k -movflags +faststart \"#{new_file_path}\""
+    # Video filter with format=yuv420p ensures proper pixel format from any input codec
+    ~c"ffmpeg -y -threads 4 #{@hw_input_flags} -i \"#{file_path}\" #{@hw_output_flags} #{video_filter} -c:v #{codec} #{extra_args} -b:v \"#{video_bitrate}\" -c:a aac -b:a 128k -movflags +faststart \"#{new_file_path}\""
   end
 
   @spec h264_codec?(String.t()) :: boolean()
@@ -286,9 +288,11 @@ defmodule Lolek.Converter do
     end
   end
 
-  @spec build_scale_filter(nil | {integer(), integer()}) :: String.t()
-  defp build_scale_filter(nil), do: ""
-  defp build_scale_filter({width, height}), do: "-vf scale=#{width}:#{height}"
+  # Build video filter for hardware encoder - always include format=yuv420p for proper
+  # pixel format conversion from various input codecs (VP9, HEVC, etc.)
+  @spec build_hw_video_filter(nil | {integer(), integer()}) :: String.t()
+  defp build_hw_video_filter(nil), do: "-vf format=yuv420p"
+  defp build_hw_video_filter({width, height}), do: "-vf scale=#{width}:#{height},format=yuv420p"
 
   @spec hw_encoder_available?() :: boolean()
   defp hw_encoder_available? do

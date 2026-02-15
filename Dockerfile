@@ -22,14 +22,16 @@ WORKDIR /app
 COPY mix.exs ./
 COPY mix.lock ./
 COPY config ./config
-RUN mix local.hex --force && \
+RUN export MIX_OS_DEPS_COMPILE_PARTITION_COUNT=$(($(nproc) / 2)) && \
+  export HEX_HTTP_TIMEOUT=120 && \
+  mix local.hex --force && \
   mix local.rebar --force && \
   mix deps.get --only prod && \
   mix deps.compile
 
 COPY lib ./lib
 
-RUN MIX_ENV=prod mix release
+RUN MIX_OS_DEPS_COMPILE_PARTITION_COUNT=$(($(nproc) / 2)) HEX_HTTP_TIMEOUT=120 MIX_ENV=prod mix release
 
 # Main Docker Image
 # Using Debian for better V4L2 hardware encoder support on Raspberry Pi

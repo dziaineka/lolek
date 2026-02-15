@@ -190,7 +190,7 @@ defmodule Lolek.Converter do
          extra_args: extra_args,
          scale: scale
        }) do
-    {video_bitrate, _} = calculate_target_bitrates(file_path)
+    video_bitrate = calculate_conversion_bitrate(file_path, scale)
     scale_filter = build_scale_filter(scale)
 
     # Hardware encoder: use bitrate-based encoding (CRF not supported)
@@ -310,7 +310,52 @@ defmodule Lolek.Converter do
     video_bitrate = (max_video_size * 8 / duration / 1000) |> round()
     audio_bitrate = (max_audio_size * 8 / duration / 1000) |> round()
 
+    # Cap video bitrate to prevent hardware encoder issues
+    # Most content doesn't benefit from >10 Mbps
+    video_bitrate = min(video_bitrate, 10_000)
+
     {"#{video_bitrate}k", "#{audio_bitrate}k"}
+  end
+
+  # Calculate appropriate bitrate for codec conversion based on resolution
+  # Uses conservative bitrates suitable for hardware encoding
+  @spec calculate_conversion_bitrate(String.t(), nil | {integer(), integer()}) :: String.t()
+  defp calculate_conversion_bitrate(file_path, scale) do
+    # Determine target resolution (after scaling if applicable)
+    {width, height} =
+      case scale do
+        nil ->
+          case Lolek.File.get_video_width_and_height(file_path) do
+            {:ok, dimensions} -> dimensions
+            :error -> {1280, 720}
+          end
+
+        {w, h} ->
+          {w, h}
+      end
+
+    # Calculate total pixels
+    pixels = width * height
+
+    # Determine bitrate based on resolution
+    # These are conservative bitrates suitable for hardware encoding
+    bitrate_kbps =
+      cond do
+        # 4K (3840x2160 = 8,294,400 pixels)
+        pixels >= 8_000_000 -> 8000
+        # 1440p (2560x1440 = 3,686,400 pixels)
+        pixels >= 3_500_000 -> 5000
+        # 1080p (1920x1080 = 2,073,600 pixels)
+        pixels >= 2_000_000 -> 3500
+        # 720p (1280x720 = 921,600 pixels)
+        pixels >= 900_000 -> 2500
+        # 480p (854x480 = 409,920 pixels)
+        pixels >= 400_000 -> 1500
+        # < 480p
+        true -> 1000
+      end
+
+    "#{bitrate_kbps}k"
   end
 
   @spec get_compressed_file_path(String.t()) :: String.t()

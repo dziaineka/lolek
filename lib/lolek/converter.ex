@@ -8,7 +8,8 @@ defmodule Lolek.Converter do
 
   @type encoder_config :: %{
           codec: String.t(),
-          extra_args: String.t()
+          extra_args: String.t(),
+          scale: nil | {integer(), integer()}
         }
 
   @type encoding_strategy :: :compress | :convert
@@ -16,7 +17,8 @@ defmodule Lolek.Converter do
   # Hardware encoder configuration for Raspberry Pi 4B V4L2 M2M
   @hw_encoder_config %{
     codec: "h264_v4l2m2m",
-    extra_args: "-num_output_buffers 32 -num_capture_buffers 16"
+    extra_args: "-num_output_buffers 32 -num_capture_buffers 16",
+    scale: nil
   }
 
   # Input flags for hardware encoder to fix timestamp issues
@@ -31,7 +33,8 @@ defmodule Lolek.Converter do
   # Software encoder configuration with RPi-optimized settings
   @sw_encoder_config %{
     codec: "libx264",
-    extra_args: "-preset fast -tune fastdecode -threads 4"
+    extra_args: "-preset fast -tune fastdecode -threads 4",
+    scale: nil
   }
 
   @spec adapt_to_telegram(Lolek.File.file_state()) ::
@@ -103,7 +106,7 @@ defmodule Lolek.Converter do
   @spec try_encode_with_fallback(String.t(), String.t(), encoding_strategy()) ::
           :ok | {:error, term()}
   defp try_encode_with_fallback(file_path, new_file_path, strategy) do
-    encoder_config = get_encoder_config()
+    encoder_config = get_encoder_config(file_path)
     command = build_encode_command(file_path, new_file_path, strategy, encoder_config)
 
     action = if strategy == :compress, do: "Compressed", else: "Converted to H.264"
@@ -146,7 +149,8 @@ defmodule Lolek.Converter do
         ) :: charlist()
   defp build_encode_command(file_path, new_file_path, :compress, %{
          codec: "libx264",
-         extra_args: extra_args
+         extra_args: extra_args,
+         scale: _
        }) do
     {video_bitrate, audio_bitrate} = calculate_target_bitrates(file_path)
     timestamp = DateTime.utc_now() |> DateTime.to_unix(:microsecond) |> Integer.to_string()
@@ -160,18 +164,21 @@ defmodule Lolek.Converter do
 
   defp build_encode_command(file_path, new_file_path, :compress, %{
          codec: codec,
-         extra_args: extra_args
+         extra_args: extra_args,
+         scale: scale
        }) do
     {video_bitrate, audio_bitrate} = calculate_target_bitrates(file_path)
+    scale_filter = build_scale_filter(scale)
 
     # Hardware encoder: single-pass encoding (two-pass not supported by V4L2 M2M)
     # Input flags before -i, output flags after -i to fix timestamp issues
-    ~c"ffmpeg -y -threads 4 #{@hw_input_flags} -i \"#{file_path}\" #{@hw_output_flags} -c:v #{codec} #{extra_args} -b:v \"#{video_bitrate}\" -c:a aac -b:a \"#{audio_bitrate}\" -movflags +faststart \"#{new_file_path}\""
+    ~c"ffmpeg -y -threads 4 #{@hw_input_flags} -i \"#{file_path}\" #{@hw_output_flags} #{scale_filter} -c:v #{codec} #{extra_args} -b:v \"#{video_bitrate}\" -c:a aac -b:a \"#{audio_bitrate}\" -movflags +faststart \"#{new_file_path}\""
   end
 
   defp build_encode_command(file_path, new_file_path, :convert, %{
          codec: "libx264",
-         extra_args: extra_args
+         extra_args: extra_args,
+         scale: _
        }) do
     # Software encoder: use CRF for quality-based encoding
     # Using -threads 4 for RPi 4B optimization
@@ -180,13 +187,15 @@ defmodule Lolek.Converter do
 
   defp build_encode_command(file_path, new_file_path, :convert, %{
          codec: codec,
-         extra_args: extra_args
+         extra_args: extra_args,
+         scale: scale
        }) do
     {video_bitrate, _} = calculate_target_bitrates(file_path)
+    scale_filter = build_scale_filter(scale)
 
     # Hardware encoder: use bitrate-based encoding (CRF not supported)
     # Input flags before -i, output flags after -i to fix timestamp issues
-    ~c"ffmpeg -y -threads 4 #{@hw_input_flags} -i \"#{file_path}\" #{@hw_output_flags} -c:v #{codec} #{extra_args} -b:v \"#{video_bitrate}\" -c:a aac -b:a 128k -movflags +faststart \"#{new_file_path}\""
+    ~c"ffmpeg -y -threads 4 #{@hw_input_flags} -i \"#{file_path}\" #{@hw_output_flags} #{scale_filter} -c:v #{codec} #{extra_args} -b:v \"#{video_bitrate}\" -c:a aac -b:a 128k -movflags +faststart \"#{new_file_path}\""
   end
 
   @spec h264_codec?(String.t()) :: boolean()
@@ -204,21 +213,35 @@ defmodule Lolek.Converter do
     end
   end
 
-  @spec get_encoder_config() :: encoder_config()
-  defp get_encoder_config do
+  @spec get_encoder_config(String.t()) :: encoder_config()
+  defp get_encoder_config(file_path) do
     use_hw_encoder? = Application.fetch_env!(:lolek, :use_hw_encoder?)
 
     case use_hw_encoder? do
       true ->
-        if hw_encoder_available?() do
-          Logger.info("Using hardware encoder: h264_v4l2m2m")
-          @hw_encoder_config
-        else
-          Logger.warning(
-            "Hardware encoder requested but h264_v4l2m2m not available, using software encoder"
-          )
+        cond do
+          not hw_encoder_available?() ->
+            Logger.warning(
+              "Hardware encoder requested but h264_v4l2m2m not available, using software encoder"
+            )
+            @sw_encoder_config
 
-          @sw_encoder_config
+          true ->
+            case get_scale_for_hw_encoder(file_path) do
+              {:ok, nil} ->
+                Logger.info("Using hardware encoder: h264_v4l2m2m")
+                @hw_encoder_config
+
+              {:ok, {width, height}} ->
+                Logger.info(
+                  "Video resolution too high for hardware encoder, downscaling to #{width}x#{height}"
+                )
+                %{@hw_encoder_config | scale: {width, height}}
+
+              :error ->
+                Logger.info("Could not determine resolution, using hardware encoder without scaling")
+                @hw_encoder_config
+            end
         end
 
       _ ->
@@ -226,6 +249,46 @@ defmodule Lolek.Converter do
         @sw_encoder_config
     end
   end
+
+  # Raspberry Pi hardware encoder (h264_v4l2m2m) typically supports up to 1920x1080
+  # Returns {:ok, nil} if no scaling needed, {:ok, {width, height}} if downscaling needed, or :error
+  @spec get_scale_for_hw_encoder(String.t()) :: {:ok, nil | {integer(), integer()}} | :error
+  defp get_scale_for_hw_encoder(file_path) do
+    case Lolek.File.get_video_width_and_height(file_path) do
+      {:ok, {width, height}} ->
+        max_pixels = 1920 * 1080
+        video_pixels = width * height
+
+        if video_pixels <= max_pixels do
+          {:ok, nil}
+        else
+          # Calculate scaled dimensions maintaining aspect ratio
+          # Fit to 1920x1080 while preserving aspect ratio
+          aspect_ratio = width / height
+          {scaled_width, scaled_height} =
+            if aspect_ratio > 16 / 9 do
+              # Width is the limiting factor
+              {1920, round(1920 / aspect_ratio)}
+            else
+              # Height is the limiting factor
+              {round(1080 * aspect_ratio), 1080}
+            end
+
+          # Ensure dimensions are even (required by most video codecs)
+          scaled_width = scaled_width - rem(scaled_width, 2)
+          scaled_height = scaled_height - rem(scaled_height, 2)
+
+          {:ok, {scaled_width, scaled_height}}
+        end
+
+      :error ->
+        :error
+    end
+  end
+
+  @spec build_scale_filter(nil | {integer(), integer()}) :: String.t()
+  defp build_scale_filter(nil), do: ""
+  defp build_scale_filter({width, height}), do: "-vf scale=#{width}:#{height}"
 
   @spec hw_encoder_available?() :: boolean()
   defp hw_encoder_available? do

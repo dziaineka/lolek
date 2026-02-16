@@ -18,8 +18,7 @@ defmodule Lolek.Config do
       {"LOLEK_ALLOWED_URLS_REGEX", :str},
       {"LOLEK_MAX_DOWNLOAD_TRIES", :int},
       {"LOLEK_START_DOWNLOAD_PAUSE", :int},
-      {"LOLEK_MAX_DOWNLOAD_PAUSE", :int},
-      {"LOLEK_USE_HW_ENCODER", :bool}
+      {"LOLEK_MAX_DOWNLOAD_PAUSE", :int}
     ]
   end
 end

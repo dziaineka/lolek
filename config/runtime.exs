@@ -45,8 +45,4 @@ config :lolek,
        :max_download_pause,
        :dotenv_config.get("LOLEK_MAX_DOWNLOAD_PAUSE")
 
-config :lolek,
-       :use_hw_encoder?,
-       :dotenv_config.get("LOLEK_USE_HW_ENCODER")
-
 :dotenv_config.stop()

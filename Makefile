@@ -16,3 +16,6 @@ push:
 
 check:
 	mix check
+
+format:
+	mix format

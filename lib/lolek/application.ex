@@ -11,6 +11,7 @@ defmodule Lolek.Application do
     token = Application.fetch_env!(:lolek, :bot_token)
 
     children = [
+      {Registry, keys: :unique, name: Lolek.UrlProcessingRegistry},
       ExGram,
       {Lolek.Handler, [method: :polling, token: token]},
       Lolek.FileCleaner

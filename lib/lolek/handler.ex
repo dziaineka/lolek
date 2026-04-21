@@ -39,12 +39,9 @@ defmodule Lolek.Handler do
         _context
       ) do
     with {:ok, url} <- Lolek.Url.extract_url(text),
-         {:ok, folder_path} <- Lolek.File.get_folder_path(url),
-         {:ok, file_state} <- Lolek.File.get_file_state(folder_path),
-         {:ok, file_state} <- Lolek.Downloader.download(url, file_state),
-         {:ok, file_state} <- Lolek.Converter.adapt_to_telegram(file_state),
-         {:ok, file_state} <- Lolek.send_file(chat_id, file_state) do
-      Lolek.File.move_to_ready_to_telegram(file_state)
+         {:ok, _file_state} <-
+           Lolek.UrlProcessing.process(url, fn -> process_url(chat_id, url) end) do
+      :ok
     else
       {:error, _} ->
         :ok
@@ -53,5 +50,19 @@ defmodule Lolek.Handler do
 
   def handle(_, _context) do
     :ok
+  end
+
+  @spec process_url(integer(), String.t()) :: {:ok, Lolek.File.file_state()} | {:error, term()}
+  defp process_url(chat_id, url) do
+    with {:ok, folder_path} <- Lolek.File.get_folder_path(url),
+         {:ok, file_state} <- Lolek.File.get_file_state(folder_path),
+         {:ok, file_state} <- Lolek.Downloader.download(url, file_state),
+         {:ok, file_state} <- Lolek.Converter.adapt_to_telegram(file_state),
+         {:ok, file_state} <- Lolek.send_file(chat_id, file_state) do
+      case Lolek.File.move_to_ready_to_telegram(file_state) do
+        :ok -> {:ok, file_state}
+        {:error, reason} -> {:error, reason}
+      end
+    end
   end
 end

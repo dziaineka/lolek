@@ -139,11 +139,13 @@ defmodule Lolek.File do
 
   @spec check_if_ready_to_tg(String.t()) :: :not_ready | {:exists, Lolek.File.file_state()}
   defp check_if_ready_to_tg(folder_path) do
-    case Path.join(folder_path, @ready_to_telegram) |> File.ls() do
+    ready_to_telegram_path = Path.join(folder_path, @ready_to_telegram)
+
+    case File.ls(ready_to_telegram_path) do
       {:ok, [file_name | _]} ->
         {
           :exists,
-          {:ready_to_telegram, Path.join(folder_path, file_name)}
+          {:ready_to_telegram, Path.join(ready_to_telegram_path, file_name)}
         }
 
       _ ->

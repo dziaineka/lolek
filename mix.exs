@@ -7,7 +7,8 @@ defmodule Lolek.MixProject do
       version: "1.6.0",
       elixir: "1.19.5",
       start_permanent: Mix.env() == :prod,
-      deps: deps()
+      deps: deps(),
+      aliases: aliases()
     ]
   end
 
@@ -16,6 +17,12 @@ defmodule Lolek.MixProject do
     [
       extra_applications: [:logger],
       mod: {Lolek.Application, []}
+    ]
+  end
+
+  defp aliases do
+    [
+      test: ["test --no-start"]
     ]
   end
 

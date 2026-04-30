@@ -4,7 +4,7 @@ defmodule Lolek.MixProject do
   def project do
     [
       app: :lolek,
-      version: "1.8.0",
+      version: "1.8.1",
       elixir: "1.19.5",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
@@ -34,7 +34,7 @@ defmodule Lolek.MixProject do
       {:hackney, "1.25.0"},
       {:jason, "1.4.4"},
       {:dotenv_config, "2.3.3"},
-      {:erlexec, "2.2.4"},
+      {:erlexec, "2.3.0"},
       {:ex_check, "0.16.0", only: [:dev, :test], runtime: false},
       {:credo, ">= 0.0.0", only: [:dev, :test], runtime: false},
       {:dialyxir, ">= 0.0.0", only: [:dev, :test], runtime: false},

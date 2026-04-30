@@ -43,7 +43,8 @@ defmodule Lolek.Handler do
            Lolek.UrlProcessing.process(url, fn -> process_url(chat_id, url) end) do
       :ok
     else
-      {:error, _} ->
+      {:error, reason} ->
+        Logger.warning("Error when processing url: #{text}; reason: #{inspect(reason)}")
         :ok
     end
   end

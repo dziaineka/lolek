@@ -27,21 +27,55 @@ defmodule Lolek.Converter do
     else
       %File.Stat{size: file_size} = File.stat!(file_path)
       {:ok, duration} = Lolek.File.get_video_duration(file_path)
-      needs_codec_conversion = not h264_codec?(file_path)
 
-      cond do
-        small_enough_to_upload?(file_size) and not needs_codec_conversion ->
-          :ok
-
-        needs_codec_conversion and compressible_duration?(duration) ->
-          encode_video(file_path, :convert)
-
-        compressible_file?(file_size) and compressible_duration?(duration) ->
-          encode_video(file_path, :compress)
-
-        true ->
-          {:error, :too_big_media}
+      case encoding_strategy(file_path, file_size, duration) do
+        :passthrough -> :ok
+        :too_big_media -> {:error, :too_big_media}
+        strategy -> encode_video(file_path, strategy)
       end
+    end
+  end
+
+  @spec encoding_strategy(String.t(), non_neg_integer(), non_neg_integer()) ::
+          :compress | :convert | :passthrough | :too_big_media
+  defp encoding_strategy(file_path, file_size, duration) do
+    if h264_codec?(file_path) do
+      h264_encoding_strategy(file_size, duration)
+    else
+      non_h264_encoding_strategy(file_size, duration)
+    end
+  end
+
+  @spec h264_encoding_strategy(non_neg_integer(), non_neg_integer()) ::
+          :compress | :passthrough | :too_big_media
+  defp h264_encoding_strategy(file_size, duration) do
+    cond do
+      small_enough_to_upload?(file_size) ->
+        :passthrough
+
+      compressible_file?(file_size) and compressible_duration?(duration) ->
+        :compress
+
+      true ->
+        :too_big_media
+    end
+  end
+
+  @spec non_h264_encoding_strategy(non_neg_integer(), non_neg_integer()) ::
+          :compress | :convert | :too_big_media
+  defp non_h264_encoding_strategy(file_size, duration) do
+    cond do
+      small_enough_to_upload?(file_size) and compressible_duration?(duration) ->
+        :compress
+
+      compressible_duration?(duration) ->
+        :convert
+
+      compressible_file?(file_size) and compressible_duration?(duration) ->
+        :compress
+
+      true ->
+        :too_big_media
     end
   end
 

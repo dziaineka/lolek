@@ -58,10 +58,7 @@ defmodule Lolek.Url do
 
   @spec normalize_for_allow_list(String.t()) :: String.t()
   defp normalize_for_allow_list(url) do
-    case normalize_for_storage(url) do
-      normalized when is_binary(normalized) -> normalized
-      _ -> String.downcase(url)
-    end
+    normalize_for_storage(url)
   end
 
   @spec normalize_threads_host(String.t()) :: String.t()

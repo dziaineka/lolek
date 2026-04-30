@@ -10,10 +10,10 @@ defmodule Lolek do
 
     case extname do
       ".mp4" ->
-        ExGram.send_video!(chat_id, file_id, disable_notification: true)
+        call_telegram(fn -> ExGram.send_video!(chat_id, file_id, disable_notification: true) end)
 
       _ ->
-        ExGram.send_document!(chat_id, file_id)
+        call_telegram(fn -> ExGram.send_document!(chat_id, file_id) end)
     end
 
     {:ok, {:ready_to_telegram, file_path}}
@@ -25,13 +25,13 @@ defmodule Lolek do
         options = get_options(file_path)
 
         %ExGram.Model.Message{video: %ExGram.Model.Video{file_id: file_id}} =
-          ExGram.send_video!(chat_id, {:file, file_path}, options)
+          call_telegram(fn -> ExGram.send_video!(chat_id, {:file, file_path}, options) end)
 
         {:ok, {:sent_to_telegram_at_first, file_path, file_id}}
 
       _ ->
         %ExGram.Model.Message{document: %ExGram.Model.Document{file_id: file_id}} =
-          ExGram.send_document!(chat_id, {:file, file_path})
+          call_telegram(fn -> ExGram.send_document!(chat_id, {:file, file_path}) end)
 
         {:ok, {:sent_to_telegram_at_first, file_path, file_id}}
     end
@@ -57,5 +57,15 @@ defmodule Lolek do
       _ ->
         options
     end
+  end
+
+  @spec call_telegram((-> term())) :: term() | no_return()
+  defp call_telegram(fun) do
+    fun.()
+  rescue
+    error in ExGram.Error ->
+      reraise RuntimeError,
+              [message: "Telegram API request failed: #{inspect(error.code)}"],
+              __STACKTRACE__
   end
 end

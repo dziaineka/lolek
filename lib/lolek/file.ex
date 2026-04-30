@@ -97,6 +97,14 @@ defmodule Lolek.File do
     end
   end
 
+  @spec file_size(String.t()) :: {:ok, non_neg_integer()} | {:error, term()}
+  def file_size(file_path) do
+    case File.stat(file_path) do
+      {:ok, %File.Stat{size: size}} -> {:ok, size}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
   @spec move_to_ready_to_telegram(Lolek.File.file_state()) :: :ok | {:error, File.posix()}
   def move_to_ready_to_telegram({:sent_to_telegram_at_first, file_path, file_id}) do
     file_extension = Path.extname(file_path)
@@ -157,13 +165,30 @@ defmodule Lolek.File do
   defp check_if_compressed(folder_path) do
     file_path = Path.join(folder_path, @compressed_name)
 
-    if file_path |> File.exists?() do
-      {
-        :exists,
-        {:compressed, file_path}
-      }
-    else
-      :not_compressed
+    max_file_size_to_send_to_telegram =
+      Application.fetch_env!(:lolek, :max_file_size_to_send_to_telegram)
+
+    cond do
+      not File.exists?(file_path) ->
+        :not_compressed
+
+      oversized_file?(file_path, max_file_size_to_send_to_telegram) ->
+        File.rm(file_path)
+        :not_compressed
+
+      true ->
+        {
+          :exists,
+          {:compressed, file_path}
+        }
+    end
+  end
+
+  @spec oversized_file?(String.t(), non_neg_integer()) :: boolean()
+  defp oversized_file?(file_path, max_size) do
+    case file_size(file_path) do
+      {:ok, size} -> size > max_size
+      {:error, _} -> false
     end
   end
 

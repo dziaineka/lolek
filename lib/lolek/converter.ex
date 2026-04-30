@@ -22,41 +22,42 @@ defmodule Lolek.Converter do
 
   @spec compress_video_to_telegram_size(String.t()) :: :ok | {:error, atom()}
   defp compress_video_to_telegram_size(file_path) do
-    extname = Path.extname(file_path)
+    if Path.extname(file_path) != ".mp4" do
+      :ok
+    else
+      %File.Stat{size: file_size} = File.stat!(file_path)
+      {:ok, duration} = Lolek.File.get_video_duration(file_path)
+      needs_codec_conversion = not h264_codec?(file_path)
 
-    case extname do
-      ".mp4" ->
-        %File.Stat{size: file_size} = File.stat!(file_path)
-        {:ok, duration} = Lolek.File.get_video_duration(file_path)
+      cond do
+        small_enough_to_upload?(file_size) and not needs_codec_conversion ->
+          :ok
 
-        max_file_size_to_send_to_telegram =
-          Application.fetch_env!(:lolek, :max_file_size_to_send_to_telegram)
+        needs_codec_conversion and compressible_duration?(duration) ->
+          encode_video(file_path, :convert)
 
-        max_file_size_to_compress =
-          Application.fetch_env!(:lolek, :max_file_size_to_compress)
+        compressible_file?(file_size) and compressible_duration?(duration) ->
+          encode_video(file_path, :compress)
 
-        max_duration_to_compress =
-          Application.fetch_env!(:lolek, :max_duration_to_compress)
-
-        needs_codec_conversion = not h264_codec?(file_path)
-
-        cond do
-          needs_codec_conversion and duration <= max_duration_to_compress ->
-            encode_video(file_path, :convert)
-
-          file_size <= max_file_size_to_send_to_telegram ->
-            :ok
-
-          file_size <= max_file_size_to_compress and duration <= max_duration_to_compress ->
-            encode_video(file_path, :compress)
-
-          true ->
-            {:error, :too_big_media}
-        end
-
-      _ ->
-        :ok
+        true ->
+          {:error, :too_big_media}
+      end
     end
+  end
+
+  @spec small_enough_to_upload?(non_neg_integer()) :: boolean()
+  defp small_enough_to_upload?(file_size) do
+    file_size <= Application.fetch_env!(:lolek, :max_file_size_to_send_to_telegram)
+  end
+
+  @spec compressible_file?(non_neg_integer()) :: boolean()
+  defp compressible_file?(file_size) do
+    file_size <= Application.fetch_env!(:lolek, :max_file_size_to_compress)
+  end
+
+  @spec compressible_duration?(non_neg_integer()) :: boolean()
+  defp compressible_duration?(duration) do
+    duration <= Application.fetch_env!(:lolek, :max_duration_to_compress)
   end
 
   @spec encode_video(String.t(), encoding_strategy()) :: :ok | no_return()
@@ -65,7 +66,7 @@ defmodule Lolek.Converter do
 
     case encode_with_libx264(file_path, new_file_path, strategy) do
       :ok ->
-        :ok
+        ensure_telegram_file_size(new_file_path)
 
       {:error, error} ->
         action = if strategy == :compress, do: "compressing", else: "converting"
@@ -112,8 +113,9 @@ defmodule Lolek.Converter do
       ~c"ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 \"#{file_path}\""
 
     case :exec.run(command, [:sync, :stdout, :stderr]) do
-      {:ok, [{:stdout, codec_output}, {:stderr, _}]} ->
-        codec = codec_output |> to_string() |> String.trim()
+      {:ok, result} ->
+        stdout_data = Keyword.get(result, :stdout, [])
+        codec = stdout_data |> List.first("") |> to_string() |> String.trim()
         codec == "h264"
 
       _ ->
@@ -133,8 +135,23 @@ defmodule Lolek.Converter do
     # Cap video bitrate to prevent quality issues
     # Most content doesn't benefit from >10 Mbps
     video_bitrate = min(video_bitrate, 10_000)
+    audio_bitrate = min(audio_bitrate, 128)
 
     {"#{video_bitrate}k", "#{audio_bitrate}k"}
+  end
+
+  @spec ensure_telegram_file_size(String.t()) :: :ok | {:error, atom()}
+  defp ensure_telegram_file_size(file_path) do
+    max_file_size_to_send_to_telegram =
+      Application.fetch_env!(:lolek, :max_file_size_to_send_to_telegram)
+
+    %File.Stat{size: file_size} = File.stat!(file_path)
+
+    if file_size <= max_file_size_to_send_to_telegram do
+      :ok
+    else
+      {:error, :too_big_media}
+    end
   end
 
   @spec get_compressed_file_path(String.t()) :: String.t()

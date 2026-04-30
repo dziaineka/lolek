@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && rm -rf /var/lib/apt/lists/*
 
 # yt-dlp source (https://github.com/yt-dlp/yt-dlp)
-ENV BUILD_VERSION=2026.02.04
+ENV BUILD_VERSION=2026.03.17
 RUN wget https://github.com/yt-dlp/yt-dlp/releases/download/${BUILD_VERSION}/SHA2-256SUMS \
 && SHA256_SUM=`grep 'yt-dlp$' SHA2-256SUMS` \
 && wget https://github.com/yt-dlp/yt-dlp/releases/download/${BUILD_VERSION}/yt-dlp \
@@ -43,6 +43,7 @@ ENV SHELL=/bin/bash
 RUN apt-get update && apt-get install -y --no-install-recommends \
   ffmpeg \
   python3 \
+  curl \
   ca-certificates \
   openssl \
   libncurses6 \

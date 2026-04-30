@@ -2,6 +2,8 @@ defmodule Lolek.Url do
   @moduledoc """
   This module is responsible for operations with URLs.
   """
+
+  @threads_hosts ["threads.com", "www.threads.com", "threads.net", "www.threads.net"]
   @url_regex ~r/(:?https|http):\/\/\S+/
 
   @spec extract_url(String.t()) :: {:ok, String.t()} | {:error, atom()}
@@ -25,6 +27,37 @@ defmodule Lolek.Url do
 
   @spec to_folder_name(String.t()) :: String.t()
   def to_folder_name(url) do
-    url |> String.downcase() |> Base.encode64(padding: false)
+    url
+    |> normalize_for_storage()
+    |> Base.encode64(padding: false)
   end
+
+  @spec normalize_for_storage(String.t()) :: String.t()
+  defp normalize_for_storage(url) do
+    case URI.parse(url) do
+      %URI{scheme: scheme, host: host, path: path} = uri
+      when scheme in ["http", "https"] and host in @threads_hosts and is_binary(path) ->
+        normalized_path = String.replace(path, ~r|/media/?$|, "")
+
+        %URI{
+          uri
+          | scheme: "https",
+            host: normalize_threads_host(host),
+            path: normalized_path,
+            query: nil,
+            fragment: nil
+        }
+        |> URI.to_string()
+        |> String.downcase()
+
+      _ ->
+        String.downcase(url)
+    end
+  end
+
+  @spec normalize_threads_host(String.t()) :: String.t()
+  defp normalize_threads_host(host) when host in ["threads.net", "www.threads.net"],
+    do: "www.threads.com"
+
+  defp normalize_threads_host(host), do: host
 end

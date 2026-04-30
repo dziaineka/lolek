@@ -4,6 +4,7 @@ defmodule Lolek.Downloader do
   """
   require Logger
   @downloaded_name "downloaded"
+  @threads_hosts ["threads.com", "www.threads.com", "threads.net", "www.threads.net"]
 
   @spec download(String.t(), Lolek.File.file_state()) ::
           {:ok, Lolek.File.file_state()} | {:error, String.t()}
@@ -21,12 +22,7 @@ defmodule Lolek.Downloader do
   defp download(url, output_path, tries_done, max_tries, pause, max_pause) do
     pause = min(pause, max_pause)
 
-    output_file_path = Path.join(output_path, @downloaded_name)
-
-    command =
-      ~c"yt-dlp --format-sort '+vcodec:h264,+acodec:aac' --recode-video mp4 -o \"#{output_file_path}\" \"#{url}\""
-
-    case :exec.run(command, [:sync, :stdout, :stderr]) do
+    case download_once(url, output_path) do
       {:ok, _} ->
         {:ok, file_path} = Lolek.File.get_file_path_by_pattern(output_path, @downloaded_name)
         {:ok, {:downloaded, file_path}}
@@ -42,6 +38,30 @@ defmodule Lolek.Downloader do
         else
           raise("Error when downloading url: #{url}; reason: #{inspect(reason)}")
         end
+    end
+  end
+
+  @spec download_once(String.t(), String.t()) :: {:ok, term()} | {:error, term()}
+  defp download_once(url, output_path) do
+    output_file_path = Path.join(output_path, @downloaded_name)
+
+    case downloader_module(url) do
+      Lolek.ThreadsDownloader ->
+        Lolek.ThreadsDownloader.download(url, output_file_path)
+
+      :yt_dlp ->
+        command =
+          ~c"yt-dlp --format-sort '+vcodec:h264,+acodec:aac' --recode-video mp4 -o \"#{output_file_path}\" \"#{url}\""
+
+        :exec.run(command, [:sync, :stdout, :stderr])
+    end
+  end
+
+  @spec downloader_module(String.t()) :: Lolek.ThreadsDownloader | :yt_dlp
+  def downloader_module(url) do
+    case URI.parse(url) do
+      %URI{host: host} when host in @threads_hosts -> Lolek.ThreadsDownloader
+      _ -> :yt_dlp
     end
   end
 end

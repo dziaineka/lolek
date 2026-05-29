@@ -9,10 +9,10 @@ defmodule Lolek.Downloader do
   @spec download(String.t(), Lolek.File.file_state()) ::
           {:ok, Lolek.File.file_state()} | {:error, String.t()}
   def download(url, {:new_file, output_path}) do
-    max_tries = Application.get_env(:lolek, :max_download_tries)
+    max_tries = max(Application.get_env(:lolek, :max_download_tries), 1)
     pause = Application.get_env(:lolek, :start_download_pause)
     max_pause = Application.get_env(:lolek, :max_download_pause)
-    download(url, output_path, 0, max_tries, pause, max_pause)
+    download(url, output_path, 1, max_tries, pause, max_pause)
   end
 
   def download(_url, another_file_state) do

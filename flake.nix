@@ -32,7 +32,17 @@
           mixRelease = beamPackages.mixRelease.override {
             rebar3 = rebar3WithPlugins;
           };
-          sourceFiles = extraFiles: lib.fileset.unions ([ ./config ./lib ./mix.exs ./mix.lock ] ++ extraFiles);
+          sourceFiles =
+            extraFiles:
+            lib.fileset.unions (
+              [
+                ./config
+                ./lib
+                ./mix.exs
+                ./mix.lock
+              ]
+              ++ extraFiles
+            );
           src = lib.fileset.toSource {
             root = ./.;
             fileset = sourceFiles [ ./rel ];
@@ -179,6 +189,20 @@
               runHook postInstall
             '';
           };
+        }
+      );
+
+      formatter = forAllSystems (
+        system:
+        let
+          inherit (perSystem system) pkgs;
+        in
+        pkgs.writeShellApplication {
+          name = "formatter";
+          runtimeInputs = [ pkgs.nixfmt-tree ];
+          text = ''
+            treefmt "$@"
+          '';
         }
       );
     };

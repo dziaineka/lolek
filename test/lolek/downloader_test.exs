@@ -29,7 +29,7 @@ defmodule Lolek.DownloaderTest do
 
       File.write!(fake_yt_dlp, """
       #!/bin/sh
-      printf x >> "$LOLEK_TEST_ATTEMPTS_FILE"
+      printf x >> "#{attempts_file}"
       exit 1
       """)
 
@@ -39,7 +39,6 @@ defmodule Lolek.DownloaderTest do
       Application.put_env(:lolek, :start_download_pause, 0)
       Application.put_env(:lolek, :max_download_pause, 0)
 
-      System.put_env("LOLEK_TEST_ATTEMPTS_FILE", attempts_file)
       System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
       {:ok, _apps} = Application.ensure_all_started(:erlexec)
 
@@ -80,7 +79,6 @@ defmodule Lolek.DownloaderTest do
   defp preserve_download_env(fun) do
     app_env = Map.new(@download_env_keys, &{&1, Application.fetch_env(:lolek, &1)})
     path = System.get_env("PATH")
-    attempts_file = System.get_env("LOLEK_TEST_ATTEMPTS_FILE")
 
     try do
       fun.()
@@ -91,7 +89,6 @@ defmodule Lolek.DownloaderTest do
       end)
 
       restore_env("PATH", path)
-      restore_env("LOLEK_TEST_ATTEMPTS_FILE", attempts_file)
     end
   end
 

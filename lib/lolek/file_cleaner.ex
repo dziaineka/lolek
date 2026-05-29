@@ -10,6 +10,11 @@ defmodule Lolek.FileCleaner do
     GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
   end
 
+  @spec cleanup_now() :: :ok
+  def cleanup_now do
+    GenServer.call(__MODULE__, :cleanup_now)
+  end
+
   @spec child_spec(any()) :: Supervisor.child_spec()
   def child_spec(_args) do
     %{
@@ -28,6 +33,12 @@ defmodule Lolek.FileCleaner do
   def handle_info(:cleanup, state) do
     cleanup_downloads_directory()
     {:noreply, state}
+  end
+
+  @impl true
+  def handle_call(:cleanup_now, _from, state) do
+    cleanup_downloads_directory()
+    {:reply, :ok, state}
   end
 
   @spec cleanup_downloads_directory() :: :ok

@@ -1,6 +1,8 @@
 {
   pkgs,
   root,
+  module ? null,
+  package ? null,
 }:
 
 let
@@ -63,5 +65,10 @@ in
       touch "$out/passed"
       runHook postInstall
     '';
+  };
+}
+// pkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+  nixos-service = import ./tests/service.nix {
+    inherit pkgs module package;
   };
 }

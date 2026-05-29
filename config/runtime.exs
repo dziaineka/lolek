@@ -3,7 +3,9 @@ import Config
 files = ["config/.env.default", "config/.env"] |> Enum.filter(&File.exists?/1)
 :dotenv_config.init(Lolek.Config, files)
 
-config :ex_gram, token: :dotenv_config.get("LOLEK_BOT_TOKEN")
+config :ex_gram,
+  token: :dotenv_config.get("LOLEK_BOT_TOKEN"),
+  base_url: :dotenv_config.get("LOLEK_TELEGRAM_BASE_URL")
 
 config :lolek, :bot_token, :dotenv_config.get("LOLEK_BOT_TOKEN")
 

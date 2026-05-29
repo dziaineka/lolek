@@ -43,11 +43,37 @@ defmodule Lolek.DownloaderTest do
       System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
       {:ok, _apps} = Application.ensure_all_started(:erlexec)
 
-      assert_raise RuntimeError, ~r/Error when downloading url:/, fn ->
-        Lolek.Downloader.download("https://example.com/video", {:new_file, tmp_dir})
-      end
+      assert {:error, "Error when downloading url: https://example.com/video; reason: " <> _} =
+               Lolek.Downloader.download("https://example.com/video", {:new_file, tmp_dir})
 
       assert File.read!(attempts_file) == "xxx"
+    end)
+  end
+
+  @tag :tmp_dir
+  test "returns an error when downloader succeeds without creating a file", %{tmp_dir: tmp_dir} do
+    preserve_download_env(fn ->
+      bin_dir = Path.join(tmp_dir, "bin")
+      fake_yt_dlp = Path.join(bin_dir, "yt-dlp")
+
+      File.mkdir_p!(bin_dir)
+
+      File.write!(fake_yt_dlp, """
+      #!/bin/sh
+      exit 0
+      """)
+
+      File.chmod!(fake_yt_dlp, 0o755)
+
+      Application.put_env(:lolek, :max_download_tries, 1)
+      Application.put_env(:lolek, :start_download_pause, 0)
+      Application.put_env(:lolek, :max_download_pause, 0)
+
+      System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
+      {:ok, _apps} = Application.ensure_all_started(:erlexec)
+
+      assert {:error, "File not found"} =
+               Lolek.Downloader.download("https://example.com/video", {:new_file, tmp_dir})
     end)
   end
 

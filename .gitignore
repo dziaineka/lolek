@@ -36,3 +36,7 @@ downloads/
 
 # elixir ls
 .expert
+
+# Nix build output symlinks
+result
+result-*

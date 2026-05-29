@@ -31,44 +31,112 @@ defmodule Lolek.FileCleaner do
   end
 
   @spec cleanup_downloads_directory() :: :ok
-  defp cleanup_downloads_directory do
-    downloads_dir = "/path/to/downloads"
-    # 5 GB in bytes
-    max_size = 5 * 1024 * 1024 * 1024
+  def cleanup_downloads_directory do
+    downloads_dir = Application.fetch_env!(:lolek, :download_path)
+    max_size = Application.fetch_env!(:lolek, :max_download_dir_size)
 
-    case File.stat(downloads_dir) do
-      {:ok, %File.Stat{size: size}} when size > max_size ->
-        Logger.info("Cleaning downloads directory...")
-        cleanup_oldest_files(downloads_dir, max_size - size)
-        :ok
+    cleanup_downloads_directory(downloads_dir, max_size)
+  end
 
-      _ ->
-        Logger.info("Downloads directory is within the size limit.")
+  @spec cleanup_downloads_directory(String.t(), non_neg_integer()) :: :ok
+  def cleanup_downloads_directory(downloads_dir, max_size) do
+    entries = cache_entries(downloads_dir)
+    total_size = entries |> Enum.map(& &1.size) |> Enum.sum()
+
+    if total_size > max_size do
+      Logger.info("Cleaning downloads directory...")
+      cleanup_oldest_entries(entries, total_size - max_size)
+    else
+      Logger.info("Downloads directory is within the size limit.")
+    end
+
+    :ok
+  end
+
+  @spec cache_entries(String.t()) :: [
+          %{
+            path: String.t(),
+            name: String.t(),
+            size: non_neg_integer(),
+            mtime: File.calendar_time()
+          }
+        ]
+  defp cache_entries(downloads_dir) do
+    case File.ls(downloads_dir) do
+      {:ok, entries} ->
+        Enum.map(entries, fn name ->
+          path = Path.join(downloads_dir, name)
+
+          %{
+            path: path,
+            name: name,
+            size: path_size(path),
+            mtime: path_mtime(path)
+          }
+        end)
+
+      {:error, :enoent} ->
+        []
+
+      {:error, reason} ->
+        Logger.warning("Could not list downloads directory #{downloads_dir}: #{inspect(reason)}")
+        []
     end
   end
 
-  @spec cleanup_oldest_files(String.t(), integer()) :: integer()
-  defp cleanup_oldest_files(dir, space_to_free) do
-    files =
-      dir
-      |> File.ls!()
-      |> Enum.map(&{&1, File.stat!(Path.join(dir, &1)).ctime})
+  @spec cleanup_oldest_entries([map()], integer()) :: :ok
+  defp cleanup_oldest_entries(entries, space_to_free) do
+    entries
+    |> Enum.sort_by(& &1.mtime)
+    |> Enum.reduce_while(space_to_free, fn entry, remaining ->
+      if remaining <= 0 do
+        {:halt, remaining}
+      else
+        case File.rm_rf(entry.path) do
+          {:ok, _removed} ->
+            Logger.info("Removed #{entry.name} (#{entry.size} bytes)")
+            {:cont, remaining - entry.size}
 
-    files
-    |> Enum.sort_by(&elem(&1, 1))
-    |> Enum.reduce(space_to_free, fn {file, _}, acc ->
-      file_path = Path.join(dir, file)
-      file_size = File.stat!(file_path).size
-
-      case File.rm(file_path) do
-        :ok ->
-          Logger.info("Removed #{file} (#{file_size} bytes)")
-          acc - file_size
-
-        _ ->
-          Logger.warning("Failed to remove #{file}")
-          acc
+          {:error, failed_path, reason} ->
+            Logger.warning("Failed to remove #{failed_path}: #{inspect(reason)}")
+            {:cont, remaining}
+        end
       end
     end)
+
+    :ok
+  end
+
+  @spec path_size(String.t()) :: non_neg_integer()
+  defp path_size(path) do
+    case File.lstat(path) do
+      {:ok, %File.Stat{type: :directory}} ->
+        path
+        |> list_child_paths()
+        |> Enum.map(&path_size/1)
+        |> Enum.sum()
+
+      {:ok, %File.Stat{size: size}} ->
+        size
+
+      {:error, _reason} ->
+        0
+    end
+  end
+
+  @spec list_child_paths(String.t()) :: [String.t()]
+  defp list_child_paths(path) do
+    case File.ls(path) do
+      {:ok, children} -> Enum.map(children, &Path.join(path, &1))
+      {:error, _reason} -> []
+    end
+  end
+
+  @spec path_mtime(String.t()) :: File.calendar_time()
+  defp path_mtime(path) do
+    case File.lstat(path) do
+      {:ok, %File.Stat{mtime: mtime}} -> mtime
+      {:error, _reason} -> {{0, 1, 1}, {0, 0, 0}}
+    end
   end
 end

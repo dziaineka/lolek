@@ -112,11 +112,11 @@ defmodule Lolek.Converter do
   @spec encode_with_libx264(String.t(), String.t(), encoding_strategy()) ::
           :ok | {:error, term()}
   defp encode_with_libx264(file_path, new_file_path, strategy) do
-    command = build_encode_command(file_path, new_file_path, strategy)
+    args = build_encode_args(file_path, new_file_path, strategy)
 
     action = if strategy == :compress, do: "Compressed", else: "Converted to H.264"
 
-    case :exec.run(command, [:sync, :stdout, :stderr]) do
+    case Lolek.Command.run("ffmpeg", args) do
       {:ok, result} ->
         Logger.info("#{action} video with libx264: #{inspect(result)}")
         :ok
@@ -126,27 +126,92 @@ defmodule Lolek.Converter do
     end
   end
 
-  @spec build_encode_command(String.t(), String.t(), encoding_strategy()) :: charlist()
-  defp build_encode_command(file_path, new_file_path, :compress) do
+  @spec build_encode_args(String.t(), String.t(), encoding_strategy()) :: [String.t()]
+  defp build_encode_args(file_path, new_file_path, :compress) do
     {video_bitrate, audio_bitrate} = calculate_target_bitrates(file_path)
 
     # One-pass encoding with target bitrate
     # Using -threads 4 for RPi 4B optimization
-    ~c"ffmpeg -y -threads 4 -i \"#{file_path}\" -c:v libx264 -preset fast -tune fastdecode -threads 4 -profile:v baseline -level 3.0 -pix_fmt yuv420p -b:v \"#{video_bitrate}\" -c:a aac -b:a \"#{audio_bitrate}\" -movflags +faststart \"#{new_file_path}\""
+    [
+      "-y",
+      "-threads",
+      "4",
+      "-i",
+      file_path,
+      "-c:v",
+      "libx264",
+      "-preset",
+      "fast",
+      "-tune",
+      "fastdecode",
+      "-threads",
+      "4",
+      "-profile:v",
+      "baseline",
+      "-level",
+      "3.0",
+      "-pix_fmt",
+      "yuv420p",
+      "-b:v",
+      video_bitrate,
+      "-c:a",
+      "aac",
+      "-b:a",
+      audio_bitrate,
+      "-movflags",
+      "+faststart",
+      new_file_path
+    ]
   end
 
-  defp build_encode_command(file_path, new_file_path, :convert) do
+  defp build_encode_args(file_path, new_file_path, :convert) do
     # Software encoder: use CRF for quality-based encoding
     # Using -threads 4 for RPi 4B optimization
-    ~c"ffmpeg -y -threads 4 -i \"#{file_path}\" -c:v libx264 -preset fast -tune fastdecode -threads 4 -profile:v baseline -level 3.0 -pix_fmt yuv420p -crf 23 -c:a aac -b:a 128k -movflags +faststart \"#{new_file_path}\""
+    [
+      "-y",
+      "-threads",
+      "4",
+      "-i",
+      file_path,
+      "-c:v",
+      "libx264",
+      "-preset",
+      "fast",
+      "-tune",
+      "fastdecode",
+      "-threads",
+      "4",
+      "-profile:v",
+      "baseline",
+      "-level",
+      "3.0",
+      "-pix_fmt",
+      "yuv420p",
+      "-crf",
+      "23",
+      "-c:a",
+      "aac",
+      "-b:a",
+      "128k",
+      "-movflags",
+      "+faststart",
+      new_file_path
+    ]
   end
 
   @spec h264_codec?(String.t()) :: boolean()
   defp h264_codec?(file_path) do
-    command =
-      ~c"ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 \"#{file_path}\""
-
-    case :exec.run(command, [:sync, :stdout, :stderr]) do
+    case Lolek.Command.run("ffprobe", [
+           "-v",
+           "error",
+           "-select_streams",
+           "v:0",
+           "-show_entries",
+           "stream=codec_name",
+           "-of",
+           "default=noprint_wrappers=1:nokey=1",
+           file_path
+         ]) do
       {:ok, result} ->
         stdout_data = Keyword.get(result, :stdout, [])
         codec = stdout_data |> List.first("") |> to_string() |> String.trim()

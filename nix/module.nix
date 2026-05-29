@@ -88,7 +88,6 @@ in
         isSystemUser = true;
         group = cfg.group;
         home = cfg.stateDir;
-        shell = pkgs.runtimeShell;
       };
     };
 

@@ -73,6 +73,7 @@ pkgs.testers.nixosTest {
         environment = {
           LOLEK_TELEGRAM_BASE_URL = fakeBaseUrl;
           LOLEK_ALLOWED_URLS_REGEX = fakeAllowedUrlsRegex;
+          LOLEK_MAX_DOWNLOAD_DIR_SIZE = "0";
           LOLEK_MAX_DOWNLOAD_TRIES = "1";
           LOLEK_START_DOWNLOAD_PAUSE = "10";
           LOLEK_MAX_DOWNLOAD_PAUSE = "10";
@@ -150,6 +151,11 @@ pkgs.testers.nixosTest {
     machine.succeed("grep -a 'ftyp' %s" % fake_upload_file)
 
     folder_name = base64.b64encode(media_url.encode()).decode().rstrip("=")
-    machine.succeed("test -f %s/%s/%s/%s.mp4" % (download_dir, folder_name, ready_dir_name, video_file_id))
+    cache_dir = "%s/%s" % (download_dir, folder_name)
+    machine.succeed("test -f %s/%s/%s.mp4" % (cache_dir, ready_dir_name, video_file_id))
+
+    machine.succeed("${package}/bin/lolek rpc 'Lolek.FileCleaner.cleanup_now()'")
+    machine.succeed("test ! -e %s" % cache_dir)
+    machine.succeed("systemctl is-active --quiet ${serviceUnit}")
   '';
 }

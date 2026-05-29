@@ -9,7 +9,7 @@ defmodule Lolek.Converter do
   @type encoding_strategy :: :compress | :convert
 
   @spec adapt_to_telegram(Lolek.File.file_state()) ::
-          {:ok, Lolek.File.file_state()} | {:error, atom()}
+          {:ok, Lolek.File.file_state()} | {:error, term()}
   def adapt_to_telegram({:downloaded, file_path}) do
     with :ok <- compress_video_to_telegram_size(file_path) do
       replace_original_file_with_compressed(file_path)
@@ -20,18 +20,18 @@ defmodule Lolek.Converter do
     {:ok, another_file_state}
   end
 
-  @spec compress_video_to_telegram_size(String.t()) :: :ok | {:error, atom()}
+  @spec compress_video_to_telegram_size(String.t()) :: :ok | {:error, term()}
   defp compress_video_to_telegram_size(file_path) do
     if Path.extname(file_path) != ".mp4" do
       :ok
     else
-      %File.Stat{size: file_size} = File.stat!(file_path)
-      {:ok, duration} = Lolek.File.get_video_duration(file_path)
-
-      case encoding_strategy(file_path, file_size, duration) do
-        :passthrough -> :ok
-        :too_big_media -> {:error, :too_big_media}
-        strategy -> encode_video(file_path, strategy)
+      with {:ok, file_size} <- Lolek.File.file_size(file_path),
+           {:ok, duration} <- video_duration(file_path) do
+        case encoding_strategy(file_path, file_size, duration) do
+          :passthrough -> :ok
+          :too_big_media -> {:error, :too_big_media}
+          strategy -> encode_video(file_path, strategy)
+        end
       end
     end
   end
@@ -94,7 +94,7 @@ defmodule Lolek.Converter do
     duration <= Application.fetch_env!(:lolek, :max_duration_to_compress)
   end
 
-  @spec encode_video(String.t(), encoding_strategy()) :: :ok | no_return()
+  @spec encode_video(String.t(), encoding_strategy()) :: :ok | {:error, term()}
   defp encode_video(file_path, strategy) do
     new_file_path = get_compressed_file_path(file_path)
 
@@ -105,98 +105,101 @@ defmodule Lolek.Converter do
       {:error, error} ->
         action = if strategy == :compress, do: "compressing", else: "converting"
         Logger.error("Error when #{action} video: #{inspect(error)}")
-        raise("Error when #{action} video: #{inspect(error)}")
+        {:error, error}
     end
   end
 
   @spec encode_with_libx264(String.t(), String.t(), encoding_strategy()) ::
           :ok | {:error, term()}
   defp encode_with_libx264(file_path, new_file_path, strategy) do
-    args = build_encode_args(file_path, new_file_path, strategy)
+    with {:ok, args} <- build_encode_args(file_path, new_file_path, strategy) do
+      action = if strategy == :compress, do: "Compressed", else: "Converted to H.264"
 
-    action = if strategy == :compress, do: "Compressed", else: "Converted to H.264"
+      case Lolek.Command.run("ffmpeg", args) do
+        {:ok, result} ->
+          Logger.info("#{action} video with libx264: #{inspect(result)}")
+          :ok
 
-    case Lolek.Command.run("ffmpeg", args) do
-      {:ok, result} ->
-        Logger.info("#{action} video with libx264: #{inspect(result)}")
-        :ok
-
-      {:error, error} ->
-        {:error, error}
+        {:error, error} ->
+          {:error, error}
+      end
     end
   end
 
-  @spec build_encode_args(String.t(), String.t(), encoding_strategy()) :: [String.t()]
+  @spec build_encode_args(String.t(), String.t(), encoding_strategy()) ::
+          {:ok, [String.t()]} | {:error, term()}
   defp build_encode_args(file_path, new_file_path, :compress) do
-    {video_bitrate, audio_bitrate} = calculate_target_bitrates(file_path)
-
-    # One-pass encoding with target bitrate
-    # Using -threads 4 for RPi 4B optimization
-    [
-      "-y",
-      "-threads",
-      "4",
-      "-i",
-      file_path,
-      "-c:v",
-      "libx264",
-      "-preset",
-      "fast",
-      "-tune",
-      "fastdecode",
-      "-threads",
-      "4",
-      "-profile:v",
-      "baseline",
-      "-level",
-      "3.0",
-      "-pix_fmt",
-      "yuv420p",
-      "-b:v",
-      video_bitrate,
-      "-c:a",
-      "aac",
-      "-b:a",
-      audio_bitrate,
-      "-movflags",
-      "+faststart",
-      new_file_path
-    ]
+    with {:ok, {video_bitrate, audio_bitrate}} <- calculate_target_bitrates(file_path) do
+      # One-pass encoding with target bitrate
+      # Using -threads 4 for RPi 4B optimization
+      {:ok,
+       [
+         "-y",
+         "-threads",
+         "4",
+         "-i",
+         file_path,
+         "-c:v",
+         "libx264",
+         "-preset",
+         "fast",
+         "-tune",
+         "fastdecode",
+         "-threads",
+         "4",
+         "-profile:v",
+         "baseline",
+         "-level",
+         "3.0",
+         "-pix_fmt",
+         "yuv420p",
+         "-b:v",
+         video_bitrate,
+         "-c:a",
+         "aac",
+         "-b:a",
+         audio_bitrate,
+         "-movflags",
+         "+faststart",
+         new_file_path
+       ]}
+    end
   end
 
   defp build_encode_args(file_path, new_file_path, :convert) do
     # Software encoder: use CRF for quality-based encoding
     # Using -threads 4 for RPi 4B optimization
-    [
-      "-y",
-      "-threads",
-      "4",
-      "-i",
-      file_path,
-      "-c:v",
-      "libx264",
-      "-preset",
-      "fast",
-      "-tune",
-      "fastdecode",
-      "-threads",
-      "4",
-      "-profile:v",
-      "baseline",
-      "-level",
-      "3.0",
-      "-pix_fmt",
-      "yuv420p",
-      "-crf",
-      "23",
-      "-c:a",
-      "aac",
-      "-b:a",
-      "128k",
-      "-movflags",
-      "+faststart",
-      new_file_path
-    ]
+    {:ok,
+     [
+       "-y",
+       "-threads",
+       "4",
+       "-i",
+       file_path,
+       "-c:v",
+       "libx264",
+       "-preset",
+       "fast",
+       "-tune",
+       "fastdecode",
+       "-threads",
+       "4",
+       "-profile:v",
+       "baseline",
+       "-level",
+       "3.0",
+       "-pix_fmt",
+       "yuv420p",
+       "-crf",
+       "23",
+       "-c:a",
+       "aac",
+       "-b:a",
+       "128k",
+       "-movflags",
+       "+faststart",
+       new_file_path
+     ]}
   end
 
   @spec h264_codec?(String.t()) :: boolean()
@@ -222,34 +225,47 @@ defmodule Lolek.Converter do
     end
   end
 
-  @spec calculate_target_bitrates(String.t()) :: {String.t(), String.t()}
+  @spec calculate_target_bitrates(String.t()) ::
+          {:ok, {String.t(), String.t()}} | {:error, term()}
   defp calculate_target_bitrates(file_path) do
     max_video_size = Application.fetch_env!(:lolek, :max_video_size_to_send_to_telegram)
     max_audio_size = Application.fetch_env!(:lolek, :max_audio_size_to_send_to_telegram)
-    {:ok, duration} = Lolek.File.get_video_duration(file_path)
 
-    video_bitrate = (max_video_size * 8 / duration / 1000) |> round()
-    audio_bitrate = (max_audio_size * 8 / duration / 1000) |> round()
+    with {:ok, duration} when duration > 0 <- video_duration(file_path) do
+      video_bitrate = (max_video_size * 8 / duration / 1000) |> round()
+      audio_bitrate = (max_audio_size * 8 / duration / 1000) |> round()
 
-    # Cap video bitrate to prevent quality issues
-    # Most content doesn't benefit from >10 Mbps
-    video_bitrate = min(video_bitrate, 10_000)
-    audio_bitrate = min(audio_bitrate, 128)
+      # Cap video bitrate to prevent quality issues
+      # Most content doesn't benefit from >10 Mbps
+      video_bitrate = min(video_bitrate, 10_000)
+      audio_bitrate = min(audio_bitrate, 128)
 
-    {"#{video_bitrate}k", "#{audio_bitrate}k"}
+      {:ok, {"#{video_bitrate}k", "#{audio_bitrate}k"}}
+    else
+      {:ok, 0} -> {:error, :invalid_video_duration}
+      error -> error
+    end
   end
 
-  @spec ensure_telegram_file_size(String.t()) :: :ok | {:error, atom()}
+  @spec ensure_telegram_file_size(String.t()) :: :ok | {:error, term()}
   defp ensure_telegram_file_size(file_path) do
     max_file_size_to_send_to_telegram =
       Application.fetch_env!(:lolek, :max_file_size_to_send_to_telegram)
 
-    %File.Stat{size: file_size} = File.stat!(file_path)
+    with {:ok, file_size} <- Lolek.File.file_size(file_path) do
+      if file_size <= max_file_size_to_send_to_telegram do
+        :ok
+      else
+        {:error, :too_big_media}
+      end
+    end
+  end
 
-    if file_size <= max_file_size_to_send_to_telegram do
-      :ok
-    else
-      {:error, :too_big_media}
+  @spec video_duration(String.t()) :: {:ok, non_neg_integer()} | {:error, :video_duration}
+  defp video_duration(file_path) do
+    case Lolek.File.get_video_duration(file_path) do
+      {:ok, duration} -> {:ok, duration}
+      :error -> {:error, :video_duration}
     end
   end
 
@@ -258,16 +274,21 @@ defmodule Lolek.Converter do
     file_path |> Path.dirname() |> Path.join(@compressed_name)
   end
 
-  @spec replace_original_file_with_compressed(String.t()) :: {:ok, Lolek.File.file_state()}
+  @spec replace_original_file_with_compressed(String.t()) ::
+          {:ok, Lolek.File.file_state()} | {:error, term()}
   defp replace_original_file_with_compressed(file_path) do
     new_file_path = get_compressed_file_path(file_path)
 
     if File.exists?(new_file_path) do
-      File.rm!(file_path)
-      {:ok, {:compressed, new_file_path}}
+      case File.rm(file_path) do
+        :ok -> {:ok, {:compressed, new_file_path}}
+        {:error, reason} -> {:error, {:remove_original_failed, reason}}
+      end
     else
-      File.rename(file_path, new_file_path)
-      {:ok, {:compressed, new_file_path}}
+      case File.rename(file_path, new_file_path) do
+        :ok -> {:ok, {:compressed, new_file_path}}
+        {:error, reason} -> {:error, {:rename_compressed_failed, reason}}
+      end
     end
   end
 end

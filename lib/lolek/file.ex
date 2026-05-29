@@ -119,7 +119,7 @@ defmodule Lolek.File do
     end
   end
 
-  @spec move_to_ready_to_telegram(Lolek.File.file_state()) :: :ok | {:error, File.posix()}
+  @spec move_to_ready_to_telegram(Lolek.File.file_state()) :: :ok | {:error, term()}
   def move_to_ready_to_telegram({:sent_to_telegram_at_first, file_path, file_id}) do
     file_extension = Path.extname(file_path)
 
@@ -132,8 +132,9 @@ defmodule Lolek.File do
       folder_path
       |> Path.join(file_id <> file_extension)
 
-    File.mkdir(folder_path)
-    File.rename(file_path, new_file_path)
+    with :ok <- File.mkdir_p(folder_path) do
+      File.rename(file_path, new_file_path)
+    end
   end
 
   def move_to_ready_to_telegram(_another_file_state) do

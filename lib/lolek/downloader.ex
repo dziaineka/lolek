@@ -24,8 +24,10 @@ defmodule Lolek.Downloader do
 
     case download_once(url, output_path) do
       {:ok, _} ->
-        {:ok, file_path} = Lolek.File.get_file_path_by_pattern(output_path, @downloaded_name)
-        {:ok, {:downloaded, file_path}}
+        case Lolek.File.get_file_path_by_pattern(output_path, @downloaded_name) do
+          {:ok, file_path} -> {:ok, {:downloaded, file_path}}
+          {:error, reason} -> {:error, reason}
+        end
 
       {:error, reason} ->
         if tries_done < max_tries do
@@ -36,7 +38,7 @@ defmodule Lolek.Downloader do
           Process.sleep(pause)
           download(url, output_path, tries_done + 1, max_tries, pause * 2, max_pause)
         else
-          raise("Error when downloading url: #{url}; reason: #{inspect(reason)}")
+          {:error, "Error when downloading url: #{url}; reason: #{inspect(reason)}"}
         end
     end
   end

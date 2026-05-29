@@ -3,20 +3,15 @@ defmodule Lolek do
   This module is the main module of the Lolek bot containing bot operations
   """
 
-  @spec send_file(integer(), Lolek.File.file_state()) :: {:ok, Lolek.File.file_state()}
+  @spec send_file(integer(), Lolek.File.file_state()) ::
+          {:ok, Lolek.File.file_state()} | {:error, term()}
   def send_file(chat_id, {:ready_to_telegram, file_path}) do
     extname = Path.extname(file_path) |> String.downcase()
     file_id = Path.basename(file_path, extname)
 
-    case extname do
-      ".mp4" ->
-        call_telegram(fn -> ExGram.send_video!(chat_id, file_id, disable_notification: true) end)
-
-      _ ->
-        call_telegram(fn -> ExGram.send_document!(chat_id, file_id) end)
+    with {:ok, _response} <- send_ready_file(chat_id, file_id, extname) do
+      {:ok, {:ready_to_telegram, file_path}}
     end
-
-    {:ok, {:ready_to_telegram, file_path}}
   end
 
   def send_file(chat_id, {:compressed, file_path}) do
@@ -24,17 +19,36 @@ defmodule Lolek do
       ".mp4" ->
         options = get_options(file_path)
 
-        %ExGram.Model.Message{video: %ExGram.Model.Video{file_id: file_id}} =
-          call_telegram(fn -> ExGram.send_video!(chat_id, {:file, file_path}, options) end)
-
-        {:ok, {:sent_to_telegram_at_first, file_path, file_id}}
+        with {:ok, %ExGram.Model.Message{video: %ExGram.Model.Video{file_id: file_id}}} <-
+               call_telegram(fn ->
+                 Lolek.Telegram.send_video(chat_id, {:file, file_path}, options)
+               end) do
+          {:ok, {:sent_to_telegram_at_first, file_path, file_id}}
+        else
+          {:ok, response} -> {:error, {:unexpected_telegram_response, response}}
+          {:error, _reason} = error -> error
+        end
 
       _ ->
-        %ExGram.Model.Message{document: %ExGram.Model.Document{file_id: file_id}} =
-          call_telegram(fn -> ExGram.send_document!(chat_id, {:file, file_path}) end)
-
-        {:ok, {:sent_to_telegram_at_first, file_path, file_id}}
+        with {:ok, %ExGram.Model.Message{document: %ExGram.Model.Document{file_id: file_id}}} <-
+               call_telegram(fn -> Lolek.Telegram.send_document(chat_id, {:file, file_path}) end) do
+          {:ok, {:sent_to_telegram_at_first, file_path, file_id}}
+        else
+          {:ok, response} -> {:error, {:unexpected_telegram_response, response}}
+          {:error, _reason} = error -> error
+        end
     end
+  end
+
+  @spec send_ready_file(integer(), String.t(), String.t()) :: {:ok, term()} | {:error, term()}
+  defp send_ready_file(chat_id, file_id, ".mp4") do
+    call_telegram(fn ->
+      Lolek.Telegram.send_video(chat_id, file_id, disable_notification: true)
+    end)
+  end
+
+  defp send_ready_file(chat_id, file_id, _extname) do
+    call_telegram(fn -> Lolek.Telegram.send_document(chat_id, file_id) end)
   end
 
   @spec get_options(String.t()) :: Keyword.t()
@@ -59,13 +73,14 @@ defmodule Lolek do
     end
   end
 
-  @spec call_telegram((-> term())) :: term() | no_return()
+  @spec call_telegram((-> {:ok, term()} | {:error, term()})) :: {:ok, term()} | {:error, term()}
   defp call_telegram(fun) do
-    fun.()
+    case fun.() do
+      {:error, %ExGram.Error{} = error} -> {:error, {:telegram_api, error}}
+      result -> result
+    end
   rescue
     error in ExGram.Error ->
-      reraise RuntimeError,
-              [message: "Telegram API request failed: #{inspect(error.code)}"],
-              __STACKTRACE__
+      {:error, {:telegram_api, error}}
   end
 end

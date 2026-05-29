@@ -50,10 +50,15 @@ defmodule Lolek.Downloader do
         Lolek.ThreadsDownloader.download(url, output_file_path)
 
       :yt_dlp ->
-        command =
-          ~c"yt-dlp --format-sort '+vcodec:h264,+acodec:aac' --recode-video mp4 -o \"#{output_file_path}\" \"#{url}\""
-
-        :exec.run(command, [:sync, :stdout, :stderr])
+        Lolek.Command.run("yt-dlp", [
+          "--format-sort",
+          "+vcodec:h264,+acodec:aac",
+          "--recode-video",
+          "mp4",
+          "-o",
+          output_file_path,
+          url
+        ])
     end
   end
 

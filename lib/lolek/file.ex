@@ -17,10 +17,17 @@ defmodule Lolek.File do
 
   @spec get_video_width_and_height(String.t()) :: :error | {:ok, {integer(), integer()}}
   def get_video_width_and_height(file_path) do
-    command =
-      ~c"ffprobe -v error -select_streams v -show_entries stream=width,height -of csv=p=0:s=x #{file_path}"
-
-    case :exec.run(command, [:sync, :stdout, :stderr]) do
+    case Lolek.Command.run("ffprobe", [
+           "-v",
+           "error",
+           "-select_streams",
+           "v",
+           "-show_entries",
+           "stream=width,height",
+           "-of",
+           "csv=p=0:s=x",
+           file_path
+         ]) do
       {:ok, result} ->
         # Extract stdout regardless of stderr warnings
         stdout_data = Keyword.get(result, :stdout, [])
@@ -52,10 +59,17 @@ defmodule Lolek.File do
 
   @spec get_video_duration(String.t()) :: :error | {:ok, integer()}
   def get_video_duration(file_path) do
-    command =
-      ~c"ffprobe -v error -select_streams v:0 -show_entries stream=duration -of default=noprint_wrappers=1:nokey=1 #{file_path}"
-
-    case :exec.run(command, [:sync, :stdout, :stderr]) do
+    case Lolek.Command.run("ffprobe", [
+           "-v",
+           "error",
+           "-select_streams",
+           "v:0",
+           "-show_entries",
+           "stream=duration",
+           "-of",
+           "default=noprint_wrappers=1:nokey=1",
+           file_path
+         ]) do
       {:ok, result} ->
         # Extract stdout regardless of stderr warnings
         stdout_data = Keyword.get(result, :stdout, [])

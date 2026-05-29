@@ -88,6 +88,7 @@ in
         isSystemUser = true;
         group = cfg.group;
         home = cfg.stateDir;
+        shell = pkgs.runtimeShell;
       };
     };
 
@@ -103,6 +104,7 @@ in
       wants = [ "network-online.target" ];
 
       environment = {
+        LOLEK_TELEGRAM_BASE_URL = "https://api.telegram.org";
         LOLEK_DOWNLOAD_DIR_PATH = toString cfg.downloadDir;
         LOLEK_MAX_FILE_SIZE_TO_SEND_TO_TELEGRAM = "45000000";
         LOLEK_MAX_VIDEO_SIZE_TO_SEND_TO_TELEGRAM = "40000000";

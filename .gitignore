@@ -28,6 +28,10 @@ lolek-*.tar
 # local config
 config/.env
 
+# local Mix/Hex homes
+.hex/
+.mix/
+
 # downloads dev
 downloads/
 

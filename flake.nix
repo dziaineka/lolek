@@ -33,6 +33,8 @@
         import ./nix/checks.nix {
           pkgs = pkgsFor system;
           root = ./.;
+          module = self.nixosModules.default;
+          package = self.packages.${system}.lolek;
         }
       );
 
@@ -42,5 +44,7 @@
           pkgs = pkgsFor system;
         }
       );
+
+      nixosModules.default = import ./nix/module.nix { inherit self; };
     };
 }

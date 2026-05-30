@@ -50,6 +50,18 @@ config :lolek,
        :dotenv_config.get("LOLEK_MAX_CONCURRENT_DOWNLOADS_PER_CHAT")
 
 config :lolek,
+       :download_command_timeout_seconds,
+       :dotenv_config.get("LOLEK_DOWNLOAD_COMMAND_TIMEOUT_SECONDS")
+
+config :lolek,
+       :convert_command_timeout_seconds,
+       :dotenv_config.get("LOLEK_CONVERT_COMMAND_TIMEOUT_SECONDS")
+
+config :lolek,
+       :probe_command_timeout_seconds,
+       :dotenv_config.get("LOLEK_PROBE_COMMAND_TIMEOUT_SECONDS")
+
+config :lolek,
        :allowed_urls_regex,
        :dotenv_config.get("LOLEK_ALLOWED_URLS_REGEX")
 

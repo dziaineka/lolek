@@ -115,7 +115,9 @@ defmodule Lolek.Converter do
     with {:ok, args} <- build_encode_args(file_path, new_file_path, strategy) do
       action = if strategy == :compress, do: "Compressed", else: "Converted to H.264"
 
-      case Lolek.Command.run("ffmpeg", args) do
+      case Lolek.Command.run("ffmpeg", args,
+             timeout: command_timeout(:convert_command_timeout_seconds)
+           ) do
         {:ok, result} ->
           Logger.info("#{action} video with libx264: #{inspect(result)}")
           :ok
@@ -204,20 +206,24 @@ defmodule Lolek.Converter do
 
   @spec h264_codec?(String.t()) :: boolean()
   defp h264_codec?(file_path) do
-    case Lolek.Command.run("ffprobe", [
-           "-v",
-           "error",
-           "-select_streams",
-           "v:0",
-           "-show_entries",
-           "stream=codec_name",
-           "-of",
-           "default=noprint_wrappers=1:nokey=1",
-           file_path
-         ]) do
+    case Lolek.Command.run(
+           "ffprobe",
+           [
+             "-v",
+             "error",
+             "-select_streams",
+             "v:0",
+             "-show_entries",
+             "stream=codec_name",
+             "-of",
+             "default=noprint_wrappers=1:nokey=1",
+             file_path
+           ],
+           timeout: command_timeout(:probe_command_timeout_seconds)
+         ) do
       {:ok, result} ->
         stdout_data = Keyword.get(result, :stdout, [])
-        codec = stdout_data |> List.first("") |> to_string() |> String.trim()
+        codec = stdout_data |> IO.iodata_to_binary() |> String.trim()
         codec == "h264"
 
       _ ->
@@ -290,5 +296,12 @@ defmodule Lolek.Converter do
         {:error, reason} -> {:error, {:rename_compressed_failed, reason}}
       end
     end
+  end
+
+  @spec command_timeout(atom()) :: pos_integer()
+  defp command_timeout(config_key) do
+    :lolek
+    |> Application.fetch_env!(config_key)
+    |> :timer.seconds()
   end
 end

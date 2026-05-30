@@ -4,7 +4,8 @@ defmodule Lolek.DownloaderTest do
   @download_env_keys [
     :max_download_tries,
     :start_download_pause,
-    :max_download_pause
+    :max_download_pause,
+    :download_command_timeout_seconds
   ]
 
   test "uses dedicated threads downloader for threads urls" do
@@ -47,6 +48,7 @@ defmodule Lolek.DownloaderTest do
       Application.put_env(:lolek, :max_download_tries, 1)
       Application.put_env(:lolek, :start_download_pause, 0)
       Application.put_env(:lolek, :max_download_pause, 0)
+      Application.put_env(:lolek, :download_command_timeout_seconds, 5)
 
       System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
       {:ok, _apps} = Application.ensure_all_started(:erlexec)
@@ -79,6 +81,7 @@ defmodule Lolek.DownloaderTest do
       Application.put_env(:lolek, :max_download_tries, 3)
       Application.put_env(:lolek, :start_download_pause, 0)
       Application.put_env(:lolek, :max_download_pause, 0)
+      Application.put_env(:lolek, :download_command_timeout_seconds, 5)
 
       System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
       {:ok, _apps} = Application.ensure_all_started(:erlexec)
@@ -108,6 +111,7 @@ defmodule Lolek.DownloaderTest do
       Application.put_env(:lolek, :max_download_tries, 1)
       Application.put_env(:lolek, :start_download_pause, 0)
       Application.put_env(:lolek, :max_download_pause, 0)
+      Application.put_env(:lolek, :download_command_timeout_seconds, 5)
 
       System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
       {:ok, _apps} = Application.ensure_all_started(:erlexec)

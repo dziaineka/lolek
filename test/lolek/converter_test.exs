@@ -6,7 +6,9 @@ defmodule Lolek.ConverterTest do
     :max_video_size_to_send_to_telegram,
     :max_audio_size_to_send_to_telegram,
     :max_file_size_to_compress,
-    :max_duration_to_compress
+    :max_duration_to_compress,
+    :convert_command_timeout_seconds,
+    :probe_command_timeout_seconds
   ]
 
   @tag :tmp_dir
@@ -24,6 +26,7 @@ defmodule Lolek.ConverterTest do
 
       File.write!(file_path, "video")
       put_fake_executable(bin_dir, "ffprobe", "exit 1")
+      Application.put_env(:lolek, :probe_command_timeout_seconds, 5)
 
       System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
       {:ok, _apps} = Application.ensure_all_started(:erlexec)
@@ -99,6 +102,8 @@ defmodule Lolek.ConverterTest do
     Application.put_env(:lolek, :max_audio_size_to_send_to_telegram, 200)
     Application.put_env(:lolek, :max_file_size_to_compress, 100)
     Application.put_env(:lolek, :max_duration_to_compress, 100)
+    Application.put_env(:lolek, :convert_command_timeout_seconds, 5)
+    Application.put_env(:lolek, :probe_command_timeout_seconds, 5)
   end
 
   defp put_video_probe(bin_dir, duration, codec) do

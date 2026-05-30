@@ -150,6 +150,24 @@ in
       description = "Maximum number of downloads and conversions processed concurrently per chat.";
     };
 
+    downloadCommandTimeout = mkOption {
+      type = types.ints.positive;
+      default = 300;
+      description = "Timeout, in seconds, for yt-dlp and Threads curl commands.";
+    };
+
+    convertCommandTimeout = mkOption {
+      type = types.ints.positive;
+      default = 300;
+      description = "Timeout, in seconds, for ffmpeg conversion commands.";
+    };
+
+    probeCommandTimeout = mkOption {
+      type = types.ints.positive;
+      default = 15;
+      description = "Timeout, in seconds, for ffprobe metadata commands.";
+    };
+
     maxDownloadTries = mkOption {
       type = types.ints.positive;
       default = 10;
@@ -254,6 +272,9 @@ in
         LOLEK_MAX_DURATION_TO_COMPRESS = toString cfg.maxDurationToCompress;
         LOLEK_MAX_CONCURRENT_DOWNLOADS = toString cfg.maxConcurrentDownloads;
         LOLEK_MAX_CONCURRENT_DOWNLOADS_PER_CHAT = toString cfg.maxConcurrentDownloadsPerChat;
+        LOLEK_DOWNLOAD_COMMAND_TIMEOUT_SECONDS = toString cfg.downloadCommandTimeout;
+        LOLEK_CONVERT_COMMAND_TIMEOUT_SECONDS = toString cfg.convertCommandTimeout;
+        LOLEK_PROBE_COMMAND_TIMEOUT_SECONDS = toString cfg.probeCommandTimeout;
         LOLEK_ALLOWED_URLS_REGEX = lib.concatStringsSep "|" (map lib.escapeRegex cfg.allowedUrlPatterns);
         LOLEK_MAX_DOWNLOAD_TRIES = toString cfg.maxDownloadTries;
         LOLEK_START_DOWNLOAD_PAUSE = toString cfg.startDownloadPause;

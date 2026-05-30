@@ -270,10 +270,33 @@ in
         Group = cfg.group;
         WorkingDirectory = cfg.stateDir;
         Restart = "on-failure";
+        AmbientCapabilities = "";
+        CapabilityBoundingSet = "";
+        LockPersonality = true;
+        NoNewPrivileges = true;
+        PrivateDevices = true;
+        PrivateTmp = true;
+        ProtectClock = true;
+        ProtectControlGroups = true;
+        ProtectHostname = true;
+        ProtectKernelLogs = true;
+        ProtectKernelModules = true;
+        ProtectKernelTunables = true;
+        ProtectSystem = "strict";
         ReadWritePaths = [
           cfg.stateDir
           cfg.downloadDir
         ];
+        RemoveIPC = true;
+        RestrictAddressFamilies = [
+          "AF_UNIX"
+          "AF_INET"
+          "AF_INET6"
+        ];
+        RestrictRealtime = true;
+        RestrictSUIDSGID = true;
+        SystemCallArchitectures = "native";
+        UMask = "0077";
       }
       // optionalAttrs (cfg.environmentFile != null) {
         EnvironmentFile = cfg.environmentFile;

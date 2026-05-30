@@ -12,7 +12,6 @@ let
   stateDir = "/var/lib/${serviceUser}";
   downloadDir = "${stateDir}/downloads";
   readyDirName = "ready_to_telegram";
-  envFileName = "${serviceName}.env";
 
   fakeServicesName = "lolek-fake-services";
   fakeServicesUnit = "${fakeServicesName}.service";
@@ -102,9 +101,7 @@ pkgs.testers.nixosTest {
         user = serviceUser;
         group = serviceGroup;
         inherit stateDir downloadDir;
-        environmentFile = pkgs.writeText envFileName ''
-          LOLEK_BOT_TOKEN=${fakeToken}
-        '';
+        botTokenFile = pkgs.writeText "lolek-test-token" fakeToken;
         allowedUrlPatterns = [ fakeHost ];
         maxDownloadDirSize = 0;
         maxConcurrentDownloads = 2;

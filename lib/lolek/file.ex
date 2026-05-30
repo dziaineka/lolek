@@ -173,11 +173,20 @@ defmodule Lolek.File do
     ready_to_telegram_path = Path.join(folder_path, @ready_to_telegram)
 
     case File.ls(ready_to_telegram_path) do
-      {:ok, [file_name | _]} ->
-        {
-          :exists,
-          {:ready_to_telegram, Path.join(ready_to_telegram_path, file_name)}
-        }
+      {:ok, file_names} ->
+        Enum.find_value(file_names, :not_ready, fn file_name ->
+          file_path = Path.join(ready_to_telegram_path, file_name)
+
+          if usable_cached_file?(file_path) do
+            {
+              :exists,
+              {:ready_to_telegram, file_path}
+            }
+          else
+            remove_invalid_cache_file(file_path)
+            false
+          end
+        end)
 
       _ ->
         :not_ready
@@ -196,7 +205,11 @@ defmodule Lolek.File do
         :not_compressed
 
       oversized_file?(file_path, max_file_size_to_send_to_telegram) ->
-        File.rm(file_path)
+        remove_invalid_cache_file(file_path)
+        :not_compressed
+
+      not usable_cached_file?(file_path) ->
+        remove_invalid_cache_file(file_path)
         :not_compressed
 
       true ->
@@ -205,6 +218,33 @@ defmodule Lolek.File do
           {:compressed, file_path}
         }
     end
+  end
+
+  @spec usable_cached_file?(String.t()) :: boolean()
+  defp usable_cached_file?(file_path) do
+    with {:ok, size} when size > 0 <- file_size(file_path) do
+      usable_media_file?(file_path)
+    else
+      _ -> false
+    end
+  end
+
+  @spec usable_media_file?(String.t()) :: boolean()
+  defp usable_media_file?(file_path) do
+    case Path.extname(file_path) |> String.downcase() do
+      ".mp4" ->
+        match?({:ok, duration} when duration > 0, get_video_duration(file_path))
+
+      _ ->
+        true
+    end
+  end
+
+  @spec remove_invalid_cache_file(String.t()) :: :ok
+  defp remove_invalid_cache_file(file_path) do
+    Logger.warning("Removing invalid cached file: #{file_path}")
+    File.rm(file_path)
+    :ok
   end
 
   @spec oversized_file?(String.t(), non_neg_integer()) :: boolean()

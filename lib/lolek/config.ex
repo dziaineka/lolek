@@ -9,6 +9,7 @@ defmodule Lolek.Config do
   def get_parser() do
     [
       {"LOLEK_TELEGRAM_BASE_URL", :str},
+      {"LOLEK_TELEGRAM_LOCAL_FILE_UPLOADS", :bool},
       {"LOLEK_DOWNLOAD_DIR_PATH", :str},
       {"LOLEK_MAX_DOWNLOAD_DIR_SIZE", :int},
       {"LOLEK_MAX_FILE_SIZE_TO_SEND_TO_TELEGRAM", :int},

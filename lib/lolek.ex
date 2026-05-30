@@ -41,10 +41,23 @@ defmodule Lolek do
     end
   end
 
-  @spec upload_file(String.t()) :: {:file_content, File.Stream.t(), String.t()}
+  @spec upload_file(String.t()) :: {:file_content, File.Stream.t(), String.t()} | String.t()
   defp upload_file(file_path) do
-    {:file_content, File.stream!(file_path, [], @upload_chunk_size), Path.basename(file_path)}
+    if Application.get_env(:lolek, :telegram_local_file_uploads, false) do
+      local_file_uri(file_path)
+    else
+      {:file_content, File.stream!(file_path, [], @upload_chunk_size), Path.basename(file_path)}
+    end
   end
+
+  @spec local_file_uri(String.t()) :: String.t()
+  defp local_file_uri(file_path) do
+    "file://" <> URI.encode(file_path, &file_uri_char?/1)
+  end
+
+  @spec file_uri_char?(non_neg_integer()) :: boolean()
+  defp file_uri_char?(?/), do: true
+  defp file_uri_char?(char), do: URI.char_unreserved?(char)
 
   @spec send_ready_file(integer(), String.t(), String.t()) :: {:ok, term()} | {:error, term()}
   defp send_ready_file(chat_id, file_id, ".mp4") do

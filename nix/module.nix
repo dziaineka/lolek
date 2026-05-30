@@ -21,6 +21,7 @@ let
     "youtube.com/shorts"
   ];
   inherit (lib)
+    getExe
     mkEnableOption
     mkIf
     mkMerge
@@ -29,6 +30,12 @@ let
     types
     ;
   hardwareAccelerationEnabled = cfg.hardwareAcceleration.backend != "none";
+  localTelegramBotApi = cfg.localTelegramBotApi;
+  localTelegramBotApiServiceName = "lolek-telegram-bot-api";
+  localTelegramBotApiBaseUrl = "http://${localTelegramBotApi.ipAddress}:${toString localTelegramBotApi.port}";
+  effectiveTelegramBaseUrl =
+    if localTelegramBotApi.enable then localTelegramBotApiBaseUrl else cfg.telegramBaseUrl;
+  effectiveTelegramLocalFileUploads = cfg.telegramLocalFileUploads || localTelegramBotApi.enable;
 in
 {
   options.services.lolek = {
@@ -80,6 +87,76 @@ in
         sops-nix secret paths. When set, the module exports
         LOLEK_BOT_TOKEN_FILE and Lolek reads the token from that file.
       '';
+    };
+
+    telegramBaseUrl = mkOption {
+      type = types.str;
+      default = "https://api.telegram.org";
+      description = "Base URL of the Telegram Bot API server.";
+    };
+
+    telegramLocalFileUploads = mkOption {
+      type = types.bool;
+      default = false;
+      description = ''
+        Whether to send new media uploads as file:// URIs. This requires a
+        local Telegram Bot API server running in local mode and able to read
+        Lolek's download directory.
+      '';
+    };
+
+    localTelegramBotApi = {
+      enable = mkEnableOption "a local Telegram Bot API server sidecar";
+
+      package = mkOption {
+        type = types.package;
+        default = pkgs.telegram-bot-api;
+        defaultText = lib.literalExpression "pkgs.telegram-bot-api";
+        description = "Telegram Bot API server package to run.";
+      };
+
+      environmentFile = mkOption {
+        type = types.nullOr types.path;
+        default = null;
+        description = ''
+          Environment file containing TELEGRAM_API_ID and TELEGRAM_API_HASH
+          for the local Telegram Bot API server.
+        '';
+      };
+
+      ipAddress = mkOption {
+        type = types.str;
+        default = "127.0.0.1";
+        description = "IP address on which the local Telegram Bot API server listens.";
+      };
+
+      port = mkOption {
+        type = types.port;
+        default = 8081;
+        description = "TCP port on which the local Telegram Bot API server listens.";
+      };
+
+      stateDir = mkOption {
+        type = types.path;
+        default = "${cfg.stateDir}/telegram-bot-api";
+        defaultText = lib.literalExpression ''"''${config.services.lolek.stateDir}/telegram-bot-api"'';
+        description = "State directory for the local Telegram Bot API server.";
+      };
+
+      tempDir = mkOption {
+        type = types.path;
+        default = "${cfg.localTelegramBotApi.stateDir}/tmp";
+        defaultText = lib.literalExpression ''
+          "''${config.services.lolek.localTelegramBotApi.stateDir}/tmp"
+        '';
+        description = "Temporary upload directory for the local Telegram Bot API server.";
+      };
+
+      verbosity = mkOption {
+        type = types.ints.unsigned;
+        default = 2;
+        description = "Telegram Bot API server log verbosity.";
+      };
     };
 
     environmentFile = mkOption {
@@ -258,6 +335,22 @@ in
           equal to services.lolek.maxConcurrentDownloads.
         '';
       }
+      {
+        assertion =
+          !effectiveTelegramLocalFileUploads || effectiveTelegramBaseUrl != "https://api.telegram.org";
+        message = ''
+          services.lolek.telegramLocalFileUploads requires
+          services.lolek.telegramBaseUrl to point at a local Telegram Bot API
+          server.
+        '';
+      }
+      {
+        assertion = !localTelegramBotApi.enable || localTelegramBotApi.environmentFile != null;
+        message = ''
+          services.lolek.localTelegramBotApi.environmentFile must be set when
+          services.lolek.localTelegramBotApi.enable is true.
+        '';
+      }
     ];
 
     users.groups = mkMerge [
@@ -281,16 +374,71 @@ in
     systemd.tmpfiles.rules = [
       "d ${cfg.stateDir} 0750 ${cfg.user} ${cfg.group} - -"
       "d ${cfg.downloadDir} 0750 ${cfg.user} ${cfg.group} - -"
+    ]
+    ++ lib.optionals localTelegramBotApi.enable [
+      "d ${localTelegramBotApi.stateDir} 0750 ${cfg.user} ${cfg.group} - -"
+      "d ${localTelegramBotApi.tempDir} 0750 ${cfg.user} ${cfg.group} - -"
     ];
 
-    systemd.services.lolek = {
-      description = "Lolek Telegram media downloader bot";
+    systemd.services.${localTelegramBotApiServiceName} = mkIf localTelegramBotApi.enable {
+      description = "Local Telegram Bot API server for Lolek";
       wantedBy = [ "multi-user.target" ];
       after = [ "network-online.target" ];
       wants = [ "network-online.target" ];
 
+      serviceConfig = {
+        ExecStart = "${getExe localTelegramBotApi.package} --local --http-ip-address=${localTelegramBotApi.ipAddress} --http-port=${toString localTelegramBotApi.port} --dir=${localTelegramBotApi.stateDir} --temp-dir=${localTelegramBotApi.tempDir} --verbosity=${toString localTelegramBotApi.verbosity}";
+        User = cfg.user;
+        Group = cfg.group;
+        WorkingDirectory = localTelegramBotApi.stateDir;
+        Restart = "on-failure";
+        AmbientCapabilities = "";
+        CapabilityBoundingSet = "";
+        LockPersonality = true;
+        NoNewPrivileges = true;
+        PrivateTmp = true;
+        ProtectClock = true;
+        ProtectControlGroups = true;
+        ProtectHostname = true;
+        ProtectKernelLogs = true;
+        ProtectKernelModules = true;
+        ProtectKernelTunables = true;
+        ProtectSystem = "strict";
+        ReadWritePaths = [
+          localTelegramBotApi.stateDir
+          localTelegramBotApi.tempDir
+        ];
+        RemoveIPC = true;
+        RestrictAddressFamilies = [
+          "AF_UNIX"
+          "AF_INET"
+          "AF_INET6"
+        ];
+        RestrictRealtime = true;
+        RestrictSUIDSGID = true;
+        SystemCallArchitectures = "native";
+        UMask = "0077";
+      }
+      // optionalAttrs (localTelegramBotApi.environmentFile != null) {
+        EnvironmentFile = localTelegramBotApi.environmentFile;
+      };
+    };
+
+    systemd.services.lolek = {
+      description = "Lolek Telegram media downloader bot";
+      wantedBy = [ "multi-user.target" ];
+      after = [
+        "network-online.target"
+      ]
+      ++ lib.optionals localTelegramBotApi.enable [ "${localTelegramBotApiServiceName}.service" ];
+      wants = [
+        "network-online.target"
+      ]
+      ++ lib.optionals localTelegramBotApi.enable [ "${localTelegramBotApiServiceName}.service" ];
+
       environment = {
-        LOLEK_TELEGRAM_BASE_URL = "https://api.telegram.org";
+        LOLEK_TELEGRAM_BASE_URL = effectiveTelegramBaseUrl;
+        LOLEK_TELEGRAM_LOCAL_FILE_UPLOADS = if effectiveTelegramLocalFileUploads then "true" else "false";
         LOLEK_DOWNLOAD_DIR_PATH = toString cfg.downloadDir;
         LOLEK_MAX_DOWNLOAD_DIR_SIZE = toString cfg.maxDownloadDirSize;
         LOLEK_MAX_FILE_SIZE_TO_SEND_TO_TELEGRAM = toString cfg.maxFileSizeToSendToTelegram;

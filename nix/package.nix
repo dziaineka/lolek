@@ -73,6 +73,10 @@ rec {
 
       runHook postCheck
     '';
+    doInstallCheck = true;
+    nativeInstallCheckInputs = [ pkgs.versionCheckHook ];
+    versionCheckProgram = "${placeholder "out"}/bin/lolek";
+    versionCheckProgramArg = "version";
 
     postInstall = ''
       cat >> "$out/releases/${version}/env.sh" <<'EOF'

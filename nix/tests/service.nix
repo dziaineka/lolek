@@ -151,6 +151,7 @@ pkgs.testers.nixosTest {
           LOLEK_FAKE_SERVICES_TOKEN = fakeToken;
           LOLEK_FAKE_SERVICES_DOCUMENT_FILE_ID = documentFileId;
           LOLEK_FAKE_SERVICES_DOCUMENT_FILE_UNIQUE_ID = documentFileUniqueId;
+          PYTHONPATH = "${./.}";
         };
         serviceConfig = {
           ExecStart = "${pkgs.python3}/bin/python3 ${./fake-services.py}";

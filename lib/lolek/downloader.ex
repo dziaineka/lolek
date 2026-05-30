@@ -3,7 +3,7 @@ defmodule Lolek.Downloader do
   This module is responsible for downloading media from the internet.
   """
   require Logger
-  @downloaded_name "downloaded"
+  @downloaded_name "downloaded.mp4"
   @threads_hosts ["threads.com", "www.threads.com", "threads.net", "www.threads.net"]
 
   @spec download(String.t(), Lolek.File.file_state()) ::

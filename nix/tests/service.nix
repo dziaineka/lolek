@@ -26,7 +26,6 @@ let
   compressedUploadFile = "${fakeUploadDir}/compressed.bin";
 
   fakeBaseUrl = "http://${fakeHost}:${toString fakePort}";
-  fakeAllowedUrlsRegex = pkgs.lib.escapeRegex fakeHost;
   passthroughMediaPath = "/passthrough.mp4";
   passthroughMediaUrl = "${fakeBaseUrl}${passthroughMediaPath}";
   passthroughMediaWidth = 160;
@@ -106,18 +105,20 @@ pkgs.testers.nixosTest {
         environmentFile = pkgs.writeText envFileName ''
           LOLEK_BOT_TOKEN=${fakeToken}
         '';
+        allowedUrlPatterns = [ fakeHost ];
+        maxDownloadDirSize = 0;
+        maxDownloadTries = 1;
+        startDownloadPause = 10;
+        maxDownloadPause = 10;
+        inherit
+          maxFileSizeToSendToTelegram
+          maxVideoSizeToSendToTelegram
+          maxAudioSizeToSendToTelegram
+          maxFileSizeToCompress
+          maxDurationToCompress
+          ;
         environment = {
           LOLEK_TELEGRAM_BASE_URL = fakeBaseUrl;
-          LOLEK_ALLOWED_URLS_REGEX = fakeAllowedUrlsRegex;
-          LOLEK_MAX_DOWNLOAD_DIR_SIZE = "0";
-          LOLEK_MAX_DOWNLOAD_TRIES = "1";
-          LOLEK_START_DOWNLOAD_PAUSE = "10";
-          LOLEK_MAX_DOWNLOAD_PAUSE = "10";
-          LOLEK_MAX_FILE_SIZE_TO_SEND_TO_TELEGRAM = toString maxFileSizeToSendToTelegram;
-          LOLEK_MAX_VIDEO_SIZE_TO_SEND_TO_TELEGRAM = toString maxVideoSizeToSendToTelegram;
-          LOLEK_MAX_AUDIO_SIZE_TO_SEND_TO_TELEGRAM = toString maxAudioSizeToSendToTelegram;
-          LOLEK_MAX_FILE_SIZE_TO_COMPRESS = toString maxFileSizeToCompress;
-          LOLEK_MAX_DURATION_TO_COMPRESS = toString maxDurationToCompress;
         };
       };
 
@@ -204,7 +205,16 @@ pkgs.testers.nixosTest {
         % (fake_events_file, fake_events_file)
     )
 
-    # The second fake update is larger than the Telegram send limit. It should go through compression.
+    # The second fake update repeats the same URL. It should reuse the cached Telegram file ID.
+    machine.succeed(
+        "timeout 120 sh -c 'until grep \"^sendVideo passthrough-file-id-send \" %s; do sleep 1; done' "
+        "|| (journalctl -u ${serviceUnit} --no-pager; cat %s; false)"
+        % (fake_events_file, fake_events_file)
+    )
+    machine.succeed("test $(grep -c '^sendVideo passthrough-upload ' %s) -eq 1" % fake_events_file)
+    machine.succeed("test $(grep -c '^sendVideo passthrough-file-id-send ' %s) -eq 1" % fake_events_file)
+
+    # The third fake update is larger than the Telegram send limit. It should go through compression.
     machine.succeed(
         "timeout 120 sh -c 'until grep \"^sendVideo compressed-upload \" %s; do sleep 1; done' "
         "|| (journalctl -u ${serviceUnit} --no-pager; cat %s; false)"

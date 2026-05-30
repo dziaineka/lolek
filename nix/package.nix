@@ -7,6 +7,7 @@
 let
   common = import ./common.nix { inherit pkgs root; };
   lib = pkgs.lib;
+  version = "1.8.1";
   runtimePath = lib.makeBinPath [
     pkgs.curl
     pkgs.ffmpeg
@@ -16,21 +17,24 @@ in
 rec {
   lolek = common.mixRelease {
     pname = "lolek";
-    version = "1.8.1";
+    inherit version;
     inherit (common) elixir src;
 
     mixFodDeps = common.fetchMixDeps {
       pname = "lolek-mix-deps";
-      version = "1.8.1";
+      inherit version;
       src = root;
       inherit (common) elixir;
       hash = "sha256-pdh+PiriuRixsEw2Mvjop3kTRyUo60mWdcB3PWhkqK8=";
     };
 
     postInstall = ''
-      wrapProgram "$out/bin/lolek" \
-        --run 'export RELEASE_COOKIE="''${RELEASE_COOKIE:-lolek}"' \
-        --prefix PATH : ${runtimePath}
+      cat >> "$out/releases/${version}/env.sh" <<'EOF'
+
+      export RELEASE_COOKIE="''${RELEASE_COOKIE:-lolek}"
+      export RELEASE_PROG="lolek"
+      export PATH="${runtimePath}:$PATH"
+      EOF
     '';
 
     meta = {

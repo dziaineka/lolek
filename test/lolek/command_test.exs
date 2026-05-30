@@ -24,12 +24,19 @@ defmodule Lolek.CommandTest do
   test "returns exit status on command failure", %{tmp_dir: tmp_dir} do
     preserve_path(fn ->
       bin_dir = Path.join(tmp_dir, "bin")
-      put_fake_executable(bin_dir, "fail", "exit 7")
+      put_fake_executable(bin_dir, "fail", """
+      printf out
+      printf err >&2
+      exit 7
+      """)
 
       System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
       {:ok, _apps} = Application.ensure_all_started(:erlexec)
 
-      assert {:error, [exit_status: 7]} = Lolek.Command.run("fail", [])
+      assert {:error, reason} = Lolek.Command.run("fail", [])
+      assert Keyword.get(reason, :exit_status) == 7
+      assert IO.iodata_to_binary(Keyword.get(reason, :stdout, [])) == "out"
+      assert IO.iodata_to_binary(Keyword.get(reason, :stderr, [])) == "err"
     end)
   end
 

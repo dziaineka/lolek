@@ -138,6 +138,18 @@ in
       description = "Maximum video duration, in seconds, eligible for compression.";
     };
 
+    maxConcurrentDownloads = mkOption {
+      type = types.ints.positive;
+      default = 2;
+      description = "Maximum number of downloads and conversions processed concurrently.";
+    };
+
+    maxConcurrentDownloadsPerChat = mkOption {
+      type = types.ints.positive;
+      default = 1;
+      description = "Maximum number of downloads and conversions processed concurrently per chat.";
+    };
+
     maxDownloadTries = mkOption {
       type = types.ints.positive;
       default = 10;
@@ -199,6 +211,13 @@ in
           services.lolek.maxDownloadPause.
         '';
       }
+      {
+        assertion = cfg.maxConcurrentDownloadsPerChat <= cfg.maxConcurrentDownloads;
+        message = ''
+          services.lolek.maxConcurrentDownloadsPerChat must be less than or
+          equal to services.lolek.maxConcurrentDownloads.
+        '';
+      }
     ];
 
     users.groups = mkIf cfg.createUser {
@@ -233,6 +252,8 @@ in
         LOLEK_MAX_AUDIO_SIZE_TO_SEND_TO_TELEGRAM = toString cfg.maxAudioSizeToSendToTelegram;
         LOLEK_MAX_FILE_SIZE_TO_COMPRESS = toString cfg.maxFileSizeToCompress;
         LOLEK_MAX_DURATION_TO_COMPRESS = toString cfg.maxDurationToCompress;
+        LOLEK_MAX_CONCURRENT_DOWNLOADS = toString cfg.maxConcurrentDownloads;
+        LOLEK_MAX_CONCURRENT_DOWNLOADS_PER_CHAT = toString cfg.maxConcurrentDownloadsPerChat;
         LOLEK_ALLOWED_URLS_REGEX = lib.concatStringsSep "|" (map lib.escapeRegex cfg.allowedUrlPatterns);
         LOLEK_MAX_DOWNLOAD_TRIES = toString cfg.maxDownloadTries;
         LOLEK_START_DOWNLOAD_PAUSE = toString cfg.startDownloadPause;

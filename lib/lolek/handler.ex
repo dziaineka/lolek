@@ -40,7 +40,9 @@ defmodule Lolek.Handler do
       ) do
     with {:ok, url} <- Lolek.Url.extract_url(text),
          {:ok, _file_state} <-
-           Lolek.UrlProcessing.process(url, fn -> process_url(chat_id, url) end) do
+           Lolek.UrlProcessing.process(url, fn ->
+             Lolek.ProcessingLimiter.with_limit(chat_id, fn -> process_url(chat_id, url) end)
+           end) do
       :ok
     else
       {:error, reason} ->

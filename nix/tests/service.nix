@@ -107,6 +107,8 @@ pkgs.testers.nixosTest {
         '';
         allowedUrlPatterns = [ fakeHost ];
         maxDownloadDirSize = 0;
+        maxConcurrentDownloads = 2;
+        maxConcurrentDownloadsPerChat = 1;
         maxDownloadTries = 1;
         startDownloadPause = 10;
         maxDownloadPause = 10;

@@ -12,6 +12,7 @@ defmodule Lolek.Application do
 
     children = [
       {Registry, keys: :unique, name: Lolek.UrlProcessingRegistry},
+      Lolek.ProcessingLimiter,
       ExGram,
       {Lolek.Handler, [method: :polling, token: token]},
       Lolek.FileCleaner

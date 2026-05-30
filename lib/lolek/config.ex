@@ -17,6 +17,8 @@ defmodule Lolek.Config do
       {"LOLEK_MAX_AUDIO_SIZE_TO_SEND_TO_TELEGRAM", :int},
       {"LOLEK_MAX_FILE_SIZE_TO_COMPRESS", :int},
       {"LOLEK_MAX_DURATION_TO_COMPRESS", :int},
+      {"LOLEK_MAX_CONCURRENT_DOWNLOADS", :int},
+      {"LOLEK_MAX_CONCURRENT_DOWNLOADS_PER_CHAT", :int},
       {"LOLEK_ALLOWED_URLS_REGEX", :str},
       {"LOLEK_MAX_DOWNLOAD_TRIES", :int},
       {"LOLEK_START_DOWNLOAD_PAUSE", :int},

@@ -260,15 +260,7 @@ defmodule Lolek.ThreadsDownloader do
 
   @spec download_media_file(String.t(), String.t()) :: {:ok, String.t()} | {:error, String.t()}
   defp download_media_file(media_url, output_file_path) do
-    with {:ok, response} <- get(media_url, download_headers()),
-         :ok <- File.mkdir_p(Path.dirname(output_file_path)),
-         extension <- file_extension(media_url, response.headers),
-         file_path <- output_file_path <> extension,
-         :ok <- File.write(file_path, response.body) do
-      {:ok, file_path}
-    else
-      {:error, reason} -> {:error, format_error(reason)}
-    end
+    Lolek.StreamDownload.download(media_url, output_file_path, download_headers())
   end
 
   @spec get(String.t(), [{String.t(), String.t()}]) ::
@@ -313,6 +305,7 @@ defmodule Lolek.ThreadsDownloader do
   @spec download_headers() :: [{String.t(), String.t()}]
   defp download_headers do
     [
+      {"user-agent", @threads_ua},
       {"accept", "*/*"},
       {"accept-language", "en-US,en;q=0.9"}
     ]
@@ -444,34 +437,6 @@ defmodule Lolek.ThreadsDownloader do
     uri = URI.parse(url)
     path = uri.path |> String.trim_trailing("/") |> Kernel.<>("/media")
     URI.to_string(%URI{uri | path: path})
-  end
-
-  @spec file_extension(String.t(), [{binary(), binary()}]) :: String.t()
-  defp file_extension(media_url, headers) do
-    case Path.extname(URI.parse(media_url).path || "") do
-      "" -> extension_from_content_type(headers)
-      extension -> extension
-    end
-  end
-
-  @spec extension_from_content_type([{binary(), binary()}]) :: String.t()
-  defp extension_from_content_type(headers) do
-    case content_type_header(headers) do
-      "video/mp4" <> _ -> ".mp4"
-      "application/dash+xml" <> _ -> ".mpd"
-      _ -> ".mp4"
-    end
-  end
-
-  @spec content_type_header([{binary(), binary()}]) :: String.t() | nil
-  defp content_type_header(headers) do
-    Enum.find_value(headers, fn
-      {name, value} when is_binary(name) and is_binary(value) ->
-        if String.downcase(name) == "content-type", do: String.downcase(value)
-
-      _ ->
-        nil
-    end)
   end
 
   @spec format_error(term()) :: String.t()

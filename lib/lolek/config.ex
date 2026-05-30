@@ -8,7 +8,6 @@ defmodule Lolek.Config do
   @spec get_parser() :: :dotenv_config.parser()
   def get_parser() do
     [
-      {"LOLEK_BOT_TOKEN", :str},
       {"LOLEK_TELEGRAM_BASE_URL", :str},
       {"LOLEK_DOWNLOAD_DIR_PATH", :str},
       {"LOLEK_MAX_DOWNLOAD_DIR_SIZE", :int},
@@ -29,5 +28,43 @@ defmodule Lolek.Config do
       {"LOLEK_START_DOWNLOAD_PAUSE", :int},
       {"LOLEK_MAX_DOWNLOAD_PAUSE", :int}
     ]
+  end
+
+  @spec get_bot_token([String.t()]) :: String.t()
+  def get_bot_token(files) do
+    case System.get_env("LOLEK_BOT_TOKEN_FILE") do
+      path when path in [nil, ""] ->
+        System.get_env("LOLEK_BOT_TOKEN") || get_bot_token_from_files(files) ||
+          raise "Can't find config item: LOLEK_BOT_TOKEN"
+
+      path ->
+        path |> File.read!() |> String.trim()
+    end
+  end
+
+  @spec get_bot_token_from_files([String.t()]) :: String.t() | nil
+  defp get_bot_token_from_files(files) do
+    files
+    |> Enum.reduce(%{}, fn file, config ->
+      case :dotenv_config_parser.parse_file(file) do
+        {:ok, file_config} -> Map.merge(config, file_config)
+        {:error, _reason} -> config
+      end
+    end)
+    |> Map.get("LOLEK_BOT_TOKEN")
+    |> normalize_bot_token()
+  end
+
+  @spec normalize_bot_token(binary() | nil) :: String.t() | nil
+  defp normalize_bot_token(nil), do: nil
+
+  defp normalize_bot_token(value) do
+    value
+    |> to_string()
+    |> String.trim()
+    |> String.trim_leading("\"")
+    |> String.trim_trailing("\"")
+    |> String.trim_leading("'")
+    |> String.trim_trailing("'")
   end
 end

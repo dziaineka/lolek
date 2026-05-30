@@ -3,11 +3,7 @@ import Config
 files = ["config/.env.default", "config/.env"] |> Enum.filter(&File.exists?/1)
 :dotenv_config.init(Lolek.Config, files)
 
-bot_token =
-  case System.get_env("LOLEK_BOT_TOKEN_FILE") do
-    path when path in [nil, ""] -> :dotenv_config.get("LOLEK_BOT_TOKEN")
-    path -> path |> File.read!() |> String.trim()
-  end
+bot_token = Lolek.Config.get_bot_token(files)
 
 config :ex_gram,
   token: bot_token,

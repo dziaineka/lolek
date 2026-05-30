@@ -1,12 +1,12 @@
 defmodule Lolek.Converter do
   @moduledoc """
   This module is responsible for converting files to the required by telegram format.
-  Uses libx264 software encoder for all video encoding operations.
   """
   require Logger
   @compressed_name "compressed.mp4"
 
   @type encoding_strategy :: :compress | :convert
+  @type h264_encoder :: :software | {:vaapi, String.t()}
 
   @spec adapt_to_telegram(Lolek.File.file_state()) ::
           {:ok, Lolek.File.file_state()} | {:error, term()}
@@ -98,7 +98,7 @@ defmodule Lolek.Converter do
   defp encode_video(file_path, strategy) do
     new_file_path = get_compressed_file_path(file_path)
 
-    case encode_with_libx264(file_path, new_file_path, strategy) do
+    case encode_with_h264(file_path, new_file_path, strategy) do
       :ok ->
         ensure_telegram_file_size(new_file_path)
 
@@ -109,17 +109,18 @@ defmodule Lolek.Converter do
     end
   end
 
-  @spec encode_with_libx264(String.t(), String.t(), encoding_strategy()) ::
+  @spec encode_with_h264(String.t(), String.t(), encoding_strategy()) ::
           :ok | {:error, term()}
-  defp encode_with_libx264(file_path, new_file_path, strategy) do
-    with {:ok, args} <- build_encode_args(file_path, new_file_path, strategy) do
+  defp encode_with_h264(file_path, new_file_path, strategy) do
+    with {:ok, encoder} <- h264_encoder(),
+         {:ok, args} <- build_encode_args(file_path, new_file_path, strategy, encoder) do
       action = if strategy == :compress, do: "Compressed", else: "Converted to H.264"
 
       case Lolek.Command.run("ffmpeg", args,
              timeout: command_timeout(:convert_command_timeout_seconds)
            ) do
         {:ok, result} ->
-          Logger.info("#{action} video with libx264: #{inspect(result)}")
+          Logger.info("#{action} video with #{encoder_name(encoder)}: #{inspect(result)}")
           :ok
 
         {:error, error} ->
@@ -128,12 +129,11 @@ defmodule Lolek.Converter do
     end
   end
 
-  @spec build_encode_args(String.t(), String.t(), encoding_strategy()) ::
+  @spec build_encode_args(String.t(), String.t(), encoding_strategy(), h264_encoder()) ::
           {:ok, [String.t()]} | {:error, term()}
-  defp build_encode_args(file_path, new_file_path, :compress) do
+  defp build_encode_args(file_path, new_file_path, :compress, :software) do
     with {:ok, {video_bitrate, audio_bitrate}} <- calculate_target_bitrates(file_path) do
       # One-pass encoding with target bitrate
-      # Using -threads 4 for RPi 4B optimization
       {:ok,
        [
          "-y",
@@ -168,9 +168,37 @@ defmodule Lolek.Converter do
     end
   end
 
-  defp build_encode_args(file_path, new_file_path, :convert) do
-    # Software encoder: use CRF for quality-based encoding
-    # Using -threads 4 for RPi 4B optimization
+  defp build_encode_args(file_path, new_file_path, :compress, {:vaapi, device}) do
+    with {:ok, {video_bitrate, audio_bitrate}} <- calculate_target_bitrates(file_path) do
+      {:ok,
+       [
+         "-y",
+         "-vaapi_device",
+         device,
+         "-i",
+         file_path,
+         "-vf",
+         "format=nv12,hwupload",
+         "-c:v",
+         "h264_vaapi",
+         "-profile:v",
+         "constrained_baseline",
+         "-level",
+         "3.0",
+         "-b:v",
+         video_bitrate,
+         "-c:a",
+         "aac",
+         "-b:a",
+         audio_bitrate,
+         "-movflags",
+         "+faststart",
+         new_file_path
+       ]}
+    end
+  end
+
+  defp build_encode_args(file_path, new_file_path, :convert, :software) do
     {:ok,
      [
        "-y",
@@ -203,6 +231,52 @@ defmodule Lolek.Converter do
        new_file_path
      ]}
   end
+
+  defp build_encode_args(file_path, new_file_path, :convert, {:vaapi, device}) do
+    {:ok,
+     [
+       "-y",
+       "-vaapi_device",
+       device,
+       "-i",
+       file_path,
+       "-vf",
+       "format=nv12,hwupload",
+       "-c:v",
+       "h264_vaapi",
+       "-profile:v",
+       "constrained_baseline",
+       "-level",
+       "3.0",
+       "-qp",
+       "23",
+       "-c:a",
+       "aac",
+       "-b:a",
+       "128k",
+       "-movflags",
+       "+faststart",
+       new_file_path
+     ]}
+  end
+
+  @spec h264_encoder() :: {:ok, h264_encoder()} | {:error, term()}
+  defp h264_encoder do
+    case Application.get_env(:lolek, :hw_acceleration, "none") do
+      value when value in ["", "none"] ->
+        {:ok, :software}
+
+      "vaapi" ->
+        {:ok, {:vaapi, Application.get_env(:lolek, :hw_device, "/dev/dri/renderD128")}}
+
+      value ->
+        {:error, {:unsupported_hw_acceleration, value}}
+    end
+  end
+
+  @spec encoder_name(h264_encoder()) :: String.t()
+  defp encoder_name(:software), do: "libx264"
+  defp encoder_name({:vaapi, _device}), do: "h264_vaapi"
 
   @spec h264_codec?(String.t()) :: boolean()
   defp h264_codec?(file_path) do

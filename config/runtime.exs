@@ -62,6 +62,14 @@ config :lolek,
        :dotenv_config.get("LOLEK_PROBE_COMMAND_TIMEOUT_SECONDS")
 
 config :lolek,
+       :hw_acceleration,
+       :dotenv_config.get("LOLEK_HW_ACCELERATION")
+
+config :lolek,
+       :hw_device,
+       :dotenv_config.get("LOLEK_HW_DEVICE")
+
+config :lolek,
        :allowed_urls_regex,
        :dotenv_config.get("LOLEK_ALLOWED_URLS_REGEX")
 

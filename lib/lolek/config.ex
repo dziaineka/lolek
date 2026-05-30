@@ -22,6 +22,8 @@ defmodule Lolek.Config do
       {"LOLEK_DOWNLOAD_COMMAND_TIMEOUT_SECONDS", :int},
       {"LOLEK_CONVERT_COMMAND_TIMEOUT_SECONDS", :int},
       {"LOLEK_PROBE_COMMAND_TIMEOUT_SECONDS", :int},
+      {"LOLEK_HW_ACCELERATION", :str},
+      {"LOLEK_HW_DEVICE", :str},
       {"LOLEK_ALLOWED_URLS_REGEX", :str},
       {"LOLEK_MAX_DOWNLOAD_TRIES", :int},
       {"LOLEK_START_DOWNLOAD_PAUSE", :int},

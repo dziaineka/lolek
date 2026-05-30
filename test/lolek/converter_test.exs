@@ -8,7 +8,9 @@ defmodule Lolek.ConverterTest do
     :max_file_size_to_compress,
     :max_duration_to_compress,
     :convert_command_timeout_seconds,
-    :probe_command_timeout_seconds
+    :probe_command_timeout_seconds,
+    :hw_acceleration,
+    :hw_device
   ]
 
   @tag :tmp_dir
@@ -80,6 +82,47 @@ defmodule Lolek.ConverterTest do
              Lolek.Converter.adapt_to_telegram({:downloaded, file_path})
   end
 
+  @tag :tmp_dir
+  test "uses vaapi encoder when configured", %{tmp_dir: tmp_dir} do
+    preserve_converter_env(fn ->
+      bin_dir = Path.join(tmp_dir, "bin")
+      file_path = Path.join(tmp_dir, "downloaded.mp4")
+      ffmpeg_args_file = Path.join(tmp_dir, "ffmpeg.args")
+
+      File.write!(file_path, String.duplicate("x", 10))
+      put_video_probe(bin_dir, "10.0", "h264")
+
+      put_fake_executable(bin_dir, "ffmpeg", """
+      output=
+      for arg do
+        printf '%s\\n' "$arg" >> "#{ffmpeg_args_file}"
+        output="$arg"
+      done
+      printf ok > "$output"
+      """)
+
+      put_compression_env()
+      Application.put_env(:lolek, :max_file_size_to_send_to_telegram, 5)
+      Application.put_env(:lolek, :hw_acceleration, "vaapi")
+      Application.put_env(:lolek, :hw_device, "/dev/dri/renderD128")
+
+      System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
+      {:ok, _apps} = Application.ensure_all_started(:erlexec)
+
+      assert {:ok, {:compressed, compressed_path}} =
+               Lolek.Converter.adapt_to_telegram({:downloaded, file_path})
+
+      assert File.read!(compressed_path) == "ok"
+
+      ffmpeg_args = File.read!(ffmpeg_args_file)
+      assert ffmpeg_args =~ "-vaapi_device\n/dev/dri/renderD128\n"
+      assert ffmpeg_args =~ "-vf\nformat=nv12,hwupload\n"
+      assert ffmpeg_args =~ "-c:v\nh264_vaapi\n"
+      assert ffmpeg_args =~ "-profile:v\nconstrained_baseline\n"
+      refute ffmpeg_args =~ "libx264"
+    end)
+  end
+
   defp preserve_converter_env(fun) do
     app_env = Map.new(@converter_env_keys, &{&1, Application.fetch_env(:lolek, &1)})
     path = System.get_env("PATH")
@@ -104,6 +147,8 @@ defmodule Lolek.ConverterTest do
     Application.put_env(:lolek, :max_duration_to_compress, 100)
     Application.put_env(:lolek, :convert_command_timeout_seconds, 5)
     Application.put_env(:lolek, :probe_command_timeout_seconds, 5)
+    Application.put_env(:lolek, :hw_acceleration, "none")
+    Application.put_env(:lolek, :hw_device, "/dev/dri/renderD128")
   end
 
   defp put_video_probe(bin_dir, duration, codec) do

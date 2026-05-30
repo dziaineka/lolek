@@ -23,10 +23,12 @@ let
   inherit (lib)
     mkEnableOption
     mkIf
+    mkMerge
     mkOption
     optionalAttrs
     types
     ;
+  hardwareAccelerationEnabled = cfg.hardwareAcceleration.backend != "none";
 in
 {
   options.services.lolek = {
@@ -168,6 +170,26 @@ in
       description = "Timeout, in seconds, for ffprobe metadata commands.";
     };
 
+    hardwareAcceleration = {
+      backend = mkOption {
+        type = types.enum [
+          "none"
+          "vaapi"
+        ];
+        default = "none";
+        description = ''
+          Hardware acceleration backend for H.264 encoding. The default keeps
+          software libx264 encoding. The vaapi backend uses h264_vaapi.
+        '';
+      };
+
+      device = mkOption {
+        type = types.path;
+        default = "/dev/dri/renderD128";
+        description = "Render device used when hardware acceleration is enabled.";
+      };
+    };
+
     maxDownloadTries = mkOption {
       type = types.ints.positive;
       default = 10;
@@ -238,9 +260,15 @@ in
       }
     ];
 
-    users.groups = mkIf cfg.createUser {
-      ${cfg.group} = { };
-    };
+    users.groups = mkMerge [
+      (mkIf cfg.createUser {
+        ${cfg.group} = { };
+      })
+      (mkIf hardwareAccelerationEnabled {
+        render = { };
+        video = { };
+      })
+    ];
 
     users.users = mkIf cfg.createUser {
       ${cfg.user} = {
@@ -275,6 +303,8 @@ in
         LOLEK_DOWNLOAD_COMMAND_TIMEOUT_SECONDS = toString cfg.downloadCommandTimeout;
         LOLEK_CONVERT_COMMAND_TIMEOUT_SECONDS = toString cfg.convertCommandTimeout;
         LOLEK_PROBE_COMMAND_TIMEOUT_SECONDS = toString cfg.probeCommandTimeout;
+        LOLEK_HW_ACCELERATION = cfg.hardwareAcceleration.backend;
+        LOLEK_HW_DEVICE = toString cfg.hardwareAcceleration.device;
         LOLEK_ALLOWED_URLS_REGEX = lib.concatStringsSep "|" (map lib.escapeRegex cfg.allowedUrlPatterns);
         LOLEK_MAX_DOWNLOAD_TRIES = toString cfg.maxDownloadTries;
         LOLEK_START_DOWNLOAD_PAUSE = toString cfg.startDownloadPause;
@@ -295,7 +325,7 @@ in
         CapabilityBoundingSet = "";
         LockPersonality = true;
         NoNewPrivileges = true;
-        PrivateDevices = true;
+        PrivateDevices = !hardwareAccelerationEnabled;
         PrivateTmp = true;
         ProtectClock = true;
         ProtectControlGroups = true;
@@ -318,6 +348,12 @@ in
         RestrictSUIDSGID = true;
         SystemCallArchitectures = "native";
         UMask = "0077";
+      }
+      // optionalAttrs hardwareAccelerationEnabled {
+        SupplementaryGroups = [
+          "render"
+          "video"
+        ];
       }
       // optionalAttrs (cfg.environmentFile != null) {
         EnvironmentFile = cfg.environmentFile;

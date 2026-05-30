@@ -59,6 +59,16 @@ in
       description = "Directory where Lolek stores downloaded media.";
     };
 
+    botTokenFile = mkOption {
+      type = types.nullOr types.path;
+      default = null;
+      description = ''
+        Path to a file containing the Telegram bot token. This is suitable for
+        sops-nix secret paths. When set, the module exports
+        LOLEK_BOT_TOKEN_FILE and Lolek reads the token from that file.
+      '';
+    };
+
     environmentFile = mkOption {
       type = types.nullOr types.path;
       default = null;
@@ -115,6 +125,9 @@ in
         LOLEK_MAX_DOWNLOAD_TRIES = "10";
         LOLEK_START_DOWNLOAD_PAUSE = "1000";
         LOLEK_MAX_DOWNLOAD_PAUSE = "10000";
+      }
+      // optionalAttrs (cfg.botTokenFile != null) {
+        LOLEK_BOT_TOKEN_FILE = toString cfg.botTokenFile;
       }
       // builtins.mapAttrs (_: toString) cfg.environment;
 

@@ -145,6 +145,9 @@ defmodule Lolek.ConverterTest do
       assert File.read!(compressed_path) == "ok"
 
       ffmpeg_args = File.read!(ffmpeg_args_file)
+      assert ffmpeg_args =~ "-hwaccel\nvaapi\n"
+      assert ffmpeg_args =~ "-hwaccel_device\n/dev/dri/renderD128\n"
+      assert ffmpeg_args =~ "-hwaccel_output_format\nvaapi\n"
       assert ffmpeg_args =~ "-vaapi_device\n/dev/dri/renderD128\n"
       assert ffmpeg_args =~ "-vf\nformat=nv12,hwupload\n"
       assert ffmpeg_args =~ "-c:v\nh264_vaapi\n"
@@ -196,6 +199,9 @@ defmodule Lolek.ConverterTest do
       assert File.read!(compressed_path) == "ok"
 
       ffmpeg_args = File.read!(ffmpeg_args_file)
+      assert ffmpeg_args =~ "-hwaccel\nvaapi\n"
+      assert ffmpeg_args =~ "-hwaccel_device\n/dev/dri/renderD128\n"
+      assert ffmpeg_args =~ "-hwaccel_output_format\nvaapi\n"
       assert ffmpeg_args =~ "-c:v\nh264_vaapi\n"
       assert ffmpeg_args =~ "-c:v\nlibx264\n"
     end)

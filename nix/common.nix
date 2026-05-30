@@ -14,6 +14,7 @@ let
     rebar3 = rebar3WithPlugins;
   };
   mixRelease = beamPackages.mixRelease.override {
+    makeWrapper = pkgs.makeBinaryWrapper;
     rebar3 = rebar3WithPlugins;
   };
   sourceFiles =

@@ -17,6 +17,13 @@ defmodule Lolek.TelegramLog do
     ]
   end
 
+  @spec tesla_log_level(Tesla.Env.result()) :: Logger.level() | :default
+  def tesla_log_level({:ok, %Tesla.Env{status: status} = response}) when status in 200..299 do
+    if get_updates_request?(response), do: :debug, else: :info
+  end
+
+  def tesla_log_level(_response), do: :default
+
   @spec sanitize_url(String.t()) :: String.t()
   def sanitize_url(url) do
     url
@@ -36,6 +43,23 @@ defmodule Lolek.TelegramLog do
     |> String.split(["?", "#"], parts: 2)
     |> List.first()
     |> redact_bot_token_path()
+  end
+
+  @spec get_updates_request?(Tesla.Env.t()) :: boolean()
+  defp get_updates_request?(%Tesla.Env{url: url}) do
+    url
+    |> URI.parse()
+    |> request_path(url)
+    |> String.ends_with?("/getUpdates")
+  end
+
+  @spec request_path(URI.t(), String.t()) :: String.t()
+  defp request_path(%URI{path: path}, _url) when is_binary(path), do: path
+
+  defp request_path(_uri, url) do
+    url
+    |> String.split(["?", "#"], parts: 2)
+    |> List.first()
   end
 
   @spec port_suffix(String.t(), :inet.port_number() | nil) :: String.t()

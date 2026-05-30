@@ -42,6 +42,14 @@ config :lolek,
        :dotenv_config.get("LOLEK_MAX_DURATION_TO_COMPRESS")
 
 config :lolek,
+       :max_concurrent_downloads,
+       :dotenv_config.get("LOLEK_MAX_CONCURRENT_DOWNLOADS")
+
+config :lolek,
+       :max_concurrent_downloads_per_chat,
+       :dotenv_config.get("LOLEK_MAX_CONCURRENT_DOWNLOADS_PER_CHAT")
+
+config :lolek,
        :allowed_urls_regex,
        :dotenv_config.get("LOLEK_ALLOWED_URLS_REGEX")
 

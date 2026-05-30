@@ -61,6 +61,7 @@ defmodule Lolek.Downloader do
             "mp4",
             "--max-filesize",
             max_download_file_size(),
+            "--no-playlist",
             "-o",
             output_file_path,
             url

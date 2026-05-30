@@ -32,6 +32,7 @@ defmodule Lolek.DownloaderTest do
       #!/bin/sh
       output=
       max_filesize=
+      no_playlist=0
 
       while [ "$#" -gt 0 ]; do
         case "$1" in
@@ -43,12 +44,16 @@ defmodule Lolek.DownloaderTest do
             shift
             output="$1"
             ;;
+          --no-playlist)
+            no_playlist=1
+            ;;
         esac
 
         shift
       done
 
       [ "$max_filesize" = "12345" ] || exit 9
+      [ "$no_playlist" = "1" ] || exit 10
       printf video > "$output"
       """)
 

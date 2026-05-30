@@ -105,6 +105,7 @@ defmodule Lolek.Converter do
       {:error, error} ->
         action = if strategy == :compress, do: "compressing", else: "converting"
         Logger.error("Error when #{action} video: #{inspect(error)}")
+        File.rm(new_file_path)
         {:error, error}
     end
   end
@@ -112,8 +113,26 @@ defmodule Lolek.Converter do
   @spec encode_with_h264(String.t(), String.t(), encoding_strategy()) ::
           :ok | {:error, term()}
   defp encode_with_h264(file_path, new_file_path, strategy) do
-    with {:ok, encoder} <- h264_encoder(),
-         {:ok, args} <- build_encode_args(file_path, new_file_path, strategy, encoder) do
+    with {:ok, encoder} <- h264_encoder() do
+      case encode_with_encoder(file_path, new_file_path, strategy, encoder) do
+        {:error, reason} when is_tuple(encoder) ->
+          Logger.warning(
+            "Hardware encoder #{encoder_name(encoder)} failed: #{inspect(reason)}. Retrying with libx264"
+          )
+
+          File.rm(new_file_path)
+          encode_with_encoder(file_path, new_file_path, strategy, :software)
+
+        result ->
+          result
+      end
+    end
+  end
+
+  @spec encode_with_encoder(String.t(), String.t(), encoding_strategy(), h264_encoder()) ::
+          :ok | {:error, term()}
+  defp encode_with_encoder(file_path, new_file_path, strategy, encoder) do
+    with {:ok, args} <- build_encode_args(file_path, new_file_path, strategy, encoder) do
       action = if strategy == :compress, do: "Compressed", else: "Converted to H.264"
 
       case Lolek.Command.run("ffmpeg", args,

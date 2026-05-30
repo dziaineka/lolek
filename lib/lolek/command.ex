@@ -79,7 +79,7 @@ defmodule Lolek.Command do
         {:ok, output_to_keyword(output)}
 
       {:DOWN, ^os_pid, :process, ^pid, reason} ->
-        {:error, normalize_exit_reason(reason)}
+        {:error, normalize_exit_reason(reason, output_to_keyword(output))}
     after
       remaining_timeout(deadline) ->
         _ = :exec.stop_and_wait(pid, (kill_timeout + 1) * 1000)
@@ -107,16 +107,27 @@ defmodule Lolek.Command do
     |> Enum.reject(fn {_key, chunks} -> chunks == [] end)
   end
 
-  @spec normalize_exit_reason(term()) :: keyword() | term()
-  defp normalize_exit_reason({:exit_status, status}), do: normalize_status(status)
-  defp normalize_exit_reason({:status, status}), do: normalize_status(status)
-  defp normalize_exit_reason(reason), do: reason
+  @spec normalize_exit_reason(term(), keyword()) :: keyword() | term()
+  defp normalize_exit_reason({:exit_status, status}, output) do
+    normalize_status(status, output)
+  end
 
-  @spec normalize_status(integer()) :: keyword()
-  defp normalize_status(status) do
-    case :exec.status(status) do
-      {:status, exit_status} -> [exit_status: exit_status]
-      {:signal, signal, core?} -> [signal: signal, core_dump: core?]
-    end
+  defp normalize_exit_reason({:status, status}, output) do
+    normalize_status(status, output)
+  end
+
+  defp normalize_exit_reason(reason, _output), do: reason
+
+  @spec normalize_status(integer(), keyword()) :: keyword()
+  defp normalize_status(status, output) do
+    status_reason =
+      case :exec.status(status) do
+        {:status, exit_status} -> [exit_status: exit_status]
+        {:signal, signal, core?} -> [signal: signal, core_dump: core?]
+      end
+
+    Keyword.merge(output, status_reason, fn _k, output_value, _status_value ->
+      output_value
+    end)
   end
 end

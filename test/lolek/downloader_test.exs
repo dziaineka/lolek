@@ -102,8 +102,14 @@ defmodule Lolek.DownloaderTest do
       System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
       {:ok, _apps} = Application.ensure_all_started(:erlexec)
 
-      assert {:error, "Error when downloading url: https://example.com/video; reason: " <> _} =
-               Lolek.Downloader.download("https://example.com/video", {:new_file, tmp_dir})
+      assert {:error, "Error when downloading url: https://example.com/video; reason: " <> reason} =
+               Lolek.Downloader.download(
+                 "https://example.com/video?token=secret#fragment",
+                 {:new_file, tmp_dir}
+               )
+
+      refute reason =~ "token=secret"
+      refute reason =~ "fragment"
 
       assert File.read!(attempts_file) == "xxx"
     end)

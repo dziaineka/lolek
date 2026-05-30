@@ -21,6 +21,7 @@ defmodule Lolek.Downloader do
 
   defp download(url, output_path, tries_done, max_tries, pause, max_pause) do
     pause = min(pause, max_pause)
+    log_url = Lolek.Url.normalize_for_log(url)
 
     case download_once(url, output_path) do
       {:ok, _} ->
@@ -32,13 +33,13 @@ defmodule Lolek.Downloader do
       {:error, reason} ->
         if tries_done < max_tries do
           Logger.warning(
-            "Error when downloading url: #{url}; reason: #{inspect(reason)}. Retrying..."
+            "Error when downloading url: #{log_url}; reason: #{inspect(reason)}. Retrying..."
           )
 
           Process.sleep(pause)
           download(url, output_path, tries_done + 1, max_tries, pause * 2, max_pause)
         else
-          {:error, "Error when downloading url: #{url}; reason: #{inspect(reason)}"}
+          {:error, "Error when downloading url: #{log_url}; reason: #{inspect(reason)}"}
         end
     end
   end

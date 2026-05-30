@@ -78,4 +78,15 @@ defmodule Lolek.UrlTest do
     assert canonical == media_variant
     assert canonical == net_variant
   end
+
+  test "normalizes urls for logs without query string or fragment" do
+    assert "https://example.com/path/to/video" =
+             Lolek.Url.normalize_for_log(
+               "https://User:Password@Example.COM/path/to/video?token=secret#fragment"
+             )
+  end
+
+  test "normalizes missing log path to root" do
+    assert "https://example.com/" = Lolek.Url.normalize_for_log("https://Example.COM")
+  end
 end

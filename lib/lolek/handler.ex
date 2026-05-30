@@ -38,13 +38,22 @@ defmodule Lolek.Handler do
         },
         _context
       ) do
-    with {:ok, url} <- Lolek.Url.extract_url(text),
-         {:ok, _file_state} <-
-           Lolek.UrlProcessing.process(url, fn ->
-             Lolek.ProcessingLimiter.with_limit(chat_id, fn -> process_url(chat_id, url) end)
-           end) do
-      :ok
-    else
+    case Lolek.Url.extract_url(text) do
+      {:ok, url} ->
+        case Lolek.UrlProcessing.process(url, fn ->
+               Lolek.ProcessingLimiter.with_limit(chat_id, fn -> process_url(chat_id, url) end)
+             end) do
+          {:ok, _file_state} ->
+            :ok
+
+          {:error, reason} ->
+            Logger.warning(
+              "Error when processing url: #{Lolek.Url.normalize_for_log(url)}; reason: #{inspect(reason)}"
+            )
+
+            :ok
+        end
+
       {:error, reason} ->
         Logger.warning("Error when processing url: #{text}; reason: #{inspect(reason)}")
         :ok

@@ -30,6 +30,29 @@ defmodule Lolek.Url do
     |> Base.encode64(padding: false)
   end
 
+  @spec normalize_for_log(String.t()) :: String.t()
+  def normalize_for_log(url) do
+    case URI.parse(url) do
+      %URI{scheme: scheme, host: host} = uri
+      when scheme in ["http", "https"] and is_binary(host) ->
+        %URI{
+          scheme: String.downcase(scheme),
+          host: String.downcase(host),
+          port: uri.port,
+          path: normalize_log_path(uri.path)
+        }
+        |> URI.to_string()
+
+      _ ->
+        "[invalid_url]"
+    end
+  end
+
+  @spec normalize_log_path(String.t() | nil) :: String.t()
+  defp normalize_log_path(nil), do: "/"
+  defp normalize_log_path(""), do: "/"
+  defp normalize_log_path(path), do: path
+
   @spec normalize_for_storage(String.t()) :: String.t()
   defp normalize_for_storage(url) do
     case URI.parse(url) do

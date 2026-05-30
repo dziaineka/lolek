@@ -207,33 +207,37 @@ defmodule Lolek.ThreadsDownloader do
   @spec curl_post(String.t(), String.t(), [{String.t(), String.t()}]) ::
           {:ok, http_response()} | {:error, String.t()}
   defp curl_post(url, body, headers) do
-    case System.find_executable("curl") do
-      nil ->
-        {:error, "curl executable was not found"}
+    args =
+      [
+        "-sS",
+        "--http1.1",
+        "-X",
+        "POST",
+        url,
+        "--data-binary",
+        body,
+        "-w",
+        "\n__CURL_STATUS__:%{http_code}"
+      ] ++
+        Enum.flat_map(headers, fn {name, value} -> ["-H", "#{name}: #{value}"] end)
 
-      curl_path ->
-        args =
-          [
-            "-sS",
-            "--http1.1",
-            "-X",
-            "POST",
-            url,
-            "--data-binary",
-            body,
-            "-w",
-            "\n__CURL_STATUS__:%{http_code}"
-          ] ++
-            Enum.flat_map(headers, fn {name, value} -> ["-H", "#{name}: #{value}"] end)
+    case Lolek.Command.run("curl", args,
+           timeout: command_timeout(:download_command_timeout_seconds)
+         ) do
+      {:ok, result} ->
+        response = result |> Keyword.get(:stdout, []) |> IO.iodata_to_binary()
+        parse_curl_response(response)
 
-        case System.cmd(curl_path, args, stderr_to_stdout: true) do
-          {response, 0} ->
-            parse_curl_response(response)
-
-          {response, exit_code} ->
-            {:error, "curl POST failed with exit code #{exit_code}: #{String.trim(response)}"}
-        end
+      {:error, error} ->
+        {:error, "curl POST failed: #{inspect(error)}"}
     end
+  end
+
+  @spec command_timeout(atom()) :: pos_integer()
+  defp command_timeout(config_key) do
+    :lolek
+    |> Application.fetch_env!(config_key)
+    |> :timer.seconds()
   end
 
   @spec parse_curl_response(String.t()) :: {:ok, http_response()} | {:error, String.t()}

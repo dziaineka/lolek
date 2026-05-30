@@ -52,16 +52,27 @@ defmodule Lolek.Downloader do
         Lolek.ThreadsDownloader.download(url, output_file_path)
 
       :yt_dlp ->
-        Lolek.Command.run("yt-dlp", [
-          "--format-sort",
-          "+vcodec:h264,+acodec:aac",
-          "--recode-video",
-          "mp4",
-          "-o",
-          output_file_path,
-          url
-        ])
+        Lolek.Command.run(
+          "yt-dlp",
+          [
+            "--format-sort",
+            "+vcodec:h264,+acodec:aac",
+            "--recode-video",
+            "mp4",
+            "-o",
+            output_file_path,
+            url
+          ],
+          timeout: command_timeout(:download_command_timeout_seconds)
+        )
     end
+  end
+
+  @spec command_timeout(atom()) :: pos_integer()
+  defp command_timeout(config_key) do
+    :lolek
+    |> Application.fetch_env!(config_key)
+    |> :timer.seconds()
   end
 
   @spec downloader_module(String.t()) :: Lolek.ThreadsDownloader | :yt_dlp

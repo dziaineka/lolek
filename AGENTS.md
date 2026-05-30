@@ -168,6 +168,8 @@ Key environment variables:
 
 - `LOLEK_BOT_TOKEN` - Telegram bot token (required)
 - `LOLEK_DOWNLOAD_DIR_PATH` - Download directory (default: `./downloads`)
+- `LOLEK_HW_ACCELERATION` - H.264 encoder backend (`none` or `vaapi`; default: `none`)
+- `LOLEK_HW_DEVICE` - Render device for hardware acceleration (default: `/dev/dri/renderD128`)
 - Various size/duration limits for compression logic
 
 ## External Dependencies

@@ -207,6 +207,103 @@ defmodule Lolek.ConverterTest do
     end)
   end
 
+  @tag :tmp_dir
+  test "uses qsv encoder when configured", %{tmp_dir: tmp_dir} do
+    preserve_converter_env(fn ->
+      bin_dir = Path.join(tmp_dir, "bin")
+      file_path = Path.join(tmp_dir, "downloaded.mp4")
+      ffmpeg_args_file = Path.join(tmp_dir, "ffmpeg.args")
+
+      File.write!(file_path, String.duplicate("x", 10))
+      put_video_probe(bin_dir, "10.0", "h264")
+
+      put_fake_executable(bin_dir, "ffmpeg", """
+      output=
+      for arg do
+        printf '%s\\n' \"$arg\" >> \"#{ffmpeg_args_file}\"
+        output=\"$arg\"
+      done
+      printf ok > \"$output\"
+      """)
+
+      put_compression_env()
+      Application.put_env(:lolek, :max_file_size_to_send_to_telegram, 5)
+      Application.put_env(:lolek, :hw_acceleration, "qsv")
+      Application.put_env(:lolek, :hw_device, "/dev/dri/renderD128")
+
+      System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
+      {:ok, _apps} = Application.ensure_all_started(:erlexec)
+
+      assert {:ok, {:compressed, compressed_path}} =
+               Lolek.Converter.adapt_to_telegram({:downloaded, file_path})
+
+      assert File.read!(compressed_path) == "ok"
+
+      ffmpeg_args = File.read!(ffmpeg_args_file)
+      assert ffmpeg_args =~ "-init_hw_device\nqsv=hw,child_device=/dev/dri/renderD128,child_device_type=vaapi\n"
+      assert ffmpeg_args =~ "-filter_hw_device\nhw\n"
+      assert ffmpeg_args =~ "-hwaccel\nqsv\n"
+      assert ffmpeg_args =~ "-hwaccel_device\nhw\n"
+      assert ffmpeg_args =~ "-hwaccel_output_format\nqsv\n"
+      assert ffmpeg_args =~ "-c:v\nh264_qsv\n"
+      assert ffmpeg_args =~ "-profile:v\nmain\n"
+      refute ffmpeg_args =~ "libx264"
+    end)
+  end
+
+  @tag :tmp_dir
+  test "falls back to software encoder when qsv fails", %{tmp_dir: tmp_dir} do
+    preserve_converter_env(fn ->
+      bin_dir = Path.join(tmp_dir, "bin")
+      file_path = Path.join(tmp_dir, "downloaded.mp4")
+      ffmpeg_args_file = Path.join(tmp_dir, "ffmpeg.args")
+
+      File.write!(file_path, String.duplicate("x", 10))
+      put_video_probe(bin_dir, "10.0", "h264")
+
+      put_fake_executable(bin_dir, "ffmpeg", """
+      output=
+      for arg do
+        printf '%s\\n' \"$arg\" >> \"#{ffmpeg_args_file}\"
+        output=\"$arg\"
+      done
+      printf -- '---\\n' >> \"#{ffmpeg_args_file}\"
+
+      case \"$*\" in
+        *h264_qsv*)
+          printf partial > \"$output\"
+          exit 1
+          ;;
+        *)
+          printf ok > \"$output\"
+          ;;
+      esac
+      """)
+
+      put_compression_env()
+      Application.put_env(:lolek, :max_file_size_to_send_to_telegram, 5)
+      Application.put_env(:lolek, :hw_acceleration, "qsv")
+      Application.put_env(:lolek, :hw_device, "/dev/dri/renderD128")
+
+      System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
+      {:ok, _apps} = Application.ensure_all_started(:erlexec)
+
+      assert {:ok, {:compressed, compressed_path}} =
+               Lolek.Converter.adapt_to_telegram({:downloaded, file_path})
+
+      assert File.read!(compressed_path) == "ok"
+
+      ffmpeg_args = File.read!(ffmpeg_args_file)
+      assert ffmpeg_args =~ "-init_hw_device\nqsv=hw,child_device=/dev/dri/renderD128,child_device_type=vaapi\n"
+      assert ffmpeg_args =~ "-filter_hw_device\nhw\n"
+      assert ffmpeg_args =~ "-hwaccel\nqsv\n"
+      assert ffmpeg_args =~ "-hwaccel_device\nhw\n"
+      assert ffmpeg_args =~ "-hwaccel_output_format\nqsv\n"
+      assert ffmpeg_args =~ "-c:v\nh264_qsv\n"
+      assert ffmpeg_args =~ "-c:v\nlibx264\n"
+    end)
+  end
+
   defp preserve_converter_env(fun) do
     app_env = Map.new(@converter_env_keys, &{&1, Application.fetch_env(:lolek, &1)})
     path = System.get_env("PATH")

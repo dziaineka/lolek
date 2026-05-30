@@ -6,7 +6,7 @@ defmodule Lolek.Converter do
   @compressed_name "compressed.mp4"
 
   @type encoding_strategy :: :compress | :convert
-  @type h264_encoder :: :software | {:vaapi, String.t()}
+  @type h264_encoder :: :software | {:vaapi, String.t()} | {:qsv, String.t()}
 
   @spec adapt_to_telegram(Lolek.File.file_state()) ::
           {:ok, Lolek.File.file_state()} | {:error, term()}
@@ -223,6 +223,40 @@ defmodule Lolek.Converter do
     end
   end
 
+  defp build_encode_args(file_path, new_file_path, :compress, {:qsv, device}) do
+    with {:ok, {video_bitrate, audio_bitrate}} <- calculate_target_bitrates(file_path) do
+      {:ok,
+       [
+         "-y",
+         "-init_hw_device",
+         "qsv=hw,child_device=#{device},child_device_type=vaapi",
+         "-filter_hw_device",
+         "hw",
+         "-hwaccel",
+         "qsv",
+         "-hwaccel_device",
+         "hw",
+         "-hwaccel_output_format",
+         "qsv",
+         "-i",
+         file_path,
+         "-c:v",
+         "h264_qsv",
+         "-profile:v",
+         "main",
+         "-b:v",
+         video_bitrate,
+         "-c:a",
+         "aac",
+         "-b:a",
+         audio_bitrate,
+         "-movflags",
+         "+faststart",
+         new_file_path
+       ]}
+    end
+  end
+
   defp build_encode_args(file_path, new_file_path, :convert, :software) do
     {:ok,
      [
@@ -288,6 +322,38 @@ defmodule Lolek.Converter do
        "-movflags",
        "+faststart",
        new_file_path
+       ]}
+  end
+
+  defp build_encode_args(file_path, new_file_path, :convert, {:qsv, device}) do
+    {:ok,
+     [
+       "-y",
+       "-init_hw_device",
+       "qsv=hw,child_device=#{device},child_device_type=vaapi",
+       "-filter_hw_device",
+       "hw",
+       "-hwaccel",
+       "qsv",
+       "-hwaccel_device",
+       "hw",
+       "-hwaccel_output_format",
+       "qsv",
+       "-i",
+       file_path,
+       "-c:v",
+       "h264_qsv",
+       "-global_quality",
+       "23",
+       "-profile:v",
+       "main",
+       "-c:a",
+       "aac",
+       "-b:a",
+       "128k",
+       "-movflags",
+       "+faststart",
+       new_file_path
      ]}
   end
 
@@ -300,6 +366,9 @@ defmodule Lolek.Converter do
       "vaapi" ->
         {:ok, {:vaapi, Application.get_env(:lolek, :hw_device, "/dev/dri/renderD128")}}
 
+      "qsv" ->
+        {:ok, {:qsv, Application.get_env(:lolek, :hw_device, "/dev/dri/renderD128")}}
+
       value ->
         {:error, {:unsupported_hw_acceleration, value}}
     end
@@ -308,6 +377,7 @@ defmodule Lolek.Converter do
   @spec encoder_name(h264_encoder()) :: String.t()
   defp encoder_name(:software), do: "libx264"
   defp encoder_name({:vaapi, _device}), do: "h264_vaapi"
+  defp encoder_name({:qsv, _device}), do: "h264_qsv"
 
   @spec h264_codec?(String.t()) :: boolean()
   defp h264_codec?(file_path) do

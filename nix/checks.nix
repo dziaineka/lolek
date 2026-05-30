@@ -71,4 +71,8 @@ in
   nixos-service = import ./tests/service.nix {
     inherit pkgs module package;
   };
+
+  nixos-concurrency = import ./tests/concurrency.nix {
+    inherit pkgs module package;
+  };
 }

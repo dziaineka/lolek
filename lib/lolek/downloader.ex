@@ -59,6 +59,8 @@ defmodule Lolek.Downloader do
             "+vcodec:h264,+acodec:aac",
             "--recode-video",
             "mp4",
+            "--max-filesize",
+            max_download_file_size(),
             "-o",
             output_file_path,
             url
@@ -66,6 +68,13 @@ defmodule Lolek.Downloader do
           timeout: command_timeout(:download_command_timeout_seconds)
         )
     end
+  end
+
+  @spec max_download_file_size() :: String.t()
+  defp max_download_file_size do
+    :lolek
+    |> Application.fetch_env!(:max_file_size_to_compress)
+    |> to_string()
   end
 
   @spec command_timeout(atom()) :: pos_integer()

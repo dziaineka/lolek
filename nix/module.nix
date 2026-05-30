@@ -252,11 +252,13 @@ in
         type = types.enum [
           "none"
           "vaapi"
+          "qsv"
         ];
         default = "none";
         description = ''
           Hardware acceleration backend for H.264 encoding. The default keeps
-          software libx264 encoding. The vaapi backend uses h264_vaapi.
+          software libx264 encoding. The vaapi backend uses h264_vaapi, while
+          qsv uses h264_qsv.
         '';
       };
 

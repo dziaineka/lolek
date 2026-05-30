@@ -33,9 +33,17 @@ defmodule Lolek.DownloaderTest do
       output=
       max_filesize=
       no_playlist=0
+      remux_video=
 
       while [ "$#" -gt 0 ]; do
         case "$1" in
+          --recode-video)
+            exit 11
+            ;;
+          --remux-video)
+            shift
+            remux_video="$1"
+            ;;
           --max-filesize)
             shift
             max_filesize="$1"
@@ -54,6 +62,7 @@ defmodule Lolek.DownloaderTest do
 
       [ "$max_filesize" = "12345" ] || exit 9
       [ "$no_playlist" = "1" ] || exit 10
+      [ "$remux_video" = "mp4" ] || exit 12
       printf video > "$output"
       """)
 

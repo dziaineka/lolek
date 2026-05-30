@@ -58,7 +58,7 @@ defmodule Lolek.Downloader do
           [
             "--format-sort",
             "+vcodec:h264,+acodec:aac",
-            "--recode-video",
+            "--remux-video",
             "mp4",
             "--max-filesize",
             max_download_file_size(),

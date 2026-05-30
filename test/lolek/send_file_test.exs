@@ -7,13 +7,21 @@ defmodule Lolek.SendFileTest do
     @behaviour Lolek.Telegram
 
     @impl true
-    def send_video(_chat_id, _video, _options) do
+    def send_video(chat_id, video, options) do
+      record_call({:send_video, chat_id, video, options})
       Application.fetch_env!(:lolek, :telegram_test_result)
     end
 
     @impl true
-    def send_document(_chat_id, _document) do
+    def send_document(chat_id, document) do
+      record_call({:send_document, chat_id, document})
       Application.fetch_env!(:lolek, :telegram_test_result)
+    end
+
+    defp record_call(call) do
+      if parent = Application.get_env(:lolek, :telegram_test_parent) do
+        send(parent, call)
+      end
     end
   end
 
@@ -55,7 +63,7 @@ defmodule Lolek.SendFileTest do
 
   test "returns sent file state with uploaded Telegram file id" do
     preserve_telegram_env(fn ->
-      file_path = "/tmp/downloaded.txt"
+      file_path = tmp_file("downloaded.txt", "media")
 
       response = %ExGram.Model.Message{
         document: %ExGram.Model.Document{file_id: "telegram-file-id"}
@@ -69,10 +77,32 @@ defmodule Lolek.SendFileTest do
     end)
   end
 
+  test "streams first video uploads with larger chunks" do
+    preserve_telegram_env(fn ->
+      file_path = tmp_file("downloaded.mp4", "media")
+
+      response = %ExGram.Model.Message{
+        video: %ExGram.Model.Video{file_id: "telegram-file-id"}
+      }
+
+      Application.put_env(:lolek, :telegram_client, TelegramClient)
+      Application.put_env(:lolek, :telegram_test_result, {:ok, response})
+      Application.put_env(:lolek, :telegram_test_parent, self())
+
+      assert {:ok, {:sent_to_telegram_at_first, ^file_path, "telegram-file-id"}} =
+               Lolek.send_file(123, {:compressed, file_path})
+
+      assert_receive {:send_video, 123, {:file_content, %File.Stream{} = stream, "downloaded.mp4"}, _options}
+      assert stream.path == file_path
+      assert stream.line_or_bytes == 64 * 1024
+    end)
+  end
+
   defp preserve_telegram_env(fun) do
     client = Application.fetch_env(:lolek, :telegram_client)
     result = Application.fetch_env(:lolek, :telegram_test_result)
     error = Application.fetch_env(:lolek, :telegram_test_error)
+    parent = Application.fetch_env(:lolek, :telegram_test_parent)
 
     try do
       fun.()
@@ -80,7 +110,17 @@ defmodule Lolek.SendFileTest do
       restore_app_env(:telegram_client, client)
       restore_app_env(:telegram_test_result, result)
       restore_app_env(:telegram_test_error, error)
+      restore_app_env(:telegram_test_parent, parent)
     end
+  end
+
+  defp tmp_file(name, contents) do
+    dir = Path.join(System.tmp_dir!(), "lolek-send-file-test-#{System.unique_integer([:positive])}")
+    File.mkdir_p!(dir)
+
+    path = Path.join(dir, name)
+    File.write!(path, contents)
+    path
   end
 
   defp restore_app_env(key, {:ok, value}), do: Application.put_env(:lolek, key, value)

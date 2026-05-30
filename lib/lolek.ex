@@ -2,6 +2,7 @@ defmodule Lolek do
   @moduledoc """
   This module is the main module of the Lolek bot containing bot operations
   """
+  @upload_chunk_size 64 * 1024
 
   @spec send_file(integer(), Lolek.File.file_state()) ::
           {:ok, Lolek.File.file_state()} | {:error, term()}
@@ -21,7 +22,7 @@ defmodule Lolek do
 
         with {:ok, %ExGram.Model.Message{video: %ExGram.Model.Video{file_id: file_id}}} <-
                call_telegram(fn ->
-                 Lolek.Telegram.send_video(chat_id, {:file, file_path}, options)
+                 Lolek.Telegram.send_video(chat_id, upload_file(file_path), options)
                end) do
           {:ok, {:sent_to_telegram_at_first, file_path, file_id}}
         else
@@ -31,13 +32,18 @@ defmodule Lolek do
 
       _ ->
         with {:ok, %ExGram.Model.Message{document: %ExGram.Model.Document{file_id: file_id}}} <-
-               call_telegram(fn -> Lolek.Telegram.send_document(chat_id, {:file, file_path}) end) do
+               call_telegram(fn -> Lolek.Telegram.send_document(chat_id, upload_file(file_path)) end) do
           {:ok, {:sent_to_telegram_at_first, file_path, file_id}}
         else
           {:ok, response} -> {:error, {:unexpected_telegram_response, response}}
           {:error, _reason} = error -> error
         end
     end
+  end
+
+  @spec upload_file(String.t()) :: {:file_content, File.Stream.t(), String.t()}
+  defp upload_file(file_path) do
+    {:file_content, File.stream!(file_path, [], @upload_chunk_size), Path.basename(file_path)}
   end
 
   @spec send_ready_file(integer(), String.t(), String.t()) :: {:ok, term()} | {:error, term()}

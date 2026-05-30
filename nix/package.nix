@@ -10,7 +10,7 @@ let
   version = "1.8.1";
   runtimePath = lib.makeBinPath [
     pkgs.curl
-    pkgs.ffmpeg
+    pkgs.ffmpeg-full
     pkgs.yt-dlp
   ];
 in

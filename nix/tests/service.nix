@@ -21,32 +21,68 @@ let
   fakeToken = "dummy-token";
   fakeLogDir = "/tmp/${fakeServicesName}";
   fakeEventsFile = "${fakeLogDir}/events.log";
-  fakeUploadFile = "${fakeLogDir}/upload.bin";
+  fakeUploadDir = "${fakeLogDir}/uploads";
+  passthroughUploadFile = "${fakeUploadDir}/passthrough.bin";
+  compressedUploadFile = "${fakeUploadDir}/compressed.bin";
 
-  mediaPath = "/media.mp4";
   fakeBaseUrl = "http://${fakeHost}:${toString fakePort}";
   fakeAllowedUrlsRegex = pkgs.lib.escapeRegex fakeHost;
-  mediaUrl = "${fakeBaseUrl}${mediaPath}";
-  mediaWidth = 160;
-  mediaHeight = 90;
-  mediaDuration = 1;
-  videoFileId = "fake-video-file-id";
-  videoFileUniqueId = "fake-video-unique-id";
+  passthroughMediaPath = "/passthrough.mp4";
+  passthroughMediaUrl = "${fakeBaseUrl}${passthroughMediaPath}";
+  passthroughMediaWidth = 160;
+  passthroughMediaHeight = 90;
+  passthroughMediaDuration = 1;
+  passthroughVideoFileId = "fake-passthrough-video-file-id";
+  passthroughVideoFileUniqueId = "fake-passthrough-video-unique-id";
+  compressedMediaPath = "/compressed.mp4";
+  compressedMediaUrl = "${fakeBaseUrl}${compressedMediaPath}";
+  compressedMediaWidth = 640;
+  compressedMediaHeight = 360;
+  compressedMediaDuration = 5;
+  compressedVideoFileId = "fake-compressed-video-file-id";
+  compressedVideoFileUniqueId = "fake-compressed-video-unique-id";
+  maxFileSizeToSendToTelegram = 45000000;
+  maxVideoSizeToSendToTelegram = 40000000;
+  maxAudioSizeToSendToTelegram = 5000000;
+  maxFileSizeToCompress = 100000000;
+  maxDurationToCompress = 300;
   documentFileId = "fake-document-file-id";
   documentFileUniqueId = "fake-document-unique-id";
 
-  mediaFile = pkgs.runCommand "lolek-test-media.mp4" { nativeBuildInputs = [ pkgs.ffmpeg ]; } ''
-    ffmpeg \
-      -f lavfi -i testsrc=size=${toString mediaWidth}x${toString mediaHeight}:rate=10 \
-      -f lavfi -i anullsrc=channel_layout=mono:sample_rate=44100 \
-      -t ${toString mediaDuration} \
-      -pix_fmt yuv420p \
-      -c:v libx264 \
-      -preset ultrafast \
-      -c:a aac \
-      -movflags +faststart \
-      "$out"
-  '';
+  passthroughMediaFile =
+    pkgs.runCommand "lolek-test-passthrough-media.mp4" { nativeBuildInputs = [ pkgs.ffmpeg ]; }
+      ''
+        ffmpeg \
+          -f lavfi -i testsrc=size=${toString passthroughMediaWidth}x${toString passthroughMediaHeight}:rate=10 \
+          -f lavfi -i anullsrc=channel_layout=mono:sample_rate=44100 \
+          -t ${toString passthroughMediaDuration} \
+          -pix_fmt yuv420p \
+          -c:v libx264 \
+          -preset ultrafast \
+          -c:a aac \
+          -movflags +faststart \
+          "$out"
+      '';
+
+  compressedMediaFile =
+    pkgs.runCommand "lolek-test-compressed-media.mp4" { nativeBuildInputs = [ pkgs.ffmpeg ]; }
+      ''
+        ffmpeg \
+          -f lavfi -i testsrc2=size=${toString compressedMediaWidth}x${toString compressedMediaHeight}:rate=30 \
+          -f lavfi -i anullsrc=channel_layout=mono:sample_rate=44100 \
+          -t ${toString compressedMediaDuration} \
+          -pix_fmt yuv420p \
+          -c:v libx264 \
+          -preset ultrafast \
+          -b:v 100M \
+          -minrate 100M \
+          -maxrate 100M \
+          -bufsize 200M \
+          -x264-params nal-hrd=cbr:force-cfr=1 \
+          -c:a aac \
+          -movflags +faststart \
+          "$out"
+      '';
 in
 pkgs.testers.nixosTest {
   name = "lolek-service";
@@ -77,6 +113,11 @@ pkgs.testers.nixosTest {
           LOLEK_MAX_DOWNLOAD_TRIES = "1";
           LOLEK_START_DOWNLOAD_PAUSE = "10";
           LOLEK_MAX_DOWNLOAD_PAUSE = "10";
+          LOLEK_MAX_FILE_SIZE_TO_SEND_TO_TELEGRAM = toString maxFileSizeToSendToTelegram;
+          LOLEK_MAX_VIDEO_SIZE_TO_SEND_TO_TELEGRAM = toString maxVideoSizeToSendToTelegram;
+          LOLEK_MAX_AUDIO_SIZE_TO_SEND_TO_TELEGRAM = toString maxAudioSizeToSendToTelegram;
+          LOLEK_MAX_FILE_SIZE_TO_COMPRESS = toString maxFileSizeToCompress;
+          LOLEK_MAX_DURATION_TO_COMPRESS = toString maxDurationToCompress;
         };
       };
 
@@ -88,16 +129,23 @@ pkgs.testers.nixosTest {
           LOLEK_FAKE_SERVICES_HOST = fakeHost;
           LOLEK_FAKE_SERVICES_LOG_DIR = fakeLogDir;
           LOLEK_FAKE_SERVICES_EVENTS_FILE = fakeEventsFile;
-          LOLEK_FAKE_SERVICES_UPLOAD_FILE = fakeUploadFile;
-          LOLEK_FAKE_SERVICES_MEDIA_PATH = mediaPath;
-          LOLEK_FAKE_SERVICES_MEDIA_FILE = toString mediaFile;
+          LOLEK_FAKE_SERVICES_UPLOAD_DIR = fakeUploadDir;
+          LOLEK_FAKE_SERVICES_PASSTHROUGH_MEDIA_PATH = passthroughMediaPath;
+          LOLEK_FAKE_SERVICES_PASSTHROUGH_MEDIA_FILE = toString passthroughMediaFile;
+          LOLEK_FAKE_SERVICES_PASSTHROUGH_VIDEO_FILE_ID = passthroughVideoFileId;
+          LOLEK_FAKE_SERVICES_PASSTHROUGH_VIDEO_FILE_UNIQUE_ID = passthroughVideoFileUniqueId;
+          LOLEK_FAKE_SERVICES_PASSTHROUGH_VIDEO_WIDTH = toString passthroughMediaWidth;
+          LOLEK_FAKE_SERVICES_PASSTHROUGH_VIDEO_HEIGHT = toString passthroughMediaHeight;
+          LOLEK_FAKE_SERVICES_PASSTHROUGH_VIDEO_DURATION = toString passthroughMediaDuration;
+          LOLEK_FAKE_SERVICES_COMPRESSED_MEDIA_PATH = compressedMediaPath;
+          LOLEK_FAKE_SERVICES_COMPRESSED_MEDIA_FILE = toString compressedMediaFile;
+          LOLEK_FAKE_SERVICES_COMPRESSED_VIDEO_FILE_ID = compressedVideoFileId;
+          LOLEK_FAKE_SERVICES_COMPRESSED_VIDEO_FILE_UNIQUE_ID = compressedVideoFileUniqueId;
+          LOLEK_FAKE_SERVICES_COMPRESSED_VIDEO_WIDTH = toString compressedMediaWidth;
+          LOLEK_FAKE_SERVICES_COMPRESSED_VIDEO_HEIGHT = toString compressedMediaHeight;
+          LOLEK_FAKE_SERVICES_COMPRESSED_VIDEO_DURATION = toString compressedMediaDuration;
           LOLEK_FAKE_SERVICES_PORT = toString fakePort;
           LOLEK_FAKE_SERVICES_TOKEN = fakeToken;
-          LOLEK_FAKE_SERVICES_VIDEO_FILE_ID = videoFileId;
-          LOLEK_FAKE_SERVICES_VIDEO_FILE_UNIQUE_ID = videoFileUniqueId;
-          LOLEK_FAKE_SERVICES_VIDEO_WIDTH = toString mediaWidth;
-          LOLEK_FAKE_SERVICES_VIDEO_HEIGHT = toString mediaHeight;
-          LOLEK_FAKE_SERVICES_VIDEO_DURATION = toString mediaDuration;
           LOLEK_FAKE_SERVICES_DOCUMENT_FILE_ID = documentFileId;
           LOLEK_FAKE_SERVICES_DOCUMENT_FILE_UNIQUE_ID = documentFileUniqueId;
         };
@@ -123,10 +171,17 @@ pkgs.testers.nixosTest {
     fake_base_url = "${fakeBaseUrl}"
     fake_events_file = "${fakeEventsFile}"
     fake_token = "${fakeToken}"
-    fake_upload_file = "${fakeUploadFile}"
-    media_url = "${mediaUrl}"
-    video_file_id = "${videoFileId}"
+    passthrough_upload_file = "${passthroughUploadFile}"
+    compressed_upload_file = "${compressedUploadFile}"
+    max_file_size_to_send_to_telegram = ${toString maxFileSizeToSendToTelegram}
+    passthrough_media_file = "${passthroughMediaFile}"
+    passthrough_media_url = "${passthroughMediaUrl}"
+    passthrough_video_file_id = "${passthroughVideoFileId}"
+    compressed_media_file = "${compressedMediaFile}"
+    compressed_media_url = "${compressedMediaUrl}"
+    compressed_video_file_id = "${compressedVideoFileId}"
 
+    # The module should create the service user, group, and writable download directory.
     machine.succeed("getent passwd %s" % service_user)
     machine.succeed("getent group %s" % service_group)
     machine.succeed("test -d %s" % download_dir)
@@ -134,28 +189,72 @@ pkgs.testers.nixosTest {
     machine.succeed("test $(stat -c %%G %s) = %s" % (download_dir, service_group))
     machine.succeed("su -s /bin/sh %s -c 'test -w %s'" % (service_user, download_dir))
 
-    machine.wait_until_succeeds("curl -fsS %s >/dev/null" % media_url)
+    machine.wait_until_succeeds("curl -fsS %s >/dev/null" % passthrough_media_url)
+    machine.wait_until_succeeds("curl -fsS %s >/dev/null" % compressed_media_url)
     machine.wait_until_succeeds("curl -fsS -X POST %s/bot%s/getMe | grep '\"ok\": true'" % (fake_base_url, fake_token))
 
     machine.succeed("systemctl start ${serviceUnit}")
     machine.wait_for_unit("${serviceUnit}")
 
+    # The first fake update is a small mp4. It should be uploaded without ffmpeg compression.
     machine.wait_until_succeeds("grep '^getUpdates ' %s" % fake_events_file)
     machine.succeed(
-        "timeout 120 sh -c 'until grep \"^sendVideo \" %s; do sleep 1; done' "
+        "timeout 120 sh -c 'until grep \"^sendVideo passthrough-upload \" %s; do sleep 1; done' "
         "|| (journalctl -u ${serviceUnit} --no-pager; cat %s; false)"
         % (fake_events_file, fake_events_file)
     )
-    machine.succeed("test -s %s" % fake_upload_file)
-    machine.succeed("grep -a 'name=\"video\"' %s" % fake_upload_file)
-    machine.succeed("grep -a 'ftyp' %s" % fake_upload_file)
 
-    folder_name = base64.b64encode(media_url.encode()).decode().rstrip("=")
-    cache_dir = "%s/%s" % (download_dir, folder_name)
-    machine.succeed("test -f %s/%s/%s.mp4" % (cache_dir, ready_dir_name, video_file_id))
+    # The second fake update is larger than the Telegram send limit. It should go through compression.
+    machine.succeed(
+        "timeout 120 sh -c 'until grep \"^sendVideo compressed-upload \" %s; do sleep 1; done' "
+        "|| (journalctl -u ${serviceUnit} --no-pager; cat %s; false)"
+        % (fake_events_file, fake_events_file)
+    )
+    machine.succeed("test -s %s" % passthrough_upload_file)
+    machine.succeed("grep -a 'name=\"video\"' %s" % passthrough_upload_file)
+    machine.succeed("grep -a 'ftyp' %s" % passthrough_upload_file)
+    machine.succeed("test -s %s" % compressed_upload_file)
+    machine.succeed("grep -a 'name=\"video\"' %s" % compressed_upload_file)
+    machine.succeed("grep -a 'ftyp' %s" % compressed_upload_file)
+    machine.succeed(
+        "test $(journalctl -u ${serviceUnit} --no-pager | grep -c 'Compressed video with libx264') -eq 1"
+    )
 
+    # Both uploads should be cached under the Telegram file IDs returned by the fake API.
+    passthrough_folder_name = base64.b64encode(passthrough_media_url.encode()).decode().rstrip("=")
+    passthrough_cache_dir = "%s/%s" % (download_dir, passthrough_folder_name)
+    passthrough_ready_file = "%s/%s/%s.mp4" % (
+        passthrough_cache_dir,
+        ready_dir_name,
+        passthrough_video_file_id,
+    )
+    machine.succeed("test -f %s" % passthrough_ready_file)
+    machine.succeed(
+        "test $(stat -c %%s %s) -le %d"
+        % (passthrough_media_file, max_file_size_to_send_to_telegram)
+    )
+
+    compressed_folder_name = base64.b64encode(compressed_media_url.encode()).decode().rstrip("=")
+    compressed_cache_dir = "%s/%s" % (download_dir, compressed_folder_name)
+    compressed_ready_file = "%s/%s/%s.mp4" % (
+        compressed_cache_dir,
+        ready_dir_name,
+        compressed_video_file_id,
+    )
+    machine.succeed("test -f %s" % compressed_ready_file)
+    machine.succeed(
+        "test $(stat -c %%s %s) -gt %d"
+        % (compressed_media_file, max_file_size_to_send_to_telegram)
+    )
+    machine.succeed(
+        "test $(stat -c %%s %s) -le %d"
+        % (compressed_ready_file, max_file_size_to_send_to_telegram)
+    )
+
+    # On-demand cleanup should remove both cache entries while leaving the service alive.
     machine.succeed("${package}/bin/lolek rpc 'Lolek.FileCleaner.cleanup_now()'")
-    machine.succeed("test ! -e %s" % cache_dir)
+    machine.succeed("test ! -e %s" % passthrough_cache_dir)
+    machine.succeed("test ! -e %s" % compressed_cache_dir)
     machine.succeed("systemctl is-active --quiet ${serviceUnit}")
   '';
 }

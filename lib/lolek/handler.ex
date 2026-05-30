@@ -66,15 +66,65 @@ defmodule Lolek.Handler do
 
   @spec process_url(integer(), String.t()) :: {:ok, Lolek.File.file_state()} | {:error, term()}
   defp process_url(chat_id, url) do
+    log_url = Lolek.Url.normalize_for_log(url)
+
+    timed_step("total", log_url, fn ->
+      do_process_url(chat_id, url, log_url)
+    end)
+  end
+
+  @spec do_process_url(integer(), String.t(), String.t()) ::
+          {:ok, Lolek.File.file_state()} | {:error, term()}
+  defp do_process_url(chat_id, url, log_url) do
     with {:ok, folder_path} <- Lolek.File.get_folder_path(url),
-         {:ok, file_state} <- Lolek.File.get_file_state(folder_path),
-         {:ok, file_state} <- Lolek.Downloader.download(url, file_state),
-         {:ok, file_state} <- Lolek.Converter.adapt_to_telegram(file_state),
-         {:ok, file_state} <- Lolek.send_file(chat_id, file_state) do
-      case Lolek.File.move_to_ready_to_telegram(file_state) do
+         {:ok, file_state} <-
+           timed_step("cache lookup", log_url, fn -> Lolek.File.get_file_state(folder_path) end),
+         {:ok, file_state} <-
+           timed_step("download", log_url, fn -> Lolek.Downloader.download(url, file_state) end),
+         {:ok, file_state} <-
+           timed_step("conversion", log_url, fn -> Lolek.Converter.adapt_to_telegram(file_state) end),
+         {:ok, file_state} <- timed_step("telegram send", log_url, fn -> Lolek.send_file(chat_id, file_state) end) do
+      case timed_step("cache update", log_url, fn -> Lolek.File.move_to_ready_to_telegram(file_state) end) do
         :ok -> {:ok, file_state}
         {:error, reason} -> {:error, reason}
       end
     end
   end
+
+  @spec timed_step(String.t(), String.t(), (-> term())) :: term()
+  defp timed_step(name, log_url, fun) do
+    started_at = System.monotonic_time()
+    result = fun.()
+
+    elapsed_ms =
+      System.monotonic_time()
+      |> Kernel.-(started_at)
+      |> System.convert_time_unit(:native, :microsecond)
+      |> Kernel./(1000)
+
+    Logger.info(
+      "Finished #{name} for url: #{log_url}; elapsed_ms=#{format_elapsed_ms(elapsed_ms)}; result=#{format_step_result(result)}"
+    )
+
+    result
+  end
+
+  @spec format_elapsed_ms(float()) :: String.t()
+  defp format_elapsed_ms(elapsed_ms) do
+    :io_lib.format("~.1f", [elapsed_ms]) |> IO.iodata_to_binary()
+  end
+
+  @spec format_step_result(term()) :: String.t()
+  defp format_step_result({:ok, file_state}), do: "ok:#{format_file_state(file_state)}"
+  defp format_step_result(:ok), do: "ok"
+  defp format_step_result({:error, reason}), do: "error:#{inspect(reason)}"
+  defp format_step_result(other), do: inspect(other)
+
+  @spec format_file_state(term()) :: String.t()
+  defp format_file_state({:ready_to_telegram, _file_path}), do: "ready_to_telegram"
+  defp format_file_state({:compressed, _file_path}), do: "compressed"
+  defp format_file_state({:downloaded, _file_path}), do: "downloaded"
+  defp format_file_state({:new_file, _folder_path}), do: "new_file"
+  defp format_file_state({:sent_to_telegram_at_first, _file_path, _file_id}), do: "sent_to_telegram_at_first"
+  defp format_file_state(other), do: inspect(other)
 end

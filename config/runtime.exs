@@ -9,6 +9,10 @@ config :ex_gram,
   token: bot_token,
   base_url: :dotenv_config.get("LOLEK_TELEGRAM_BASE_URL")
 
+config :ex_gram, Tesla.Middleware.Logger,
+  format: {Lolek.TelegramLog, :format_request},
+  debug: false
+
 config :lolek, :bot_token, bot_token
 
 config :lolek, :download_path, :dotenv_config.get("LOLEK_DOWNLOAD_DIR_PATH")

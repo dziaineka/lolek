@@ -56,6 +56,9 @@ defmodule Lolek.Handler do
             :ok
         end
 
+      {:error, :no_url} ->
+        :ok
+
       {:error, reason} ->
         Logger.warning("Error when processing message; reason: #{inspect(reason)}")
         :ok

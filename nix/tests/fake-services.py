@@ -3,6 +3,7 @@ import os
 import time
 from enum import Enum
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs
 
 
 HOST = os.environ["LOLEK_FAKE_SERVICES_HOST"]
@@ -20,6 +21,11 @@ class MediaKind(Enum):
     COMPRESSED = "compressed"
 
 
+PASSTHROUGH_UPLOAD_UPDATE_ID = 100
+PASSTHROUGH_REUSE_UPDATE_ID = 101
+COMPRESSED_UPLOAD_UPDATE_ID = 102
+
+
 MEDIA = {
     MediaKind.PASSTHROUGH: {
         "path": os.environ["LOLEK_FAKE_SERVICES_PASSTHROUGH_MEDIA_PATH"],
@@ -31,7 +37,6 @@ MEDIA = {
         "width": int(os.environ["LOLEK_FAKE_SERVICES_PASSTHROUGH_VIDEO_WIDTH"]),
         "height": int(os.environ["LOLEK_FAKE_SERVICES_PASSTHROUGH_VIDEO_HEIGHT"]),
         "duration": int(os.environ["LOLEK_FAKE_SERVICES_PASSTHROUGH_VIDEO_DURATION"]),
-        "update_id": 100,
     },
     MediaKind.COMPRESSED: {
         "path": os.environ["LOLEK_FAKE_SERVICES_COMPRESSED_MEDIA_PATH"],
@@ -43,11 +48,11 @@ MEDIA = {
         "width": int(os.environ["LOLEK_FAKE_SERVICES_COMPRESSED_VIDEO_WIDTH"]),
         "height": int(os.environ["LOLEK_FAKE_SERVICES_COMPRESSED_VIDEO_HEIGHT"]),
         "duration": int(os.environ["LOLEK_FAKE_SERVICES_COMPRESSED_VIDEO_DURATION"]),
-        "update_id": 101,
     },
 }
 
 for kind, media in MEDIA.items():
+    media["kind"] = kind
     media["url"] = "http://%s:%d%s" % (HOST, PORT, media["path"])
     media["upload_file"] = os.path.join(UPLOAD_DIR, "%s.bin" % kind.value)
 
@@ -57,6 +62,7 @@ MEDIA_BY_FILE_ID = {media["file_id"]: media for media in MEDIA.values()}
 os.makedirs(LOG_DIR, exist_ok=True)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 uploaded = set()
+sent_by_file_id = set()
 
 
 def write_json(handler, payload):
@@ -144,11 +150,11 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
 
-    def update_for_media(self, kind: MediaKind, message_id):
+    def update_for_media(self, kind: MediaKind, update_id, message_id):
         media = MEDIA[kind]
 
         return {
-            "update_id": media["update_id"],
+            "update_id": update_id,
             "message": {
                 "message_id": message_id,
                 "date": int(time.time()),
@@ -167,17 +173,36 @@ class Handler(BaseHTTPRequestHandler):
         offset = request.get("offset", 0)
 
         if (
-            offset <= MEDIA[MediaKind.PASSTHROUGH]["update_id"]
+            offset <= PASSTHROUGH_UPLOAD_UPDATE_ID
             and MediaKind.PASSTHROUGH not in uploaded
         ):
-            return [self.update_for_media(MediaKind.PASSTHROUGH, 10)]
+            return [
+                self.update_for_media(
+                    MediaKind.PASSTHROUGH, PASSTHROUGH_UPLOAD_UPDATE_ID, 10
+                )
+            ]
 
         if (
-            offset <= MEDIA[MediaKind.COMPRESSED]["update_id"]
+            offset <= PASSTHROUGH_REUSE_UPDATE_ID
             and MediaKind.PASSTHROUGH in uploaded
+            and MediaKind.PASSTHROUGH not in sent_by_file_id
+        ):
+            return [
+                self.update_for_media(
+                    MediaKind.PASSTHROUGH, PASSTHROUGH_REUSE_UPDATE_ID, 11
+                )
+            ]
+
+        if (
+            offset <= COMPRESSED_UPLOAD_UPDATE_ID
+            and MediaKind.PASSTHROUGH in sent_by_file_id
             and MediaKind.COMPRESSED not in uploaded
         ):
-            return [self.update_for_media(MediaKind.COMPRESSED, 11)]
+            return [
+                self.update_for_media(
+                    MediaKind.COMPRESSED, COMPRESSED_UPLOAD_UPDATE_ID, 12
+                )
+            ]
 
         return []
 
@@ -185,7 +210,7 @@ class Handler(BaseHTTPRequestHandler):
         return {
             "ok": True,
             "result": {
-                "message_id": media["update_id"],
+                "message_id": int(time.time()),
                 "date": int(time.time()),
                 "chat": {"id": 1234, "type": "private"},
                 "video": {
@@ -203,11 +228,20 @@ class Handler(BaseHTTPRequestHandler):
 
     def upload_media(self, body):
         if b"filename=" not in body:
-            request = json.loads(body.decode("utf-8") or "{}")
+            body_text = body.decode("utf-8")
+            try:
+                request = json.loads(body_text or "{}")
+            except json.JSONDecodeError:
+                request = {
+                    key: values[0] for key, values in parse_qs(body_text).items()
+                }
+
             file_id = request.get("video")
+            media = MEDIA_BY_FILE_ID[file_id]
+            sent_by_file_id.add(media["kind"])
             return (
-                MEDIA_BY_FILE_ID.get(file_id, MEDIA[MediaKind.PASSTHROUGH]),
-                "file-id-send",
+                media,
+                "%s-file-id-send" % media["kind"].value,
             )
 
         if MediaKind.PASSTHROUGH not in uploaded:

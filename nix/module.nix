@@ -9,6 +9,17 @@
 
 let
   cfg = config.services.lolek;
+  defaultAllowedUrlPatterns = [
+    "tiktok.com"
+    "twitter.com"
+    "facebook.com"
+    "instagram.com"
+    "threads.com"
+    "threads.net"
+    "coub.com"
+    "x.com"
+    "youtube.com/shorts"
+  ];
   inherit (lib)
     mkEnableOption
     mkIf
@@ -72,7 +83,77 @@ in
     environmentFile = mkOption {
       type = types.nullOr types.path;
       default = null;
-      description = "Optional environment file containing secrets such as LOLEK_BOT_TOKEN.";
+      description = ''
+        Optional systemd environment file. This is an escape hatch for
+        env-file formatted secrets and settings.
+      '';
+    };
+
+    allowedUrlPatterns = mkOption {
+      type = types.listOf (types.strMatching "[A-Za-z0-9._/-]+");
+      default = defaultAllowedUrlPatterns;
+      description = ''
+        Host/path suffixes accepted by the bot. Subdomains of host-only entries
+        are also accepted by the application. Query strings and fragments are
+        ignored during matching.
+      '';
+    };
+
+    maxDownloadDirSize = mkOption {
+      type = types.ints.unsigned;
+      default = 5368709120;
+      description = "Maximum recursive size, in bytes, of the download cache.";
+    };
+
+    maxFileSizeToSendToTelegram = mkOption {
+      type = types.ints.positive;
+      default = 45000000;
+      description = "Maximum final media size, in bytes, that Lolek sends to Telegram.";
+    };
+
+    maxVideoSizeToSendToTelegram = mkOption {
+      type = types.ints.positive;
+      default = 40000000;
+      description = "Video byte budget used when calculating compression bitrate.";
+    };
+
+    maxAudioSizeToSendToTelegram = mkOption {
+      type = types.ints.positive;
+      default = 5000000;
+      description = "Audio byte budget used when calculating compression bitrate.";
+    };
+
+    maxFileSizeToCompress = mkOption {
+      type = types.ints.positive;
+      default = 100000000;
+      description = ''
+        Maximum source media size, in bytes, eligible for compression. This also
+        caps streamed Threads media downloads.
+      '';
+    };
+
+    maxDurationToCompress = mkOption {
+      type = types.ints.positive;
+      default = 300;
+      description = "Maximum video duration, in seconds, eligible for compression.";
+    };
+
+    maxDownloadTries = mkOption {
+      type = types.ints.positive;
+      default = 10;
+      description = "Total number of attempts for a download.";
+    };
+
+    startDownloadPause = mkOption {
+      type = types.ints.unsigned;
+      default = 1000;
+      description = "Initial delay, in milliseconds, before retrying a failed download.";
+    };
+
+    maxDownloadPause = mkOption {
+      type = types.ints.unsigned;
+      default = 10000;
+      description = "Maximum retry delay, in milliseconds, for failed downloads.";
     };
 
     environment = mkOption {
@@ -89,6 +170,37 @@ in
   };
 
   config = mkIf cfg.enable {
+    assertions = [
+      {
+        assertion = cfg.allowedUrlPatterns != [ ];
+        message = "services.lolek.allowedUrlPatterns must not be empty.";
+      }
+      {
+        assertion =
+          cfg.maxVideoSizeToSendToTelegram + cfg.maxAudioSizeToSendToTelegram
+          <= cfg.maxFileSizeToSendToTelegram;
+        message = ''
+          services.lolek.maxVideoSizeToSendToTelegram plus
+          services.lolek.maxAudioSizeToSendToTelegram must be less than or
+          equal to services.lolek.maxFileSizeToSendToTelegram.
+        '';
+      }
+      {
+        assertion = cfg.maxFileSizeToCompress >= cfg.maxFileSizeToSendToTelegram;
+        message = ''
+          services.lolek.maxFileSizeToCompress must be greater than or equal to
+          services.lolek.maxFileSizeToSendToTelegram.
+        '';
+      }
+      {
+        assertion = cfg.startDownloadPause <= cfg.maxDownloadPause;
+        message = ''
+          services.lolek.startDownloadPause must be less than or equal to
+          services.lolek.maxDownloadPause.
+        '';
+      }
+    ];
+
     users.groups = mkIf cfg.createUser {
       ${cfg.group} = { };
     };
@@ -115,16 +227,16 @@ in
       environment = {
         LOLEK_TELEGRAM_BASE_URL = "https://api.telegram.org";
         LOLEK_DOWNLOAD_DIR_PATH = toString cfg.downloadDir;
-        LOLEK_MAX_DOWNLOAD_DIR_SIZE = "5368709120";
-        LOLEK_MAX_FILE_SIZE_TO_SEND_TO_TELEGRAM = "45000000";
-        LOLEK_MAX_VIDEO_SIZE_TO_SEND_TO_TELEGRAM = "40000000";
-        LOLEK_MAX_AUDIO_SIZE_TO_SEND_TO_TELEGRAM = "5000000";
-        LOLEK_MAX_FILE_SIZE_TO_COMPRESS = "100000000";
-        LOLEK_MAX_DURATION_TO_COMPRESS = "300";
-        LOLEK_ALLOWED_URLS_REGEX = "tiktok\\.com|twitter\\.com|facebook\\.com|instagram\\.com|threads\\.com|threads\\.net|coub\\.com|x\\.com|youtube\\.com\\/shorts";
-        LOLEK_MAX_DOWNLOAD_TRIES = "10";
-        LOLEK_START_DOWNLOAD_PAUSE = "1000";
-        LOLEK_MAX_DOWNLOAD_PAUSE = "10000";
+        LOLEK_MAX_DOWNLOAD_DIR_SIZE = toString cfg.maxDownloadDirSize;
+        LOLEK_MAX_FILE_SIZE_TO_SEND_TO_TELEGRAM = toString cfg.maxFileSizeToSendToTelegram;
+        LOLEK_MAX_VIDEO_SIZE_TO_SEND_TO_TELEGRAM = toString cfg.maxVideoSizeToSendToTelegram;
+        LOLEK_MAX_AUDIO_SIZE_TO_SEND_TO_TELEGRAM = toString cfg.maxAudioSizeToSendToTelegram;
+        LOLEK_MAX_FILE_SIZE_TO_COMPRESS = toString cfg.maxFileSizeToCompress;
+        LOLEK_MAX_DURATION_TO_COMPRESS = toString cfg.maxDurationToCompress;
+        LOLEK_ALLOWED_URLS_REGEX = lib.concatStringsSep "|" (map lib.escapeRegex cfg.allowedUrlPatterns);
+        LOLEK_MAX_DOWNLOAD_TRIES = toString cfg.maxDownloadTries;
+        LOLEK_START_DOWNLOAD_PAUSE = toString cfg.startDownloadPause;
+        LOLEK_MAX_DOWNLOAD_PAUSE = toString cfg.maxDownloadPause;
       }
       // optionalAttrs (cfg.botTokenFile != null) {
         LOLEK_BOT_TOKEN_FILE = toString cfg.botTokenFile;

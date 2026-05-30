@@ -13,8 +13,14 @@ defmodule Lolek.SendFileTest do
     end
 
     @impl true
-    def send_document(chat_id, document) do
-      record_call({:send_document, chat_id, document})
+    def send_document(chat_id, document, options) do
+      record_call({:send_document, chat_id, document, options})
+      Application.fetch_env!(:lolek, :telegram_test_result)
+    end
+
+    @impl true
+    def edit_message_caption(chat_id, message_id, options) do
+      record_call({:edit_message_caption, chat_id, message_id, options})
       Application.fetch_env!(:lolek, :telegram_test_result)
     end
 
@@ -113,9 +119,39 @@ defmodule Lolek.SendFileTest do
       assert {:ok, {:sent_to_telegram_at_first, ^file_path, "telegram-file-id"}} =
                Lolek.send_file(123, {:compressed, file_path})
 
-      assert_receive {:send_video, 123, {:file_content, %File.Stream{} = stream, "downloaded.mp4"}, _options}
+      assert_receive {:send_video, 123,
+                      {:file_content, %File.Stream{} = stream, "downloaded.mp4"}, _options}
+
       assert stream.path == file_path
       assert stream.line_or_bytes == 64 * 1024
+    end)
+  end
+
+  test "adds requester and elapsed time to uploaded video captions" do
+    preserve_telegram_env(fn ->
+      file_path = tmp_file("downloaded.mp4", "media")
+
+      response = %ExGram.Model.Message{
+        message_id: 456,
+        video: %ExGram.Model.Video{file_id: "telegram-file-id"}
+      }
+
+      Application.put_env(:lolek, :telegram_client, TelegramClient)
+      Application.put_env(:lolek, :telegram_test_result, {:ok, response})
+      Application.put_env(:lolek, :telegram_test_parent, self())
+
+      context = [requester_name: "alice", started_at: System.monotonic_time()]
+
+      assert {:ok, {:sent_to_telegram_at_first, ^file_path, "telegram-file-id"}} =
+               Lolek.send_file(123, {:compressed, file_path}, context)
+
+      assert_receive {:send_video, 123, {:file_content, %File.Stream{}, "downloaded.mp4"},
+                      options}
+
+      assert options[:caption] =~ ~r/^alice requested, processed in \d+\.\ds$/
+
+      assert_receive {:edit_message_caption, 123, 456, edit_options}
+      assert edit_options[:caption] =~ ~r/^alice requested, processed in \d+\.\ds$/
     end)
   end
 
@@ -138,7 +174,9 @@ defmodule Lolek.SendFileTest do
   end
 
   defp tmp_file(name, contents) do
-    dir = Path.join(System.tmp_dir!(), "lolek-send-file-test-#{System.unique_integer([:positive])}")
+    dir =
+      Path.join(System.tmp_dir!(), "lolek-send-file-test-#{System.unique_integer([:positive])}")
+
     File.mkdir_p!(dir)
 
     path = Path.join(dir, name)
@@ -161,7 +199,12 @@ defmodule Lolek.SendFileTest.RaisingTelegramClient do
   end
 
   @impl true
-  def send_document(_chat_id, _document) do
+  def send_document(_chat_id, _document, _options) do
+    raise Application.fetch_env!(:lolek, :telegram_test_error)
+  end
+
+  @impl true
+  def edit_message_caption(_chat_id, _message_id, _options) do
     raise Application.fetch_env!(:lolek, :telegram_test_error)
   end
 end

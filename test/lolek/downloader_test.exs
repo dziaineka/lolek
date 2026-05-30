@@ -5,7 +5,8 @@ defmodule Lolek.DownloaderTest do
     :max_download_tries,
     :start_download_pause,
     :max_download_pause,
-    :download_command_timeout_seconds
+    :download_command_timeout_seconds,
+    :max_file_size_to_compress
   ]
 
   test "uses dedicated threads downloader for threads urls" do
@@ -30,16 +31,24 @@ defmodule Lolek.DownloaderTest do
       File.write!(fake_yt_dlp, """
       #!/bin/sh
       output=
+      max_filesize=
 
       while [ "$#" -gt 0 ]; do
-        if [ "$1" = "-o" ]; then
-          shift
-          output="$1"
-        fi
+        case "$1" in
+          --max-filesize)
+            shift
+            max_filesize="$1"
+            ;;
+          -o)
+            shift
+            output="$1"
+            ;;
+        esac
 
         shift
       done
 
+      [ "$max_filesize" = "12345" ] || exit 9
       printf video > "$output"
       """)
 
@@ -49,6 +58,7 @@ defmodule Lolek.DownloaderTest do
       Application.put_env(:lolek, :start_download_pause, 0)
       Application.put_env(:lolek, :max_download_pause, 0)
       Application.put_env(:lolek, :download_command_timeout_seconds, 5)
+      Application.put_env(:lolek, :max_file_size_to_compress, 12_345)
 
       System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
       {:ok, _apps} = Application.ensure_all_started(:erlexec)
@@ -82,6 +92,7 @@ defmodule Lolek.DownloaderTest do
       Application.put_env(:lolek, :start_download_pause, 0)
       Application.put_env(:lolek, :max_download_pause, 0)
       Application.put_env(:lolek, :download_command_timeout_seconds, 5)
+      Application.put_env(:lolek, :max_file_size_to_compress, 12_345)
 
       System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
       {:ok, _apps} = Application.ensure_all_started(:erlexec)
@@ -112,6 +123,7 @@ defmodule Lolek.DownloaderTest do
       Application.put_env(:lolek, :start_download_pause, 0)
       Application.put_env(:lolek, :max_download_pause, 0)
       Application.put_env(:lolek, :download_command_timeout_seconds, 5)
+      Application.put_env(:lolek, :max_file_size_to_compress, 12_345)
 
       System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
       {:ok, _apps} = Application.ensure_all_started(:erlexec)

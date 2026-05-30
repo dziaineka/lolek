@@ -11,6 +11,7 @@ config :ex_gram,
 
 config :ex_gram, Tesla.Middleware.Logger,
   format: {Lolek.TelegramLog, :format_request},
+  level: &Lolek.TelegramLog.tesla_log_level/1,
   debug: false
 
 config :lolek, :bot_token, bot_token

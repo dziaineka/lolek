@@ -34,4 +34,21 @@ defmodule Lolek.TelegramLogTest do
     assert formatted == "POST https://api.telegram.org/bot[REDACTED]/getMe -> 200 (12.345 ms)"
     refute formatted =~ "123456:secret"
   end
+
+  test "downgrades successful getUpdates request logs to debug" do
+    response = {:ok, %Tesla.Env{status: 200, url: "https://api.telegram.org/bot123456:secret/getUpdates"}}
+
+    assert Lolek.TelegramLog.tesla_log_level(response) == :debug
+  end
+
+  test "keeps successful non-polling request logs at info" do
+    response = {:ok, %Tesla.Env{status: 200, url: "https://api.telegram.org/bot123456:secret/sendVideo"}}
+
+    assert Lolek.TelegramLog.tesla_log_level(response) == :info
+  end
+
+  test "leaves unsuccessful Tesla request log levels unchanged" do
+    assert Lolek.TelegramLog.tesla_log_level({:ok, %Tesla.Env{status: 500}}) == :default
+    assert Lolek.TelegramLog.tesla_log_level({:error, :timeout}) == :default
+  end
 end

@@ -5,6 +5,8 @@ files = ["config/.env.default", "config/.env"] |> Enum.filter(&File.exists?/1)
 
 bot_token = Lolek.Config.get_bot_token(files)
 
+config :logger, level: :info
+
 config :ex_gram,
   token: bot_token,
   base_url: :dotenv_config.get("LOLEK_TELEGRAM_BASE_URL")

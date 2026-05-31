@@ -89,6 +89,7 @@ defmodule Lolek.DownloaderTest do
   test "uses max download tries as total attempts", %{tmp_dir: tmp_dir} do
     preserve_download_env(fn ->
       attempts_file = Path.join(tmp_dir, "attempts")
+      probes_file = Path.join(tmp_dir, "probes")
       bin_dir = Path.join(tmp_dir, "bin")
       fake_yt_dlp = Path.join(bin_dir, "yt-dlp")
 
@@ -96,6 +97,14 @@ defmodule Lolek.DownloaderTest do
 
       File.write!(fake_yt_dlp, """
       #!/bin/sh
+      for arg in "$@"; do
+        if [ "$arg" = "--simulate" ]; then
+          printf x >> "#{probes_file}"
+          printf '[{"format_id":"1"}]\\n'
+          exit 0
+        fi
+      done
+
       printf x >> "#{attempts_file}"
       exit 1
       """)
@@ -121,6 +130,52 @@ defmodule Lolek.DownloaderTest do
       refute reason =~ "fragment"
 
       assert File.read!(attempts_file) == "xxx"
+      assert File.read!(probes_file) == "x"
+    end)
+  end
+
+  @tag :tmp_dir
+  test "does not retry yt-dlp urls without video formats", %{tmp_dir: tmp_dir} do
+    preserve_download_env(fn ->
+      attempts_file = Path.join(tmp_dir, "attempts")
+      probes_file = Path.join(tmp_dir, "probes")
+      bin_dir = Path.join(tmp_dir, "bin")
+      fake_yt_dlp = Path.join(bin_dir, "yt-dlp")
+
+      File.mkdir_p!(bin_dir)
+
+      File.write!(fake_yt_dlp, """
+      #!/bin/sh
+      for arg in "$@"; do
+        if [ "$arg" = "--simulate" ]; then
+          printf x >> "#{probes_file}"
+          printf '[]\\n'
+          exit 0
+        fi
+      done
+
+      printf x >> "#{attempts_file}"
+      printf 'download failed\\n' >&2
+      exit 1
+      """)
+
+      File.chmod!(fake_yt_dlp, 0o755)
+
+      Application.put_env(:lolek, :max_download_tries, 3)
+      Application.put_env(:lolek, :start_download_pause, 0)
+      Application.put_env(:lolek, :max_download_pause, 0)
+      Application.put_env(:lolek, :download_command_timeout_seconds, 5)
+      Application.put_env(:lolek, :max_file_size_to_compress, 12_345)
+
+      System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
+      {:ok, _apps} = Application.ensure_all_started(:erlexec)
+
+      assert {:error, "Error when downloading url: https://example.com/video; reason: " <> reason} =
+               Lolek.Downloader.download("https://example.com/video", {:new_file, tmp_dir})
+
+      assert reason == ":no_video_formats"
+      assert File.read!(attempts_file) == "x"
+      assert File.read!(probes_file) == "x"
     end)
   end
 

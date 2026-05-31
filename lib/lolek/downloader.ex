@@ -6,20 +6,31 @@ defmodule Lolek.Downloader do
   @downloaded_name "downloaded.mp4"
   @threads_hosts ["threads.com", "www.threads.com", "threads.net", "www.threads.net"]
 
+  @type formats_probe :: :not_probed | :has_formats | :no_formats | :inconclusive
+
   @spec download(String.t(), Lolek.File.file_state()) ::
           {:ok, Lolek.File.file_state()} | {:error, String.t()}
   def download(url, {:new_file, output_path}) do
     max_tries = max(Application.get_env(:lolek, :max_download_tries), 1)
     pause = Application.get_env(:lolek, :start_download_pause)
     max_pause = Application.get_env(:lolek, :max_download_pause)
-    download(url, output_path, 1, max_tries, pause, max_pause)
+    download(url, output_path, 1, max_tries, pause, max_pause, :not_probed)
   end
 
   def download(_url, another_file_state) do
     {:ok, another_file_state}
   end
 
-  defp download(url, output_path, tries_done, max_tries, pause, max_pause) do
+  @spec download(
+          String.t(),
+          String.t(),
+          pos_integer(),
+          pos_integer(),
+          non_neg_integer(),
+          non_neg_integer(),
+          formats_probe()
+        ) :: {:ok, Lolek.File.file_state()} | {:error, String.t()}
+  defp download(url, output_path, tries_done, max_tries, pause, max_pause, formats_probe) do
     pause = min(pause, max_pause)
     log_url = Lolek.Url.normalize_for_log(url)
 
@@ -31,15 +42,18 @@ defmodule Lolek.Downloader do
         end
 
       {:error, reason} ->
-        if tries_done < max_tries do
+        formats_probe = maybe_probe_formats(url, formats_probe)
+        error_reason = download_error_reason(reason, formats_probe)
+
+        if retryable_download_error?(formats_probe) and tries_done < max_tries do
           Logger.warning(
-            "Error when downloading url: #{log_url}; reason: #{inspect(reason)}. Retrying..."
+            "Error when downloading url: #{log_url}; reason: #{inspect(error_reason)}. Retrying..."
           )
 
           Process.sleep(pause)
-          download(url, output_path, tries_done + 1, max_tries, pause * 2, max_pause)
+          download(url, output_path, tries_done + 1, max_tries, pause * 2, max_pause, formats_probe)
         else
-          {:error, "Error when downloading url: #{log_url}; reason: #{inspect(reason)}"}
+          {:error, "Error when downloading url: #{log_url}; reason: #{inspect(error_reason)}"}
         end
     end
   end
@@ -93,4 +107,55 @@ defmodule Lolek.Downloader do
       _ -> :yt_dlp
     end
   end
+
+  @spec maybe_probe_formats(String.t(), formats_probe()) :: formats_probe()
+  defp maybe_probe_formats(url, :not_probed) do
+    case downloader_module(url) do
+      :yt_dlp -> probe_formats(url)
+      Lolek.ThreadsDownloader -> :inconclusive
+    end
+  end
+
+  defp maybe_probe_formats(_url, formats_probe), do: formats_probe
+
+  @spec probe_formats(String.t()) :: formats_probe()
+  defp probe_formats(url) do
+    case Lolek.Command.run(
+           "yt-dlp",
+           [
+             "--simulate",
+             "--ignore-no-formats-error",
+             "--print",
+             "%(formats)#j",
+             "--no-playlist",
+             url
+           ],
+           timeout: command_timeout(:download_command_timeout_seconds)
+         ) do
+      {:ok, output} -> parse_formats_probe(output)
+      {:error, _reason} -> :inconclusive
+    end
+  end
+
+  @spec parse_formats_probe(keyword()) :: formats_probe()
+  defp parse_formats_probe(output) do
+    output
+    |> Keyword.get(:stdout, [])
+    |> IO.iodata_to_binary()
+    |> String.trim()
+    |> Jason.decode()
+    |> case do
+      {:ok, []} -> :no_formats
+      {:ok, formats} when is_list(formats) -> :has_formats
+      _ -> :inconclusive
+    end
+  end
+
+  @spec retryable_download_error?(formats_probe()) :: boolean()
+  defp retryable_download_error?(:no_formats), do: false
+  defp retryable_download_error?(_formats_probe), do: true
+
+  @spec download_error_reason(term(), formats_probe()) :: term()
+  defp download_error_reason(_reason, :no_formats), do: :no_video_formats
+  defp download_error_reason(reason, _formats_probe), do: reason
 end

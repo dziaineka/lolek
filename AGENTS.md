@@ -168,14 +168,14 @@ Key environment variables:
 
 - `LOLEK_BOT_TOKEN` - Telegram bot token (required)
 - `LOLEK_DOWNLOAD_DIR_PATH` - Download directory (default: `./downloads`)
-- `LOLEK_HW_ACCELERATION` - H.264 encoder backend (`none` or `vaapi`; default: `none`)
+- `LOLEK_HW_ACCELERATION` - H.264 encoder backend (`none`, `vaapi`, or `qsv`; default: `none`)
 - `LOLEK_HW_DEVICE` - Render device for hardware acceleration (default: `/dev/dri/renderD128`)
 - Various size/duration limits for compression logic
 
 ## External Dependencies
 
 - **yt-dlp**: Video downloading (v2025.12.08)
-- **ffmpeg/ffprobe**: Video processing and analysis
+- **ffmpeg/ffprobe**: Video processing and analysis; hardware encoding supports VAAPI and Intel QSV when the ffmpeg build and host render device support it
 - **Python3**: Required by yt-dlp
 
 All available in Docker container; local development runs via Docker Compose.

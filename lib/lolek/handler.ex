@@ -48,6 +48,9 @@ defmodule Lolek.Handler do
           {:ok, _file_state} ->
             :ok
 
+          {:error, :no_video_formats} ->
+            :ok
+
           {:error, reason} ->
             Logger.warning(
               "Error when processing url: #{Lolek.Url.normalize_for_log(url)}; reason: #{inspect(reason)}"

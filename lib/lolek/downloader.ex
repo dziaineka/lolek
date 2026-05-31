@@ -7,9 +7,10 @@ defmodule Lolek.Downloader do
   @threads_hosts ["threads.com", "www.threads.com", "threads.net", "www.threads.net"]
 
   @type formats_probe :: :not_probed | :has_formats | :no_formats | :inconclusive
+  @type download_error :: :no_video_formats | String.t()
 
   @spec download(String.t(), Lolek.File.file_state()) ::
-          {:ok, Lolek.File.file_state()} | {:error, String.t()}
+          {:ok, Lolek.File.file_state()} | {:error, download_error()}
   def download(url, {:new_file, output_path}) do
     max_tries = max(Application.get_env(:lolek, :max_download_tries), 1)
     pause = Application.get_env(:lolek, :start_download_pause)
@@ -29,7 +30,7 @@ defmodule Lolek.Downloader do
           non_neg_integer(),
           non_neg_integer(),
           formats_probe()
-        ) :: {:ok, Lolek.File.file_state()} | {:error, String.t()}
+        ) :: {:ok, Lolek.File.file_state()} | {:error, download_error()}
   defp download(url, output_path, tries_done, max_tries, pause, max_pause, formats_probe) do
     pause = min(pause, max_pause)
     log_url = Lolek.Url.normalize_for_log(url)
@@ -53,7 +54,7 @@ defmodule Lolek.Downloader do
           Process.sleep(pause)
           download(url, output_path, tries_done + 1, max_tries, pause * 2, max_pause, formats_probe)
         else
-          {:error, "Error when downloading url: #{log_url}; reason: #{inspect(error_reason)}"}
+          {:error, download_error(log_url, error_reason)}
         end
     end
   end
@@ -158,4 +159,10 @@ defmodule Lolek.Downloader do
   @spec download_error_reason(term(), formats_probe()) :: term()
   defp download_error_reason(_reason, :no_formats), do: :no_video_formats
   defp download_error_reason(reason, _formats_probe), do: reason
+
+  @spec download_error(String.t(), term()) :: download_error()
+  defp download_error(_log_url, :no_video_formats), do: :no_video_formats
+
+  defp download_error(log_url, reason),
+    do: "Error when downloading url: #{log_url}; reason: #{inspect(reason)}"
 end

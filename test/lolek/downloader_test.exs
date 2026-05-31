@@ -170,10 +170,9 @@ defmodule Lolek.DownloaderTest do
       System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
       {:ok, _apps} = Application.ensure_all_started(:erlexec)
 
-      assert {:error, "Error when downloading url: https://example.com/video; reason: " <> reason} =
+      assert {:error, :no_video_formats} =
                Lolek.Downloader.download("https://example.com/video", {:new_file, tmp_dir})
 
-      assert reason == ":no_video_formats"
       assert File.read!(attempts_file) == "x"
       assert File.read!(probes_file) == "x"
     end)

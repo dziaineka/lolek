@@ -87,11 +87,12 @@ defmodule Lolek.Handler do
           {:ok, Lolek.File.file_state()} | {:error, term()}
   defp do_process_url(chat_id, url, log_url, requester_name, started_at) do
     with {:ok, folder_path} <- Lolek.File.get_folder_path(url),
-         source_caption <- source_caption(url, folder_path, log_url),
+         source_metadata <- source_metadata(url, folder_path, log_url),
          send_context = [
            requester_name: requester_name,
            started_at: started_at,
-           source_caption: source_caption
+           source_caption: source_metadata.caption,
+           source_title: source_metadata.title
          ],
          {:ok, file_state} <-
            timed_step("cache lookup", log_url, fn -> Lolek.File.get_file_state(folder_path) end),
@@ -114,20 +115,20 @@ defmodule Lolek.Handler do
     end
   end
 
-  @spec source_caption(String.t(), String.t(), String.t()) :: String.t() | nil
-  defp source_caption(url, folder_path, log_url) do
+  @spec source_metadata(String.t(), String.t(), String.t()) :: Lolek.SourceMetadata.t()
+  defp source_metadata(url, folder_path, log_url) do
     case timed_step("metadata", log_url, fn ->
            Lolek.SourceMetadata.get_or_fetch(url, folder_path)
          end) do
-      {:ok, caption} ->
-        caption
+      {:ok, metadata} ->
+        metadata
 
       {:error, reason} ->
         Logger.warning(
           "Error when fetching source metadata for url: #{log_url}; reason: #{inspect(reason)}"
         )
 
-        nil
+        Lolek.SourceMetadata.empty()
     end
   end
 
@@ -155,12 +156,17 @@ defmodule Lolek.Handler do
   end
 
   @spec format_step_result(term()) :: String.t()
-  defp format_step_result({:ok, nil}), do: "ok:no_source_caption"
-  defp format_step_result({:ok, caption}) when is_binary(caption), do: "ok:source_caption"
+  defp format_step_result({:ok, %{caption: caption, title: title}}) do
+    "ok:source_metadata:caption=#{present?(caption)}:title=#{present?(title)}"
+  end
+
   defp format_step_result({:ok, file_state}), do: "ok:#{format_file_state(file_state)}"
   defp format_step_result(:ok), do: "ok"
   defp format_step_result({:error, reason}), do: "error:#{inspect(reason)}"
   defp format_step_result(other), do: inspect(other)
+
+  @spec present?(term()) :: boolean()
+  defp present?(value), do: is_binary(value) and value != ""
 
   @spec format_file_state(term()) :: String.t()
   defp format_file_state({:ready_to_telegram, _file_path}), do: "ready_to_telegram"

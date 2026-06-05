@@ -6,24 +6,24 @@ defmodule Lolek.SourceMetadataTest do
   ]
 
   @tag :tmp_dir
-  test "fetches sanitizes and caches yt-dlp captions", %{tmp_dir: tmp_dir} do
+  test "fetches sanitizes and caches yt-dlp metadata", %{tmp_dir: tmp_dir} do
     preserve_metadata_env(fn ->
       calls_file = Path.join(tmp_dir, "calls")
       bin_dir = Path.join(tmp_dir, "bin")
 
       put_fake_yt_dlp(bin_dir, """
       printf x >> "#{calls_file}"
-      printf '%s' '{"description":"Watch https://example.com/source now\\nnext line","title":"Fallback"}'
+      printf '%s' '{"description":"Watch https://example.com/source now\\nnext line","title":"A / Video: Title?"}'
       """)
 
       put_metadata_env(bin_dir)
 
-      assert {:ok, "Watch now\nnext line"} =
+      assert {:ok, %{caption: "Watch now\nnext line", title: "A Video Title"}} =
                Lolek.SourceMetadata.get_or_fetch("https://example.com/video", tmp_dir)
 
       assert File.read!(calls_file) == "x"
 
-      assert {:ok, %{"caption" => "Watch now\nnext line"}} =
+      assert {:ok, %{"caption" => "Watch now\nnext line", "title" => "A Video Title"}} =
                tmp_dir
                |> Path.join("source_metadata.json")
                |> File.read!()
@@ -32,10 +32,21 @@ defmodule Lolek.SourceMetadataTest do
   end
 
   @tag :tmp_dir
-  test "uses cached source caption without running yt-dlp", %{tmp_dir: tmp_dir} do
+  test "uses cached source metadata without running yt-dlp", %{tmp_dir: tmp_dir} do
+    File.write!(
+      Path.join(tmp_dir, "source_metadata.json"),
+      Jason.encode!(%{caption: "Cached", title: "Cached Title"})
+    )
+
+    assert {:ok, %{caption: "Cached", title: "Cached Title"}} =
+             Lolek.SourceMetadata.get_or_fetch("https://example.com/video", tmp_dir)
+  end
+
+  @tag :tmp_dir
+  test "derives cached title from old caption-only cache entries", %{tmp_dir: tmp_dir} do
     File.write!(Path.join(tmp_dir, "source_metadata.json"), Jason.encode!(%{caption: "Cached"}))
 
-    assert {:ok, "Cached"} =
+    assert {:ok, %{caption: "Cached", title: "Cached"}} =
              Lolek.SourceMetadata.get_or_fetch("https://example.com/video", tmp_dir)
   end
 
@@ -44,11 +55,12 @@ defmodule Lolek.SourceMetadataTest do
     File.write!(
       Path.join(tmp_dir, "source_metadata.json"),
       Jason.encode!(%{
-        caption: "First line https://example.com/source\r\n  second\tline\n\n\nthird line  "
+        caption: "First line https://example.com/source\r\n  second\tline\n\n\nthird line  ",
+        title: "Cached Title"
       })
     )
 
-    assert {:ok, "First line\nsecond line\n\nthird line"} =
+    assert {:ok, %{caption: "First line\nsecond line\n\nthird line", title: "Cached Title"}} =
              Lolek.SourceMetadata.get_or_fetch("https://example.com/video", tmp_dir)
   end
 
@@ -63,10 +75,10 @@ defmodule Lolek.SourceMetadataTest do
 
       put_metadata_env(bin_dir)
 
-      assert {:ok, nil} =
+      assert {:ok, %{caption: nil, title: nil}} =
                Lolek.SourceMetadata.get_or_fetch("https://example.com/video", tmp_dir)
 
-      assert {:ok, %{"caption" => nil}} =
+      assert {:ok, %{"caption" => nil, "title" => nil}} =
                tmp_dir
                |> Path.join("source_metadata.json")
                |> File.read!()

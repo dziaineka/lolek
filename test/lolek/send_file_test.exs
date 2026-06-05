@@ -127,6 +127,50 @@ defmodule Lolek.SendFileTest do
     end)
   end
 
+  test "uses source titles as upload file names" do
+    preserve_telegram_env(fn ->
+      file_path = tmp_file("compressed.mp4", "media")
+
+      response = %ExGram.Model.Message{
+        video: %ExGram.Model.Video{file_id: "telegram-file-id"}
+      }
+
+      Application.put_env(:lolek, :telegram_client, TelegramClient)
+      Application.put_env(:lolek, :telegram_test_result, {:ok, response})
+      Application.put_env(:lolek, :telegram_test_parent, self())
+
+      context = [source_title: "A Video Title"]
+
+      assert {:ok, {:sent_to_telegram_at_first, ^file_path, "telegram-file-id"}} =
+               Lolek.send_file(123, {:compressed, file_path}, context)
+
+      assert_receive {:send_video, 123, {:file_content, %File.Stream{}, "A Video Title.mp4"},
+                      _options}
+    end)
+  end
+
+  test "sanitizes source titles before using them as upload file names" do
+    preserve_telegram_env(fn ->
+      file_path = tmp_file("compressed.mp4", "media")
+
+      response = %ExGram.Model.Message{
+        video: %ExGram.Model.Video{file_id: "telegram-file-id"}
+      }
+
+      Application.put_env(:lolek, :telegram_client, TelegramClient)
+      Application.put_env(:lolek, :telegram_test_result, {:ok, response})
+      Application.put_env(:lolek, :telegram_test_parent, self())
+
+      context = [source_title: "A / Video: https://example.com/watch Title?"]
+
+      assert {:ok, {:sent_to_telegram_at_first, ^file_path, "telegram-file-id"}} =
+               Lolek.send_file(123, {:compressed, file_path}, context)
+
+      assert_receive {:send_video, 123, {:file_content, %File.Stream{}, "A Video Title.mp4"},
+                      _options}
+    end)
+  end
+
   test "adds requester and elapsed time to uploaded video captions" do
     preserve_telegram_env(fn ->
       file_path = tmp_file("downloaded.mp4", "media")

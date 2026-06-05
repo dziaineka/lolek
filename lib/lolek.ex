@@ -5,6 +5,7 @@ defmodule Lolek do
   @upload_chunk_size 64 * 1024
   @max_caption_length 1024
   @caption_separator "\n\n"
+  @max_upload_file_name_length 180
 
   require Logger
 
@@ -31,7 +32,7 @@ defmodule Lolek do
 
         with {:ok, %ExGram.Model.Message{video: %ExGram.Model.Video{file_id: file_id}} = response} <-
                call_telegram(fn ->
-                 Lolek.Telegram.send_video(chat_id, upload_file(file_path), options)
+                 Lolek.Telegram.send_video(chat_id, upload_file(file_path, context), options)
                end) do
           update_caption_after_send(chat_id, response, context)
           {:ok, {:sent_to_telegram_at_first, file_path, file_id}}
@@ -46,7 +47,7 @@ defmodule Lolek do
         with {:ok,
               %ExGram.Model.Message{document: %ExGram.Model.Document{file_id: file_id}} = response} <-
                call_telegram(fn ->
-                 Lolek.Telegram.send_document(chat_id, upload_file(file_path), options)
+                 Lolek.Telegram.send_document(chat_id, upload_file(file_path, context), options)
                end) do
           update_caption_after_send(chat_id, response, context)
           {:ok, {:sent_to_telegram_at_first, file_path, file_id}}
@@ -57,13 +58,58 @@ defmodule Lolek do
     end
   end
 
-  @spec upload_file(String.t()) :: {:file_content, File.Stream.t(), String.t()} | String.t()
-  defp upload_file(file_path) do
+  @spec upload_file(String.t(), keyword()) ::
+          {:file_content, File.Stream.t(), String.t()} | String.t()
+  defp upload_file(file_path, context) do
     if Application.get_env(:lolek, :telegram_local_file_uploads, false) do
       local_file_uri(file_path)
     else
-      {:file_content, File.stream!(file_path, [], @upload_chunk_size), Path.basename(file_path)}
+      {:file_content, File.stream!(file_path, [], @upload_chunk_size),
+       upload_file_name(file_path, context)}
     end
+  end
+
+  @spec upload_file_name(String.t(), keyword()) :: String.t()
+  defp upload_file_name(file_path, context) do
+    case Keyword.get(context, :source_title) do
+      title when is_binary(title) and title != "" ->
+        titled_file_name(file_path, title)
+
+      _ ->
+        Path.basename(file_path)
+    end
+  end
+
+  @spec titled_file_name(String.t(), String.t()) :: String.t()
+  defp titled_file_name(file_path, title) do
+    extname = Path.extname(file_path)
+    max_title_length = max(@max_upload_file_name_length - String.length(extname), 1)
+
+    title =
+      title
+      |> sanitize_upload_title()
+      |> String.slice(0, max_title_length)
+      |> String.trim()
+
+    cond do
+      title == "" ->
+        Path.basename(file_path)
+
+      String.ends_with?(String.downcase(title), String.downcase(extname)) ->
+        title
+
+      true ->
+        title <> extname
+    end
+  end
+
+  @spec sanitize_upload_title(String.t()) :: String.t()
+  defp sanitize_upload_title(title) do
+    title
+    |> String.replace(~r{https?://\S+}iu, "")
+    |> String.replace(~r/[\x00-\x1F\x7F\/\\:*?"<>|]/u, " ")
+    |> String.replace(~r/\s+/, " ")
+    |> String.trim()
   end
 
   @spec local_file_uri(String.t()) :: String.t()

@@ -155,12 +155,103 @@ defmodule Lolek.SendFileTest do
     end)
   end
 
+  test "does not include source captions by default" do
+    preserve_telegram_env(fn ->
+      file_path = tmp_file("downloaded.mp4", "media")
+
+      response = %ExGram.Model.Message{
+        video: %ExGram.Model.Video{file_id: "telegram-file-id"}
+      }
+
+      Application.put_env(:lolek, :telegram_client, TelegramClient)
+      Application.put_env(:lolek, :telegram_test_result, {:ok, response})
+      Application.put_env(:lolek, :telegram_test_parent, self())
+      Application.put_env(:lolek, :post_source_caption, false)
+
+      context = [
+        source_caption: "Source post text",
+        requester_name: "alice",
+        started_at: System.monotonic_time()
+      ]
+
+      assert {:ok, {:sent_to_telegram_at_first, ^file_path, "telegram-file-id"}} =
+               Lolek.send_file(123, {:compressed, file_path}, context)
+
+      assert_receive {:send_video, 123, {:file_content, %File.Stream{}, "downloaded.mp4"},
+                      options}
+
+      refute options[:caption] =~ "Source post text"
+      assert options[:caption] =~ ~r/^alice requested, processed in \d+\.\ds$/
+    end)
+  end
+
+  test "includes source captions when enabled" do
+    preserve_telegram_env(fn ->
+      file_path = tmp_file("downloaded.mp4", "media")
+
+      response = %ExGram.Model.Message{
+        video: %ExGram.Model.Video{file_id: "telegram-file-id"}
+      }
+
+      Application.put_env(:lolek, :telegram_client, TelegramClient)
+      Application.put_env(:lolek, :telegram_test_result, {:ok, response})
+      Application.put_env(:lolek, :telegram_test_parent, self())
+      Application.put_env(:lolek, :post_source_caption, true)
+
+      context = [
+        source_caption: "Source post text\nsecond line",
+        requester_name: "alice",
+        started_at: System.monotonic_time()
+      ]
+
+      assert {:ok, {:sent_to_telegram_at_first, ^file_path, "telegram-file-id"}} =
+               Lolek.send_file(123, {:compressed, file_path}, context)
+
+      assert_receive {:send_video, 123, {:file_content, %File.Stream{}, "downloaded.mp4"},
+                      options}
+
+      assert options[:caption] =~
+               ~r/^Source post text\nsecond line\n\nalice requested, processed in \d+\.\ds$/
+    end)
+  end
+
+  test "truncates source captions while preserving requester captions" do
+    preserve_telegram_env(fn ->
+      file_path = tmp_file("downloaded.mp4", "media")
+
+      response = %ExGram.Model.Message{
+        video: %ExGram.Model.Video{file_id: "telegram-file-id"}
+      }
+
+      Application.put_env(:lolek, :telegram_client, TelegramClient)
+      Application.put_env(:lolek, :telegram_test_result, {:ok, response})
+      Application.put_env(:lolek, :telegram_test_parent, self())
+      Application.put_env(:lolek, :post_source_caption, true)
+
+      context = [
+        source_caption: String.duplicate("a", 2_000),
+        requester_name: "alice",
+        started_at: System.monotonic_time()
+      ]
+
+      assert {:ok, {:sent_to_telegram_at_first, ^file_path, "telegram-file-id"}} =
+               Lolek.send_file(123, {:compressed, file_path}, context)
+
+      assert_receive {:send_video, 123, {:file_content, %File.Stream{}, "downloaded.mp4"},
+                      options}
+
+      assert String.length(options[:caption]) == 1024
+      assert options[:caption] =~ ~r/\.\.\.\n\nalice requested, processed in \d+\.\ds$/
+    end)
+  end
+
   defp preserve_telegram_env(fun) do
     client = Application.fetch_env(:lolek, :telegram_client)
     result = Application.fetch_env(:lolek, :telegram_test_result)
     error = Application.fetch_env(:lolek, :telegram_test_error)
     parent = Application.fetch_env(:lolek, :telegram_test_parent)
     local_file_uploads = Application.fetch_env(:lolek, :telegram_local_file_uploads)
+    post_source_caption = Application.fetch_env(:lolek, :post_source_caption)
 
     try do
       fun.()
@@ -170,6 +261,7 @@ defmodule Lolek.SendFileTest do
       restore_app_env(:telegram_test_error, error)
       restore_app_env(:telegram_test_parent, parent)
       restore_app_env(:telegram_local_file_uploads, local_file_uploads)
+      restore_app_env(:post_source_caption, post_source_caption)
     end
   end
 

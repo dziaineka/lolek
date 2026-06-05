@@ -3,6 +3,8 @@ defmodule Lolek do
   This module is the main module of the Lolek bot containing bot operations
   """
   @upload_chunk_size 64 * 1024
+  @max_caption_length 1024
+  @caption_separator "\n\n"
 
   require Logger
 
@@ -137,11 +139,72 @@ defmodule Lolek do
 
   @spec caption(keyword()) :: String.t() | nil
   defp caption(context) do
+    source_caption = source_caption(context)
+    requester_caption = requester_caption(context)
+
+    build_caption(source_caption, requester_caption)
+  end
+
+  @spec source_caption(keyword()) :: String.t() | nil
+  defp source_caption(context) do
+    if Application.get_env(:lolek, :post_source_caption, false) do
+      case Keyword.get(context, :source_caption) do
+        source_caption when is_binary(source_caption) and source_caption != "" -> source_caption
+        _ -> nil
+      end
+    else
+      nil
+    end
+  end
+
+  @spec requester_caption(keyword()) :: String.t() | nil
+  defp requester_caption(context) do
     with requester when is_binary(requester) <- Keyword.get(context, :requester_name),
          started_at when is_integer(started_at) <- Keyword.get(context, :started_at) do
       "#{requester} requested, processed in #{elapsed_seconds(started_at)}s"
     else
       _ -> nil
+    end
+  end
+
+  @spec build_caption(String.t() | nil, String.t() | nil) :: String.t() | nil
+  defp build_caption(nil, nil), do: nil
+
+  defp build_caption(source_caption, nil),
+    do: truncate_caption(source_caption, @max_caption_length)
+
+  defp build_caption(nil, requester_caption),
+    do: truncate_caption(requester_caption, @max_caption_length)
+
+  defp build_caption(source_caption, requester_caption) do
+    requester_caption = truncate_caption(requester_caption, @max_caption_length)
+
+    available_source_length =
+      @max_caption_length - String.length(requester_caption) - String.length(@caption_separator)
+
+    if available_source_length > 0 do
+      [
+        truncate_caption(source_caption, available_source_length),
+        requester_caption
+      ]
+      |> Enum.reject(&(&1 == ""))
+      |> Enum.join(@caption_separator)
+    else
+      requester_caption
+    end
+  end
+
+  @spec truncate_caption(String.t(), non_neg_integer()) :: String.t()
+  defp truncate_caption(_caption, 0), do: ""
+
+  defp truncate_caption(caption, max_length) do
+    if String.length(caption) <= max_length do
+      caption
+    else
+      caption
+      |> String.slice(0, max(max_length - 3, 0))
+      |> Kernel.<>("...")
+      |> String.slice(0, max_length)
     end
   end
 

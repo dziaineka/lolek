@@ -66,6 +66,19 @@ defmodule Lolek.ThreadsDownloaderTest do
              Lolek.ThreadsDownloader.extract_media_url(body)
   end
 
+  test "extracts caption text from graphql response" do
+    body = ~s({"data":{"post":{"caption":{"text":"Threads post text"}}}})
+
+    assert {:ok, "Threads post text"} = Lolek.ThreadsDownloader.extract_caption(body)
+  end
+
+  test "extracts caption text from text fragments" do
+    body =
+      ~s({"data":{"post":{"text_post_app_info":{"text_fragments":{"fragments":[{"plaintext":"Hello "},{"plaintext":"Threads"}]}}}}})
+
+    assert {:ok, "Hello Threads"} = Lolek.ThreadsDownloader.extract_caption(body)
+  end
+
   test "builds permalink graphql request with provider variables first" do
     requests =
       Lolek.ThreadsDownloader.graphql_requests(

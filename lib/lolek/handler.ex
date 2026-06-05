@@ -86,9 +86,13 @@ defmodule Lolek.Handler do
   @spec do_process_url(integer(), String.t(), String.t(), String.t(), integer()) ::
           {:ok, Lolek.File.file_state()} | {:error, term()}
   defp do_process_url(chat_id, url, log_url, requester_name, started_at) do
-    send_context = [requester_name: requester_name, started_at: started_at]
-
     with {:ok, folder_path} <- Lolek.File.get_folder_path(url),
+         source_caption <- source_caption(url, folder_path, log_url),
+         send_context = [
+           requester_name: requester_name,
+           started_at: started_at,
+           source_caption: source_caption
+         ],
          {:ok, file_state} <-
            timed_step("cache lookup", log_url, fn -> Lolek.File.get_file_state(folder_path) end),
          {:ok, file_state} <-
@@ -107,6 +111,23 @@ defmodule Lolek.Handler do
         :ok -> {:ok, file_state}
         {:error, reason} -> {:error, reason}
       end
+    end
+  end
+
+  @spec source_caption(String.t(), String.t(), String.t()) :: String.t() | nil
+  defp source_caption(url, folder_path, log_url) do
+    case timed_step("metadata", log_url, fn ->
+           Lolek.SourceMetadata.get_or_fetch(url, folder_path)
+         end) do
+      {:ok, caption} ->
+        caption
+
+      {:error, reason} ->
+        Logger.warning(
+          "Error when fetching source metadata for url: #{log_url}; reason: #{inspect(reason)}"
+        )
+
+        nil
     end
   end
 
@@ -134,6 +155,8 @@ defmodule Lolek.Handler do
   end
 
   @spec format_step_result(term()) :: String.t()
+  defp format_step_result({:ok, nil}), do: "ok:no_source_caption"
+  defp format_step_result({:ok, caption}) when is_binary(caption), do: "ok:source_caption"
   defp format_step_result({:ok, file_state}), do: "ok:#{format_file_state(file_state)}"
   defp format_step_result(:ok), do: "ok"
   defp format_step_result({:error, reason}), do: "error:#{inspect(reason)}"

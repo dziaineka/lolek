@@ -38,6 +38,18 @@ defmodule Lolek.ThreadsDownloader do
     end
   end
 
+  @spec caption(String.t()) :: {:ok, String.t() | nil} | {:error, String.t()}
+  def caption(url) do
+    with {:ok, normalized_url} <- normalize_url(url),
+         media_route_url = media_route_url(normalized_url),
+         {:ok, shortcode} <- extract_shortcode(normalized_url),
+         {:ok, post_id} <- decode_shortcode(shortcode),
+         {:ok, html_response} <- get(normalized_url, html_headers()),
+         {:ok, tokens} <- extract_tokens(html_response) do
+      fetch_caption([normalized_url, media_route_url], post_id, tokens)
+    end
+  end
+
   @spec normalize_url(String.t()) :: {:ok, String.t()} | {:error, String.t()}
   def normalize_url(url) do
     case URI.parse(url) do
@@ -154,6 +166,28 @@ defmodule Lolek.ThreadsDownloader do
     end)
   end
 
+  @spec fetch_caption([String.t()], String.t(), token_bundle()) ::
+          {:ok, String.t() | nil} | {:error, String.t()}
+  defp fetch_caption(urls, post_id, tokens) do
+    urls
+    |> Enum.uniq()
+    |> Enum.flat_map(&graphql_requests(&1, post_id, tokens))
+    |> Enum.reduce_while({:error, "Threads caption was not found"}, fn request, acc ->
+      case execute_graphql_request(request, tokens) do
+        {:ok, response} ->
+          case extract_caption(response.body) do
+            {:ok, nil} -> {:cont, {:ok, nil}}
+            {:ok, caption} -> {:halt, {:ok, caption}}
+            {:error, _reason} -> {:cont, acc}
+          end
+
+        {:error, reason} ->
+          Logger.warning("Threads GraphQL request failed: #{reason}")
+          {:cont, acc}
+      end
+    end)
+  end
+
   @spec handle_graphql_request(map(), token_bundle()) ::
           {:halt, {:ok, String.t()}} | {:cont, {:error, String.t()}}
   defp handle_graphql_request(request, tokens) do
@@ -182,6 +216,14 @@ defmodule Lolek.ThreadsDownloader do
     case Enum.find_value(patterns, fn pattern -> extract_optional_regex(body, pattern) end) do
       nil -> {:error, "Threads video URL was not found"}
       encoded_url -> {:ok, decode_json_escaped_url(encoded_url)}
+    end
+  end
+
+  @spec extract_caption(String.t()) :: {:ok, String.t() | nil} | {:error, String.t()}
+  def extract_caption(body) do
+    case Jason.decode(body) do
+      {:ok, json} -> {:ok, find_caption(json)}
+      {:error, reason} -> {:error, reason}
     end
   end
 
@@ -412,6 +454,42 @@ defmodule Lolek.ThreadsDownloader do
       _ -> nil
     end
   end
+
+  @spec find_caption(term()) :: String.t() | nil
+  defp find_caption(%{} = map) do
+    caption_from_map(map) || Enum.find_value(Map.values(map), &find_caption/1)
+  end
+
+  defp find_caption(values) when is_list(values), do: Enum.find_value(values, &find_caption/1)
+  defp find_caption(_value), do: nil
+
+  @spec caption_from_map(map()) :: String.t() | nil
+  defp caption_from_map(%{"caption" => %{"text" => text}}) when is_binary(text) and text != "",
+    do: text
+
+  defp caption_from_map(%{"caption" => text}) when is_binary(text) and text != "", do: text
+
+  defp caption_from_map(%{
+         "text_post_app_info" => %{"text_fragments" => %{"fragments" => fragments}}
+       })
+       when is_list(fragments) do
+    fragments
+    |> Enum.map(&fragment_text/1)
+    |> Enum.join()
+    |> String.trim()
+    |> case do
+      "" -> nil
+      text -> text
+    end
+  end
+
+  defp caption_from_map(_map), do: nil
+
+  @spec fragment_text(term()) :: String.t()
+  defp fragment_text(%{"plaintext" => text}) when is_binary(text), do: text
+  defp fragment_text(%{"text" => text}) when is_binary(text), do: text
+  defp fragment_text(text) when is_binary(text), do: text
+  defp fragment_text(_fragment), do: ""
 
   @spec extract_header_cookie([{binary(), binary()}], String.t()) :: String.t() | nil
   defp extract_header_cookie(headers, cookie_name) do

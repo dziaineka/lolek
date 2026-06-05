@@ -10,6 +10,7 @@ defmodule Lolek.Config do
     [
       {"LOLEK_TELEGRAM_BASE_URL", :str},
       {"LOLEK_TELEGRAM_LOCAL_FILE_UPLOADS", :bool},
+      {"LOLEK_POST_SOURCE_CAPTION", :bool},
       {"LOLEK_DOWNLOAD_DIR_PATH", :str},
       {"LOLEK_MAX_DOWNLOAD_DIR_SIZE", :int},
       {"LOLEK_MAX_FILE_SIZE_TO_SEND_TO_TELEGRAM", :int},

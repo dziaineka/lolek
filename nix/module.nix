@@ -105,6 +105,15 @@ in
       '';
     };
 
+    postSourceCaption = mkOption {
+      type = types.bool;
+      default = false;
+      description = ''
+        Whether to include cached source post text in Telegram media captions.
+        Lolek still fetches and caches source text when this is disabled.
+      '';
+    };
+
     localTelegramBotApi = {
       enable = mkEnableOption "a local Telegram Bot API server sidecar";
 
@@ -441,6 +450,7 @@ in
       environment = {
         LOLEK_TELEGRAM_BASE_URL = effectiveTelegramBaseUrl;
         LOLEK_TELEGRAM_LOCAL_FILE_UPLOADS = if effectiveTelegramLocalFileUploads then "true" else "false";
+        LOLEK_POST_SOURCE_CAPTION = if cfg.postSourceCaption then "true" else "false";
         LOLEK_DOWNLOAD_DIR_PATH = toString cfg.downloadDir;
         LOLEK_MAX_DOWNLOAD_DIR_SIZE = toString cfg.maxDownloadDirSize;
         LOLEK_MAX_FILE_SIZE_TO_SEND_TO_TELEGRAM = toString cfg.maxFileSizeToSendToTelegram;

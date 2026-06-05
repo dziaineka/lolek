@@ -22,6 +22,10 @@ config :lolek,
        :telegram_local_file_uploads,
        :dotenv_config.get("LOLEK_TELEGRAM_LOCAL_FILE_UPLOADS")
 
+config :lolek,
+       :post_source_caption,
+       :dotenv_config.get("LOLEK_POST_SOURCE_CAPTION")
+
 config :lolek, :download_path, :dotenv_config.get("LOLEK_DOWNLOAD_DIR_PATH")
 
 config :lolek,

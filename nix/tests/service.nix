@@ -32,6 +32,7 @@ let
   passthroughMediaDuration = 1;
   passthroughVideoFileId = "fake-passthrough-video-file-id";
   passthroughVideoFileUniqueId = "fake-passthrough-video-unique-id";
+  passthroughSourceTitle = "Passthrough Cached Title";
   compressedMediaPath = "/compressed.mp4";
   compressedMediaUrl = "${fakeBaseUrl}${compressedMediaPath}";
   compressedMediaWidth = 640;
@@ -161,6 +162,11 @@ pkgs.testers.nixosTest {
 
   testScript = ''
     import base64
+    import json
+    import shlex
+
+    def shell_quote(value):
+        return shlex.quote(value)
 
     machine.wait_for_unit("multi-user.target")
     machine.wait_for_unit("${fakeServicesUnit}")
@@ -177,10 +183,16 @@ pkgs.testers.nixosTest {
     max_file_size_to_send_to_telegram = ${toString maxFileSizeToSendToTelegram}
     passthrough_media_file = "${passthroughMediaFile}"
     passthrough_media_url = "${passthroughMediaUrl}"
+    passthrough_source_title = "${passthroughSourceTitle}"
     passthrough_video_file_id = "${passthroughVideoFileId}"
     compressed_media_file = "${compressedMediaFile}"
     compressed_media_url = "${compressedMediaUrl}"
     compressed_video_file_id = "${compressedVideoFileId}"
+    passthrough_folder_name = base64.b64encode(passthrough_media_url.encode()).decode().rstrip("=")
+    passthrough_cache_dir = "%s/%s" % (download_dir, passthrough_folder_name)
+    passthrough_metadata_file = "%s/source_metadata.json" % passthrough_cache_dir
+    compressed_folder_name = base64.b64encode(compressed_media_url.encode()).decode().rstrip("=")
+    compressed_cache_dir = "%s/%s" % (download_dir, compressed_folder_name)
 
     # The module should create the service user, group, and writable download directory.
     machine.succeed("getent passwd %s" % service_user)
@@ -193,6 +205,27 @@ pkgs.testers.nixosTest {
     machine.wait_until_succeeds("curl -fsS %s >/dev/null" % passthrough_media_url)
     machine.wait_until_succeeds("curl -fsS %s >/dev/null" % compressed_media_url)
     machine.wait_until_succeeds("curl -fsS -X POST %s/bot%s/getMe | grep '\"ok\": true'" % (fake_base_url, fake_token))
+
+    # A cached source title should be used as the multipart filename for fresh uploads.
+    passthrough_metadata = json.dumps(
+        {
+            "caption": "Cached source caption",
+            "title": passthrough_source_title,
+        },
+        separators=(",", ":"),
+    )
+    machine.succeed(
+        "install -d -o %s -g %s -m 0750 %s"
+        % (service_user, service_group, shell_quote(passthrough_cache_dir))
+    )
+    machine.succeed(
+        "printf %s > %s"
+        % (shell_quote(passthrough_metadata), shell_quote(passthrough_metadata_file))
+    )
+    machine.succeed(
+        "chown %s:%s %s"
+        % (service_user, service_group, shell_quote(passthrough_metadata_file))
+    )
 
     machine.succeed("systemctl start ${serviceUnit}")
     machine.wait_for_unit("${serviceUnit}")
@@ -222,6 +255,13 @@ pkgs.testers.nixosTest {
     )
     machine.succeed("test -s %s" % passthrough_upload_file)
     machine.succeed("grep -a 'name=\"video\"' %s" % passthrough_upload_file)
+    machine.succeed(
+        "grep -a %s %s"
+        % (
+            shell_quote('filename="%s.mp4"' % passthrough_source_title),
+            shell_quote(passthrough_upload_file),
+        )
+    )
     machine.succeed("grep -a 'ftyp' %s" % passthrough_upload_file)
     machine.succeed("test -s %s" % compressed_upload_file)
     machine.succeed("grep -a 'name=\"video\"' %s" % compressed_upload_file)
@@ -231,8 +271,6 @@ pkgs.testers.nixosTest {
     )
 
     # Both uploads should be cached under the Telegram file IDs returned by the fake API.
-    passthrough_folder_name = base64.b64encode(passthrough_media_url.encode()).decode().rstrip("=")
-    passthrough_cache_dir = "%s/%s" % (download_dir, passthrough_folder_name)
     passthrough_ready_file = "%s/%s/%s.mp4" % (
         passthrough_cache_dir,
         ready_dir_name,
@@ -240,12 +278,17 @@ pkgs.testers.nixosTest {
     )
     machine.succeed("test -f %s" % passthrough_ready_file)
     machine.succeed(
+        "grep -a %s %s"
+        % (
+            shell_quote('"title":"%s"' % passthrough_source_title),
+            shell_quote(passthrough_metadata_file),
+        )
+    )
+    machine.succeed(
         "test $(stat -c %%s %s) -le %d"
         % (passthrough_media_file, max_file_size_to_send_to_telegram)
     )
 
-    compressed_folder_name = base64.b64encode(compressed_media_url.encode()).decode().rstrip("=")
-    compressed_cache_dir = "%s/%s" % (download_dir, compressed_folder_name)
     compressed_ready_file = "%s/%s/%s.mp4" % (
         compressed_cache_dir,
         ready_dir_name,

@@ -104,6 +104,32 @@ defmodule Lolek.SendFileTest do
     end)
   end
 
+  test "uses source titles as local upload file names" do
+    preserve_telegram_env(fn ->
+      file_path = tmp_file("compressed.mp4", "media")
+
+      response = %ExGram.Model.Message{
+        video: %ExGram.Model.Video{file_id: "telegram-file-id"}
+      }
+
+      Application.put_env(:lolek, :telegram_client, TelegramClient)
+      Application.put_env(:lolek, :telegram_test_result, {:ok, response})
+      Application.put_env(:lolek, :telegram_test_parent, self())
+      Application.put_env(:lolek, :telegram_local_file_uploads, true)
+
+      context = [source_title: "A / Video: https://example.com/watch Title?"]
+
+      assert {:ok, {:sent_to_telegram_at_first, ^file_path, "telegram-file-id"}} =
+               Lolek.send_file(123, {:compressed, file_path}, context)
+
+      assert_receive {:send_video, 123, "file://" <> encoded_path, _options}
+
+      assert encoded_path |> URI.decode() |> Path.basename() == "A Video Title.mp4"
+      assert File.exists?(file_path)
+      assert [] = Path.wildcard(Path.join(Path.dirname(file_path), ".telegram-upload-*"))
+    end)
+  end
+
   test "streams first video uploads with larger chunks" do
     preserve_telegram_env(fn ->
       file_path = tmp_file("downloaded.mp4", "media")

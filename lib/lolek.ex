@@ -31,8 +31,10 @@ defmodule Lolek do
         options = get_options(file_path) |> add_caption(context)
 
         with {:ok, %ExGram.Model.Message{video: %ExGram.Model.Video{file_id: file_id}} = response} <-
-               call_telegram(fn ->
-                 Lolek.Telegram.send_video(chat_id, upload_file(file_path, context), options)
+               with_upload_file(file_path, context, fn upload ->
+                 call_telegram(fn ->
+                   Lolek.Telegram.send_video(chat_id, upload, options)
+                 end)
                end) do
           update_caption_after_send(chat_id, response, context)
           {:ok, {:sent_to_telegram_at_first, file_path, file_id}}
@@ -46,8 +48,10 @@ defmodule Lolek do
 
         with {:ok,
               %ExGram.Model.Message{document: %ExGram.Model.Document{file_id: file_id}} = response} <-
-               call_telegram(fn ->
-                 Lolek.Telegram.send_document(chat_id, upload_file(file_path, context), options)
+               with_upload_file(file_path, context, fn upload ->
+                 call_telegram(fn ->
+                   Lolek.Telegram.send_document(chat_id, upload, options)
+                 end)
                end) do
           update_caption_after_send(chat_id, response, context)
           {:ok, {:sent_to_telegram_at_first, file_path, file_id}}
@@ -58,15 +62,69 @@ defmodule Lolek do
     end
   end
 
+  @spec with_upload_file(String.t(), keyword(), (term() -> term())) :: term()
+  defp with_upload_file(file_path, context, fun) do
+    with {:ok, upload, cleanup} <- upload_file(file_path, context) do
+      try do
+        fun.(upload)
+      after
+        cleanup.()
+      end
+    end
+  end
+
   @spec upload_file(String.t(), keyword()) ::
-          {:file_content, File.Stream.t(), String.t()} | String.t()
+          {:ok, {:file_content, File.Stream.t(), String.t()} | String.t(), (-> :ok)}
+          | {:error, term()}
   defp upload_file(file_path, context) do
     if Application.get_env(:lolek, :telegram_local_file_uploads, false) do
-      local_file_uri(file_path)
+      local_upload_file(file_path, context)
     else
-      {:file_content, File.stream!(file_path, [], @upload_chunk_size),
-       upload_file_name(file_path, context)}
+      {:ok,
+       {:file_content, File.stream!(file_path, [], @upload_chunk_size),
+        upload_file_name(file_path, context)}, fn -> :ok end}
     end
+  end
+
+  @spec local_upload_file(String.t(), keyword()) ::
+          {:ok, String.t(), (-> :ok)} | {:error, term()}
+  defp local_upload_file(file_path, context) do
+    file_name = upload_file_name(file_path, context)
+
+    if file_name == Path.basename(file_path) do
+      {:ok, local_file_uri(file_path), fn -> :ok end}
+    else
+      with {:ok, alias_path, cleanup} <- create_local_upload_alias(file_path, file_name) do
+        {:ok, local_file_uri(alias_path), cleanup}
+      end
+    end
+  end
+
+  @spec create_local_upload_alias(String.t(), String.t()) ::
+          {:ok, String.t(), (-> :ok)} | {:error, term()}
+  defp create_local_upload_alias(file_path, file_name) do
+    upload_dir =
+      file_path
+      |> Path.dirname()
+      |> Path.join(".telegram-upload-#{System.unique_integer([:positive])}")
+
+    alias_path = Path.join(upload_dir, file_name)
+
+    with :ok <- File.mkdir_p(upload_dir),
+         :ok <- File.ln(file_path, alias_path) do
+      {:ok, alias_path, fn -> cleanup_local_upload_alias(upload_dir, alias_path) end}
+    else
+      {:error, reason} ->
+        File.rm_rf(upload_dir)
+        {:error, {:local_upload_alias, reason}}
+    end
+  end
+
+  @spec cleanup_local_upload_alias(String.t(), String.t()) :: :ok
+  defp cleanup_local_upload_alias(upload_dir, alias_path) do
+    File.rm(alias_path)
+    File.rmdir(upload_dir)
+    :ok
   end
 
   @spec upload_file_name(String.t(), keyword()) :: String.t()

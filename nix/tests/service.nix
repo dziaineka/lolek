@@ -32,6 +32,7 @@ let
   passthroughMediaDuration = 1;
   passthroughVideoFileId = "fake-passthrough-video-file-id";
   passthroughVideoFileUniqueId = "fake-passthrough-video-unique-id";
+  passthroughSourceCaption = "Cached source caption";
   passthroughSourceTitle = "Passthrough Cached Title";
   compressedMediaPath = "/compressed.mp4";
   compressedMediaUrl = "${fakeBaseUrl}${compressedMediaPath}";
@@ -110,6 +111,7 @@ pkgs.testers.nixosTest {
         maxDownloadTries = 1;
         startDownloadPause = 10;
         maxDownloadPause = 10;
+        postSourceCaption = true;
         inherit
           maxFileSizeToSendToTelegram
           maxVideoSizeToSendToTelegram
@@ -183,6 +185,7 @@ pkgs.testers.nixosTest {
     max_file_size_to_send_to_telegram = ${toString maxFileSizeToSendToTelegram}
     passthrough_media_file = "${passthroughMediaFile}"
     passthrough_media_url = "${passthroughMediaUrl}"
+    passthrough_source_caption = "${passthroughSourceCaption}"
     passthrough_source_title = "${passthroughSourceTitle}"
     passthrough_video_file_id = "${passthroughVideoFileId}"
     compressed_media_file = "${compressedMediaFile}"
@@ -209,7 +212,7 @@ pkgs.testers.nixosTest {
     # A cached source title should be used as the multipart filename for fresh uploads.
     passthrough_metadata = json.dumps(
         {
-            "caption": "Cached source caption",
+            "caption": passthrough_source_caption,
             "title": passthrough_source_title,
         },
         separators=(",", ":"),
@@ -258,6 +261,13 @@ pkgs.testers.nixosTest {
     machine.succeed(
         "grep -a %s %s"
         % (
+            shell_quote(passthrough_source_caption),
+            shell_quote(passthrough_upload_file),
+        )
+    )
+    machine.succeed(
+        "grep -a %s %s"
+        % (
             shell_quote('filename="%s.mp4"' % passthrough_source_title),
             shell_quote(passthrough_upload_file),
         )
@@ -277,6 +287,13 @@ pkgs.testers.nixosTest {
         passthrough_video_file_id,
     )
     machine.succeed("test -f %s" % passthrough_ready_file)
+    machine.succeed(
+        "grep -a %s %s"
+        % (
+            shell_quote('"caption":"%s"' % passthrough_source_caption),
+            shell_quote(passthrough_metadata_file),
+        )
+    )
     machine.succeed(
         "grep -a %s %s"
         % (

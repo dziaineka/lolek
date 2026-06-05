@@ -26,6 +26,13 @@ SCENARIOS = {
         {"update_id": 201, "message_id": 21, "name": "chat-b", "chat_id": 2001},
         {"update_id": 202, "message_id": 22, "name": "chat-c", "chat_id": 2002},
     ],
+    "rate-limit": [
+        {"update_id": 300, "message_id": 30, "name": "rate-a", "chat_id": 3001},
+        {"update_id": 301, "message_id": 31, "name": "rate-b", "chat_id": 3001},
+        {"update_id": 302, "message_id": 32, "name": "rate-c", "chat_id": 3001},
+        {"update_id": 303, "message_id": 33, "name": "rate-d", "chat_id": 3001},
+        {"update_id": 304, "message_id": 34, "name": "rate-e", "chat_id": 3001},
+    ],
 }
 
 

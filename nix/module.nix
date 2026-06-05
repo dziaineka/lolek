@@ -238,6 +238,12 @@ in
       description = "Maximum number of downloads and conversions processed concurrently per chat.";
     };
 
+    maxVideoRequestsPerChatPerMinute = mkOption {
+      type = types.ints.positive;
+      default = 10;
+      description = "Maximum number of video URL requests admitted per chat per rolling minute.";
+    };
+
     downloadCommandTimeout = mkOption {
       type = types.ints.positive;
       default = 300;
@@ -460,6 +466,7 @@ in
         LOLEK_MAX_DURATION_TO_COMPRESS = toString cfg.maxDurationToCompress;
         LOLEK_MAX_CONCURRENT_DOWNLOADS = toString cfg.maxConcurrentDownloads;
         LOLEK_MAX_CONCURRENT_DOWNLOADS_PER_CHAT = toString cfg.maxConcurrentDownloadsPerChat;
+        LOLEK_MAX_VIDEO_REQUESTS_PER_CHAT_PER_MINUTE = toString cfg.maxVideoRequestsPerChatPerMinute;
         LOLEK_DOWNLOAD_COMMAND_TIMEOUT_SECONDS = toString cfg.downloadCommandTimeout;
         LOLEK_CONVERT_COMMAND_TIMEOUT_SECONDS = toString cfg.convertCommandTimeout;
         LOLEK_PROBE_COMMAND_TIMEOUT_SECONDS = toString cfg.probeCommandTimeout;

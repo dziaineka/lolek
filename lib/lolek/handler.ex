@@ -40,15 +40,15 @@ defmodule Lolek.Handler do
       ) do
     case Lolek.Url.extract_url(text) do
       {:ok, url} ->
-        case Lolek.UrlProcessing.process(url, fn ->
-               Lolek.ProcessingLimiter.with_limit(chat_id, fn ->
-                 process_url(chat_id, url, Lolek.Requester.display_name(from))
-               end)
-             end) do
+        case process_admitted_url(chat_id, url, from) do
           {:ok, _file_state} ->
             :ok
 
           {:error, :no_video_formats} ->
+            :ok
+
+          {:error, :chat_rate_limited} ->
+            Logger.warning("Dropping url from chat #{chat_id}: chat rate limit exceeded")
             :ok
 
           {:error, reason} ->
@@ -70,6 +70,20 @@ defmodule Lolek.Handler do
 
   def handle(_, _context) do
     :ok
+  end
+
+  @spec process_admitted_url(integer(), String.t(), ExGram.Model.User.t() | nil) ::
+          {:ok, Lolek.File.file_state()} | {:error, term()}
+  defp process_admitted_url(chat_id, url, from) do
+    if Lolek.ChatRateLimiter.admit?(chat_id) do
+      Lolek.UrlProcessing.process(url, fn ->
+        Lolek.ProcessingLimiter.with_limit(chat_id, fn ->
+          process_url(chat_id, url, Lolek.Requester.display_name(from))
+        end)
+      end)
+    else
+      {:error, :chat_rate_limited}
+    end
   end
 
   @spec process_url(integer(), String.t(), String.t()) ::

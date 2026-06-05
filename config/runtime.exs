@@ -61,6 +61,10 @@ config :lolek,
        :dotenv_config.get("LOLEK_MAX_CONCURRENT_DOWNLOADS_PER_CHAT")
 
 config :lolek,
+       :max_video_requests_per_chat_per_minute,
+       :dotenv_config.get("LOLEK_MAX_VIDEO_REQUESTS_PER_CHAT_PER_MINUTE")
+
+config :lolek,
        :download_command_timeout_seconds,
        :dotenv_config.get("LOLEK_DOWNLOAD_COMMAND_TIMEOUT_SECONDS")
 

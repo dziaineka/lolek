@@ -67,6 +67,7 @@ pkgs.testers.nixosTest {
         allowedUrlPatterns = [ fakeHost ];
         maxConcurrentDownloads = 2;
         maxConcurrentDownloadsPerChat = 1;
+        maxVideoRequestsPerChatPerMinute = 2;
         maxDownloadDirSize = 5368709120;
         maxDownloadTries = 1;
         startDownloadPause = 10;
@@ -153,6 +154,19 @@ pkgs.testers.nixosTest {
     release_media("chat-b")
     release_media("chat-c")
     machine.wait_until_succeeds("test $(%s) -eq 6" % event_count("^sendVideo "))
+
+    # A burst over the per-chat admission limit should be dropped instead of queued.
+    machine.succeed("echo rate-limit > %s/phase" % fake_control_dir)
+    wait_for_event("^getUpdates rate-limit 5$")
+    wait_for_event("^media-start rate-a$")
+    assert_event_absent("^media-start rate-c$")
+
+    release_media("rate-a")
+    wait_for_event("^media-start rate-b$")
+    assert_event_absent("^media-start rate-c$")
+    release_media("rate-b")
+    machine.wait_until_succeeds("test $(%s) -eq 8" % event_count("^sendVideo "))
+    assert_event_absent("^media-start rate-c$")
 
     machine.succeed("systemctl is-active --quiet ${serviceUnit}")
   '';

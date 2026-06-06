@@ -36,13 +36,15 @@ defmodule Lolek.TelegramLogTest do
   end
 
   test "downgrades successful getUpdates request logs to debug" do
-    response = {:ok, %Tesla.Env{status: 200, url: "https://api.telegram.org/bot123456:secret/getUpdates"}}
+    response =
+      {:ok, %Tesla.Env{status: 200, url: "https://api.telegram.org/bot123456:secret/getUpdates"}}
 
     assert Lolek.TelegramLog.tesla_log_level(response) == :debug
   end
 
   test "keeps successful non-polling request logs at info" do
-    response = {:ok, %Tesla.Env{status: 200, url: "https://api.telegram.org/bot123456:secret/sendVideo"}}
+    response =
+      {:ok, %Tesla.Env{status: 200, url: "https://api.telegram.org/bot123456:secret/sendVideo"}}
 
     assert Lolek.TelegramLog.tesla_log_level(response) == :info
   end

@@ -240,7 +240,10 @@ defmodule Lolek.ConverterTest do
       assert File.read!(compressed_path) == "ok"
 
       ffmpeg_args = File.read!(ffmpeg_args_file)
-      assert ffmpeg_args =~ "-init_hw_device\nqsv=hw,child_device=/dev/dri/renderD128,child_device_type=vaapi\n"
+
+      assert ffmpeg_args =~
+               "-init_hw_device\nqsv=hw,child_device=/dev/dri/renderD128,child_device_type=vaapi\n"
+
       assert ffmpeg_args =~ "-filter_hw_device\nhw\n"
       assert ffmpeg_args =~ "-hwaccel\nqsv\n"
       assert ffmpeg_args =~ "-hwaccel_device\nhw\n"
@@ -294,7 +297,10 @@ defmodule Lolek.ConverterTest do
       assert File.read!(compressed_path) == "ok"
 
       ffmpeg_args = File.read!(ffmpeg_args_file)
-      assert ffmpeg_args =~ "-init_hw_device\nqsv=hw,child_device=/dev/dri/renderD128,child_device_type=vaapi\n"
+
+      assert ffmpeg_args =~
+               "-init_hw_device\nqsv=hw,child_device=/dev/dri/renderD128,child_device_type=vaapi\n"
+
       assert ffmpeg_args =~ "-filter_hw_device\nhw\n"
       assert ffmpeg_args =~ "-hwaccel\nqsv\n"
       assert ffmpeg_args =~ "-hwaccel_device\nhw\n"

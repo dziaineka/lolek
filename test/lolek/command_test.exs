@@ -24,6 +24,7 @@ defmodule Lolek.CommandTest do
   test "returns exit status on command failure", %{tmp_dir: tmp_dir} do
     preserve_path(fn ->
       bin_dir = Path.join(tmp_dir, "bin")
+
       put_fake_executable(bin_dir, "fail", """
       printf out
       printf err >&2

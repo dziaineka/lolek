@@ -322,7 +322,7 @@ defmodule Lolek.Converter do
        "-movflags",
        "+faststart",
        new_file_path
-       ]}
+     ]}
   end
 
   defp build_encode_args(file_path, new_file_path, :convert, {:qsv, device}) do

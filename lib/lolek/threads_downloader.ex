@@ -173,18 +173,7 @@ defmodule Lolek.ThreadsDownloader do
     |> Enum.uniq()
     |> Enum.flat_map(&graphql_requests(&1, post_id, tokens))
     |> Enum.reduce_while({:error, "Threads caption was not found"}, fn request, acc ->
-      case execute_graphql_request(request, tokens) do
-        {:ok, response} ->
-          case extract_caption(response.body) do
-            {:ok, nil} -> {:cont, {:ok, nil}}
-            {:ok, caption} -> {:halt, {:ok, caption}}
-            {:error, _reason} -> {:cont, acc}
-          end
-
-        {:error, reason} ->
-          Logger.warning("Threads GraphQL request failed: #{reason}")
-          {:cont, acc}
-      end
+      handle_caption_request(request, acc, tokens)
     end)
   end
 
@@ -201,6 +190,23 @@ defmodule Lolek.ThreadsDownloader do
       {:error, reason} ->
         Logger.warning("Threads GraphQL request failed: #{reason}")
         {:cont, {:error, "Threads video URL was not found"}}
+    end
+  end
+
+  @spec handle_caption_request(map(), {:ok, String.t() | nil} | {:error, String.t()}, token_bundle()) ::
+          {:halt, {:ok, String.t()}} | {:cont, {:ok, nil} | {:error, String.t()}}
+  defp handle_caption_request(request, acc, tokens) do
+    case execute_graphql_request(request, tokens) do
+      {:ok, response} ->
+        case extract_caption(response.body) do
+          {:ok, nil} -> {:cont, {:ok, nil}}
+          {:ok, caption} -> {:halt, {:ok, caption}}
+          {:error, _reason} -> {:cont, acc}
+        end
+
+      {:error, reason} ->
+        Logger.warning("Threads GraphQL request failed: #{reason}")
+        {:cont, acc}
     end
   end
 
@@ -474,8 +480,7 @@ defmodule Lolek.ThreadsDownloader do
        })
        when is_list(fragments) do
     fragments
-    |> Enum.map(&fragment_text/1)
-    |> Enum.join()
+    |> Enum.map_join(&fragment_text/1)
     |> String.trim()
     |> case do
       "" -> nil

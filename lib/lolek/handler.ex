@@ -67,11 +67,6 @@ defmodule Lolek.Handler do
       {:error, :no_url} ->
         Lolek.Metrics.record_message_result(:no_url)
         :ok
-
-      {:error, reason} ->
-        Lolek.Metrics.record_message_result({:error, reason})
-        Logger.warning("Error when processing message; reason: #{inspect(reason)}")
-        :ok
     end
   end
 
@@ -84,13 +79,19 @@ defmodule Lolek.Handler do
   defp process_admitted_url(chat_id, url, from) do
     if Lolek.ChatRateLimiter.admit?(chat_id) do
       Lolek.UrlProcessing.process(url, fn ->
-        Lolek.ProcessingLimiter.with_limit(chat_id, fn ->
-          process_url(chat_id, url, Lolek.Requester.display_name(from))
-        end)
+        process_url_with_limit(chat_id, url, from)
       end)
     else
       {:error, :chat_rate_limited}
     end
+  end
+
+  @spec process_url_with_limit(integer(), String.t(), ExGram.Model.User.t() | nil) ::
+          {:ok, Lolek.File.file_state()} | {:error, term()}
+  defp process_url_with_limit(chat_id, url, from) do
+    Lolek.ProcessingLimiter.with_limit(chat_id, fn ->
+      process_url(chat_id, url, Lolek.Requester.display_name(from))
+    end)
   end
 
   @spec process_url(integer(), String.t(), String.t()) ::
@@ -126,13 +127,12 @@ defmodule Lolek.Handler do
          {:ok, file_state} <-
            timed_step("telegram send", log_url, fn ->
              Lolek.send_file(chat_id, file_state, send_context)
-           end) do
-      case timed_step("cache update", log_url, fn ->
+           end),
+         :ok <-
+           timed_step("cache update", log_url, fn ->
              Lolek.File.move_to_ready_to_telegram(file_state)
            end) do
-        :ok -> {:ok, file_state}
-        {:error, reason} -> {:error, reason}
-      end
+      {:ok, file_state}
     end
   end
 

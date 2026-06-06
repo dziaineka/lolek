@@ -97,25 +97,32 @@ defmodule Lolek.FileCleaner do
 
   @spec cleanup_oldest_entries([map()], integer()) :: :ok
   defp cleanup_oldest_entries(entries, space_to_free) do
-    entries
-    |> Enum.sort_by(& &1.mtime)
-    |> Enum.reduce_while(space_to_free, fn entry, remaining ->
-      if remaining <= 0 do
-        {:halt, remaining}
-      else
-        case File.rm_rf(entry.path) do
-          {:ok, _removed} ->
-            Logger.info("Removed #{entry.name} (#{entry.size} bytes)")
-            {:cont, remaining - entry.size}
-
-          {:error, failed_path, reason} ->
-            Logger.warning("Failed to remove #{failed_path}: #{inspect(reason)}")
-            {:cont, remaining}
+    _remaining =
+      entries
+      |> Enum.sort_by(& &1.mtime)
+      |> Enum.reduce_while(space_to_free, fn entry, remaining ->
+        if remaining <= 0 do
+          {:halt, remaining}
+        else
+          process_cleanup_entry(entry, remaining)
         end
-      end
-    end)
+      end)
 
     :ok
+  end
+
+  @spec process_cleanup_entry(map(), integer()) ::
+          {:cont, integer()} | {:halt, integer()}
+  defp process_cleanup_entry(entry, remaining) do
+    case File.rm_rf(entry.path) do
+      {:ok, _removed} ->
+        Logger.info("Removed #{entry.name} (#{entry.size} bytes)")
+        {:cont, remaining - entry.size}
+
+      {:error, failed_path, reason} ->
+        Logger.warning("Failed to remove #{failed_path}: #{inspect(reason)}")
+        {:cont, remaining}
+    end
   end
 
   @spec path_size(String.t()) :: non_neg_integer()

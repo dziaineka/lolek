@@ -27,39 +27,60 @@ defmodule Lolek do
 
   def send_file(chat_id, {:compressed, file_path}, context) do
     case Path.extname(file_path) |> String.downcase() do
-      ".mp4" ->
-        options = get_options(file_path) |> add_caption(context)
-
-        with {:ok, %ExGram.Model.Message{video: %ExGram.Model.Video{file_id: file_id}} = response} <-
-               with_upload_file(file_path, context, fn upload ->
-                 call_telegram(fn ->
-                   Lolek.Telegram.send_video(chat_id, upload, options)
-                 end)
-               end) do
-          update_caption_after_send(chat_id, response, context)
-          {:ok, {:sent_to_telegram_at_first, file_path, file_id}}
-        else
-          {:ok, response} -> {:error, {:unexpected_telegram_response, response}}
-          {:error, _reason} = error -> error
-        end
-
-      _ ->
-        options = add_caption([], context)
-
-        with {:ok,
-              %ExGram.Model.Message{document: %ExGram.Model.Document{file_id: file_id}} = response} <-
-               with_upload_file(file_path, context, fn upload ->
-                 call_telegram(fn ->
-                   Lolek.Telegram.send_document(chat_id, upload, options)
-                 end)
-               end) do
-          update_caption_after_send(chat_id, response, context)
-          {:ok, {:sent_to_telegram_at_first, file_path, file_id}}
-        else
-          {:ok, response} -> {:error, {:unexpected_telegram_response, response}}
-          {:error, _reason} = error -> error
-        end
+      ".mp4" -> send_video_file(chat_id, file_path, context)
+      _ -> send_document_file(chat_id, file_path, context)
     end
+  end
+
+  @spec send_video_file(integer(), String.t(), keyword()) ::
+          {:ok, Lolek.File.file_state()} | {:error, term()}
+  defp send_video_file(chat_id, file_path, context) do
+    options = get_options(file_path) |> add_caption(context)
+
+    case with_upload_file(file_path, context, fn upload ->
+           do_send_video(chat_id, upload, options)
+         end) do
+      {:ok, %ExGram.Model.Message{video: %ExGram.Model.Video{file_id: file_id}} = response} ->
+        update_caption_after_send(chat_id, response, context)
+        {:ok, {:sent_to_telegram_at_first, file_path, file_id}}
+
+      {:ok, response} ->
+        {:error, {:unexpected_telegram_response, response}}
+
+      {:error, _reason} = error ->
+        error
+    end
+  end
+
+  @spec do_send_video(integer(), term(), keyword()) :: {:ok, term()} | {:error, term()}
+  defp do_send_video(chat_id, upload, options) do
+    call_telegram(fn -> Lolek.Telegram.send_video(chat_id, upload, options) end)
+  end
+
+  @spec send_document_file(integer(), String.t(), keyword()) ::
+          {:ok, Lolek.File.file_state()} | {:error, term()}
+  defp send_document_file(chat_id, file_path, context) do
+    options = add_caption([], context)
+
+    case with_upload_file(file_path, context, fn upload ->
+           do_send_document(chat_id, upload, options)
+         end) do
+      {:ok,
+       %ExGram.Model.Message{document: %ExGram.Model.Document{file_id: file_id}} = response} ->
+        update_caption_after_send(chat_id, response, context)
+        {:ok, {:sent_to_telegram_at_first, file_path, file_id}}
+
+      {:ok, response} ->
+        {:error, {:unexpected_telegram_response, response}}
+
+      {:error, _reason} = error ->
+        error
+    end
+  end
+
+  @spec do_send_document(integer(), term(), keyword()) :: {:ok, term()} | {:error, term()}
+  defp do_send_document(chat_id, upload, options) do
+    call_telegram(fn -> Lolek.Telegram.send_document(chat_id, upload, options) end)
   end
 
   @spec with_upload_file(String.t(), keyword(), (term() -> term())) :: term()

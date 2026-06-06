@@ -297,8 +297,7 @@ defmodule Lolek.Metrics do
     labels =
       labels
       |> Enum.sort_by(fn {key, _value} -> key end)
-      |> Enum.map(fn {key, value} -> ~s(#{key}="#{escape_label_value(value)}") end)
-      |> Enum.join(",")
+      |> Enum.map_join(",", fn {key, value} -> ~s(#{key}="#{escape_label_value(value)}") end)
 
     "{#{labels}}"
   end

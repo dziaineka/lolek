@@ -4,8 +4,8 @@ defmodule Lolek.MixProject do
   def project do
     [
       app: :lolek,
-      version: "1.8.1",
-      elixir: "1.19.5",
+      version: "3.0.0",
+      elixir: "1.20.0",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       aliases: aliases()

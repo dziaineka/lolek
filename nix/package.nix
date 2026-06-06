@@ -6,8 +6,8 @@
 
 let
   lib = pkgs.lib;
-  beamPackages = pkgs.beam.packages.erlang_28;
-  elixir = beamPackages.elixir_1_19;
+  beamPackages = pkgs.beam.packages.erlang_29;
+  elixir = beamPackages.elixir_1_20;
   rebar3WithPlugins = beamPackages.rebar3WithPlugins {
     globalPlugins = [ beamPackages.pc ];
   };
@@ -33,7 +33,7 @@ let
     inherit root;
     fileset = sourceFiles [ (root + "/rel") ];
   };
-  version = "1.8.1";
+  version = "3.0.0";
   runtimePath = lib.makeBinPath [
     pkgs.curl
     pkgs.ffmpeg-full
@@ -55,7 +55,7 @@ rec {
       inherit version;
       src = root;
       inherit elixir;
-      hash = "sha256-pdh+PiriuRixsEw2Mvjop3kTRyUo60mWdcB3PWhkqK8=";
+      hash = "sha256-Qjtga/MGHD7lHylMNtGD343G4YHLxHPLnJGIt4/W6ow=";
     };
     doCheck = true;
     checkPhase = ''

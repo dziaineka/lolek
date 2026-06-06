@@ -16,7 +16,30 @@
       ];
 
       forAllSystems = nixpkgs.lib.genAttrs systems;
-      pkgsFor = system: import nixpkgs { inherit system; };
+      pkgsFor =
+        system:
+        import nixpkgs {
+          inherit system;
+          overlays = [
+            (final: prev: {
+              beam = prev.beam // {
+                packages = prev.beam.packages // {
+                  erlang_29 = prev.beam.packages.erlang_29 // {
+                    elixir_1_20 = prev.beam.packages.erlang_29.elixir_1_20.overrideAttrs (_: {
+                      version = "1.20.0";
+                      src = prev.fetchFromGitHub {
+                        owner = "elixir-lang";
+                        repo = "elixir";
+                        rev = "v1.20.0";
+                        hash = "sha256-cTogrKyG2SkJFlnB43pwKiowf41eTHPTHbIS5f44b0Q=";
+                      };
+                    });
+                  };
+                };
+              };
+            })
+          ];
+        };
     in
     {
       packages = forAllSystems (

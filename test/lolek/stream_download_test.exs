@@ -139,8 +139,7 @@ defmodule Lolek.StreamDownloadTest do
 
     response_headers =
       headers
-      |> Enum.map(fn {name, value} -> "#{name}: #{value}\r\n" end)
-      |> Enum.join()
+      |> Enum.map_join(fn {name, value} -> "#{name}: #{value}\r\n" end)
 
     :ok = :gen_tcp.send(socket, "HTTP/1.1 200 OK\r\n" <> response_headers <> "\r\n")
     Enum.each(chunks, &:gen_tcp.send(socket, &1))

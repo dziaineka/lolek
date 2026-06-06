@@ -25,13 +25,18 @@ defmodule Lolek.Converter do
     if Path.extname(file_path) != ".mp4" do
       :ok
     else
-      with {:ok, file_size} <- Lolek.File.file_size(file_path),
-           {:ok, duration} <- video_duration(file_path) do
-        case encoding_strategy(file_path, file_size, duration) do
-          :passthrough -> :ok
-          :too_big_media -> {:error, :too_big_media}
-          strategy -> encode_video(file_path, strategy)
-        end
+      compress_mp4_to_telegram_size(file_path)
+    end
+  end
+
+  @spec compress_mp4_to_telegram_size(String.t()) :: :ok | {:error, term()}
+  defp compress_mp4_to_telegram_size(file_path) do
+    with {:ok, file_size} <- Lolek.File.file_size(file_path),
+         {:ok, duration} <- video_duration(file_path) do
+      case encoding_strategy(file_path, file_size, duration) do
+        :passthrough -> :ok
+        :too_big_media -> {:error, :too_big_media}
+        strategy -> encode_video(file_path, strategy)
       end
     end
   end
@@ -412,19 +417,23 @@ defmodule Lolek.Converter do
     max_video_size = Application.fetch_env!(:lolek, :max_video_size_to_send_to_telegram)
     max_audio_size = Application.fetch_env!(:lolek, :max_audio_size_to_send_to_telegram)
 
-    with {:ok, duration} when duration > 0 <- video_duration(file_path) do
-      video_bitrate = (max_video_size * 8 / duration / 1000) |> round()
-      audio_bitrate = (max_audio_size * 8 / duration / 1000) |> round()
+    case video_duration(file_path) do
+      {:ok, duration} when duration > 0 ->
+        video_bitrate = (max_video_size * 8 / duration / 1000) |> round()
+        audio_bitrate = (max_audio_size * 8 / duration / 1000) |> round()
 
-      # Cap video bitrate to prevent quality issues
-      # Most content doesn't benefit from >10 Mbps
-      video_bitrate = min(video_bitrate, 10_000)
-      audio_bitrate = min(audio_bitrate, 128)
+        # Cap video bitrate to prevent quality issues
+        # Most content doesn't benefit from >10 Mbps
+        video_bitrate = min(video_bitrate, 10_000)
+        audio_bitrate = min(audio_bitrate, 128)
 
-      {:ok, {"#{video_bitrate}k", "#{audio_bitrate}k"}}
-    else
-      {:ok, 0} -> {:error, :invalid_video_duration}
-      error -> error
+        {:ok, {"#{video_bitrate}k", "#{audio_bitrate}k"}}
+
+      {:ok, 0} ->
+        {:error, :invalid_video_duration}
+
+      error ->
+        error
     end
   end
 

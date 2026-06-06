@@ -176,20 +176,21 @@ defmodule Lolek.File do
       {:ok, file_names} ->
         Enum.find_value(file_names, :not_ready, fn file_name ->
           file_path = Path.join(ready_to_telegram_path, file_name)
-
-          if usable_cached_file?(file_path) do
-            {
-              :exists,
-              {:ready_to_telegram, file_path}
-            }
-          else
-            remove_invalid_cache_file(file_path)
-            false
-          end
+          check_cache_file(file_path)
         end)
 
       _ ->
         :not_ready
+    end
+  end
+
+  @spec check_cache_file(String.t()) :: {:exists, file_state()} | false
+  defp check_cache_file(file_path) do
+    if usable_cached_file?(file_path) do
+      {:exists, {:ready_to_telegram, file_path}}
+    else
+      remove_invalid_cache_file(file_path)
+      false
     end
   end
 
@@ -222,9 +223,8 @@ defmodule Lolek.File do
 
   @spec usable_cached_file?(String.t()) :: boolean()
   defp usable_cached_file?(file_path) do
-    with {:ok, size} when size > 0 <- file_size(file_path) do
-      usable_media_file?(file_path)
-    else
+    case file_size(file_path) do
+      {:ok, size} when size > 0 -> usable_media_file?(file_path)
       _ -> false
     end
   end

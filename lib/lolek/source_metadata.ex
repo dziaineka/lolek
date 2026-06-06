@@ -104,17 +104,21 @@ defmodule Lolek.SourceMetadata do
 
   @spec parse_yt_dlp_metadata(String.t()) :: {:ok, t()} | {:error, term()}
   defp parse_yt_dlp_metadata(output) do
-    with {:ok, metadata} when is_map(metadata) <- Jason.decode(output) do
-      caption = metadata_caption(metadata)
+    case Jason.decode(output) do
+      {:ok, metadata} when is_map(metadata) ->
+        caption = metadata_caption(metadata)
 
-      {:ok,
-       %{
-         caption: caption,
-         title: metadata_title(metadata) || caption
-       }}
-    else
-      {:ok, _metadata} -> {:error, :invalid_yt_dlp_metadata}
-      {:error, _reason} -> {:error, :invalid_yt_dlp_metadata}
+        {:ok,
+         %{
+           caption: caption,
+           title: metadata_title(metadata) || caption
+         }}
+
+      {:ok, _metadata} ->
+        {:error, :invalid_yt_dlp_metadata}
+
+      {:error, _reason} ->
+        {:error, :invalid_yt_dlp_metadata}
     end
   end
 
@@ -168,8 +172,7 @@ defmodule Lolek.SourceMetadata do
     |> remove_urls()
     |> normalize_newlines()
     |> String.split("\n", trim: false)
-    |> Enum.map(&sanitize_caption_line/1)
-    |> Enum.join("\n")
+    |> Enum.map_join("\n", &sanitize_caption_line/1)
     |> String.replace(~r/\n{3,}/, "\n\n")
     |> String.trim()
     |> case do

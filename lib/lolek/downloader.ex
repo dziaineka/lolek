@@ -52,7 +52,16 @@ defmodule Lolek.Downloader do
           )
 
           Process.sleep(pause)
-          download(url, output_path, tries_done + 1, max_tries, pause * 2, max_pause, formats_probe)
+
+          download(
+            url,
+            output_path,
+            tries_done + 1,
+            max_tries,
+            pause * 2,
+            max_pause,
+            formats_probe
+          )
         else
           {:error, download_error(log_url, error_reason)}
         end

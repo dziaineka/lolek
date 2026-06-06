@@ -23,6 +23,18 @@ config :lolek,
        :dotenv_config.get("LOLEK_TELEGRAM_LOCAL_FILE_UPLOADS")
 
 config :lolek,
+       :metrics_enabled,
+       :dotenv_config.get("LOLEK_METRICS_ENABLED")
+
+config :lolek,
+       :metrics_listen_address,
+       :dotenv_config.get("LOLEK_METRICS_LISTEN_ADDRESS")
+
+config :lolek,
+       :metrics_port,
+       :dotenv_config.get("LOLEK_METRICS_PORT")
+
+config :lolek,
        :post_source_caption,
        :dotenv_config.get("LOLEK_POST_SOURCE_CAPTION")
 

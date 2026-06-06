@@ -10,18 +10,31 @@ defmodule Lolek.Application do
   def start(_type, _args) do
     token = Application.fetch_env!(:lolek, :bot_token)
 
-    children = [
-      {Registry, keys: :unique, name: Lolek.UrlProcessingRegistry},
-      Lolek.ChatRateLimiter,
-      Lolek.ProcessingLimiter,
-      ExGram,
-      {Lolek.Handler, [method: :polling, token: token]},
-      Lolek.FileCleaner
-    ]
+    children =
+      [
+        {Registry, keys: :unique, name: Lolek.UrlProcessingRegistry},
+        Lolek.ChatRateLimiter,
+        Lolek.ProcessingLimiter
+      ] ++
+        metrics_children() ++
+        [
+          ExGram,
+          {Lolek.Handler, [method: :polling, token: token]},
+          Lolek.FileCleaner
+        ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: Lolek.Supervisor]
     Supervisor.start_link(children, opts)
+  end
+
+  @spec metrics_children() :: [Supervisor.child_spec()]
+  defp metrics_children do
+    if Application.get_env(:lolek, :metrics_enabled, false) do
+      [Lolek.Metrics, Lolek.MetricsEndpoint]
+    else
+      []
+    end
   end
 end

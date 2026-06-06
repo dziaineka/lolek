@@ -114,6 +114,22 @@ in
       '';
     };
 
+    metrics = {
+      enable = mkEnableOption "a local Prometheus metrics endpoint";
+
+      listenAddress = mkOption {
+        type = types.str;
+        default = "127.0.0.1";
+        description = "IP address on which the Lolek metrics endpoint listens.";
+      };
+
+      port = mkOption {
+        type = types.port;
+        default = 9568;
+        description = "TCP port on which the Lolek metrics endpoint listens.";
+      };
+    };
+
     localTelegramBotApi = {
       enable = mkEnableOption "a local Telegram Bot API server sidecar";
 
@@ -456,6 +472,9 @@ in
       environment = {
         LOLEK_TELEGRAM_BASE_URL = effectiveTelegramBaseUrl;
         LOLEK_TELEGRAM_LOCAL_FILE_UPLOADS = if effectiveTelegramLocalFileUploads then "true" else "false";
+        LOLEK_METRICS_ENABLED = if cfg.metrics.enable then "true" else "false";
+        LOLEK_METRICS_LISTEN_ADDRESS = cfg.metrics.listenAddress;
+        LOLEK_METRICS_PORT = toString cfg.metrics.port;
         LOLEK_POST_SOURCE_CAPTION = if cfg.postSourceCaption then "true" else "false";
         LOLEK_DOWNLOAD_DIR_PATH = toString cfg.downloadDir;
         LOLEK_MAX_DOWNLOAD_DIR_SIZE = toString cfg.maxDownloadDirSize;

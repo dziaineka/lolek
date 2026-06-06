@@ -42,16 +42,21 @@ defmodule Lolek.Handler do
       {:ok, url} ->
         case process_admitted_url(chat_id, url, from) do
           {:ok, _file_state} ->
+            Lolek.Metrics.record_message_result(:ok)
             :ok
 
           {:error, :no_video_formats} ->
+            Lolek.Metrics.record_message_result(:no_video_formats)
             :ok
 
           {:error, :chat_rate_limited} ->
+            Lolek.Metrics.record_message_result(:chat_rate_limited)
             Logger.warning("Dropping url from chat #{chat_id}: chat rate limit exceeded")
             :ok
 
           {:error, reason} ->
+            Lolek.Metrics.record_message_result({:error, reason})
+
             Logger.warning(
               "Error when processing url: #{Lolek.Url.normalize_for_log(url)}; reason: #{inspect(reason)}"
             )
@@ -60,9 +65,11 @@ defmodule Lolek.Handler do
         end
 
       {:error, :no_url} ->
+        Lolek.Metrics.record_message_result(:no_url)
         :ok
 
       {:error, reason} ->
+        Lolek.Metrics.record_message_result({:error, reason})
         Logger.warning("Error when processing message; reason: #{inspect(reason)}")
         :ok
     end
@@ -157,12 +164,19 @@ defmodule Lolek.Handler do
       |> System.convert_time_unit(:native, :microsecond)
       |> Kernel./(1000)
 
+    Lolek.Metrics.record_processing_stage(name, result, elapsed_ms)
+    record_step_metrics(name, result)
+
     Logger.info(
       "Finished #{name} for url: #{log_url}; elapsed_ms=#{format_elapsed_ms(elapsed_ms)}; result=#{format_step_result(result)}"
     )
 
     result
   end
+
+  @spec record_step_metrics(String.t(), term()) :: :ok
+  defp record_step_metrics("cache lookup", result), do: Lolek.Metrics.record_cache_lookup(result)
+  defp record_step_metrics(_name, _result), do: :ok
 
   @spec format_elapsed_ms(float()) :: String.t()
   defp format_elapsed_ms(elapsed_ms) do

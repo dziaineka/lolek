@@ -39,10 +39,12 @@ defmodule Lolek.ProcessingLimiter do
     timeout = Keyword.get(opts, :timeout, :infinity)
 
     {:ok, token} = GenServer.call(server, {:acquire, self(), chat_id}, timeout)
+    Lolek.Metrics.processing_started()
 
     try do
       fun.()
     after
+      Lolek.Metrics.processing_finished()
       GenServer.cast(server, {:release, token})
     end
   end

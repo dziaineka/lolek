@@ -62,9 +62,11 @@ defmodule Lolek.ChatRateLimiter do
     cutoff = now - state.window_ms
     attempts_by_chat = prune_attempts_by_chat(state.attempts_by_chat, cutoff)
     attempts = [now | Map.get(attempts_by_chat, chat_id, [])]
+    admitted? = length(attempts) <= state.limit
 
-    {:reply, length(attempts) <= state.limit,
-     %{state | attempts_by_chat: Map.put(attempts_by_chat, chat_id, attempts)}}
+    Lolek.Metrics.record_chat_rate_limiter_result(admitted?)
+
+    {:reply, admitted?, %{state | attempts_by_chat: Map.put(attempts_by_chat, chat_id, attempts)}}
   end
 
   @spec prune_attempts_by_chat(%{integer() => [integer()]}, integer()) ::

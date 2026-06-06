@@ -23,6 +23,7 @@ let
   fakeUploadDir = "${fakeLogDir}/uploads";
   passthroughUploadFile = "${fakeUploadDir}/passthrough.bin";
   compressedUploadFile = "${fakeUploadDir}/compressed.bin";
+  metricsPort = 9568;
 
   fakeBaseUrl = "http://${fakeHost}:${toString fakePort}";
   passthroughMediaPath = "/passthrough.mp4";
@@ -112,6 +113,10 @@ pkgs.testers.nixosTest {
         startDownloadPause = 10;
         maxDownloadPause = 10;
         postSourceCaption = true;
+        metrics = {
+          enable = true;
+          port = metricsPort;
+        };
         inherit
           maxFileSizeToSendToTelegram
           maxVideoSizeToSendToTelegram
@@ -188,6 +193,8 @@ pkgs.testers.nixosTest {
     passthrough_source_caption = "${passthroughSourceCaption}"
     passthrough_source_title = "${passthroughSourceTitle}"
     passthrough_video_file_id = "${passthroughVideoFileId}"
+    metrics_url = "http://127.0.0.1:${toString metricsPort}/metrics"
+    metrics_file = "/tmp/lolek-metrics.prom"
     compressed_media_file = "${compressedMediaFile}"
     compressed_media_url = "${compressedMediaUrl}"
     compressed_video_file_id = "${compressedVideoFileId}"
@@ -320,6 +327,32 @@ pkgs.testers.nixosTest {
         "test $(stat -c %%s %s) -le %d"
         % (compressed_ready_file, max_file_size_to_send_to_telegram)
     )
+
+    # The optional Prometheus endpoint should expose metrics from the exercised service path.
+    machine.succeed("curl -fsS %s > %s" % (metrics_url, metrics_file))
+    machine.succeed(
+        "grep -F 'lolek_messages_total{result=\"ok\"} 3' %s" % metrics_file
+    )
+    machine.succeed(
+        "grep -F 'lolek_chat_rate_limiter_total{result=\"admitted\"} 3' %s"
+        % metrics_file
+    )
+    machine.succeed(
+        "grep -F 'lolek_cache_lookup_total{state=\"new_file\"} 2' %s" % metrics_file
+    )
+    machine.succeed(
+        "grep -F 'lolek_cache_lookup_total{state=\"ready_to_telegram\"} 1' %s"
+        % metrics_file
+    )
+    machine.succeed(
+        "grep -F 'lolek_processing_stage_total{result=\"ok\",stage=\"telegram_send\"} 3' %s"
+        % metrics_file
+    )
+    machine.succeed(
+        "grep -F 'lolek_processing_stage_duration_seconds_count{result=\"ok\",stage=\"telegram_send\"} 3' %s"
+        % metrics_file
+    )
+    machine.succeed("grep -F 'lolek_processing_active 0' %s" % metrics_file)
 
     # On-demand cleanup should remove both cache entries while leaving the service alive.
     machine.succeed("${package}/bin/lolek rpc 'Lolek.FileCleaner.cleanup_now()'")

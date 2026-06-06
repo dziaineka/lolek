@@ -1,5 +1,5 @@
 #### Builder
-FROM hexpm/elixir:1.19.5-erlang-28.3-debian-trixie-20260202-slim AS buildcontainer
+FROM hexpm/elixir:1.20.0-erlang-29.0.1-debian-trixie-20260518-slim AS buildcontainer
 
 RUN mkdir /ytdlp
 WORKDIR /ytdlp
@@ -32,13 +32,10 @@ COPY lib ./lib
 RUN MIX_OS_DEPS_COMPILE_PARTITION_COUNT=$(($(nproc) / 2)) HEX_HTTP_TIMEOUT=120 MIX_ENV=prod mix release
 
 # Main Docker Image
-# Using Debian for better V4L2 hardware encoder support on Raspberry Pi
-FROM debian:trixie-20260202-slim
+FROM debian:trixie-20260518-slim
 
 ENV SHELL=/bin/bash
 
-# Install ffmpeg with V4L2 M2M support (hardware encoding for RPi)
-# Debian's ffmpeg package includes v4l2_m2m encoder support
 RUN apt-get update && apt-get install -y --no-install-recommends \
   ffmpeg \
   python3 \

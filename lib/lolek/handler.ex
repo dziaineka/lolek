@@ -191,7 +191,6 @@ defmodule Lolek.Handler do
   defp format_step_result({:ok, file_state}), do: "ok:#{format_file_state(file_state)}"
   defp format_step_result(:ok), do: "ok"
   defp format_step_result({:error, reason}), do: "error:#{inspect(reason)}"
-  defp format_step_result(other), do: inspect(other)
 
   @spec present?(term()) :: boolean()
   defp present?(value), do: is_binary(value) and value != ""

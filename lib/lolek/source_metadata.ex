@@ -35,9 +35,6 @@ defmodule Lolek.SourceMetadata do
 
       {:ok, _metadata} ->
         {:error, "Cached source metadata is invalid"}
-
-      _ ->
-        {:error, "Cached source metadata is invalid"}
     end
   end
 
@@ -123,11 +120,13 @@ defmodule Lolek.SourceMetadata do
   end
 
   @spec summarize_command_error(term()) :: term()
-  defp summarize_command_error(reason) when is_list(reason) do
-    Keyword.take(reason, [:exit_status, :signal, :core_dump])
+  defp summarize_command_error(reason) do
+    if Keyword.keyword?(reason) do
+      Keyword.take(reason, [:exit_status, :signal, :core_dump])
+    else
+      reason
+    end
   end
-
-  defp summarize_command_error(reason), do: reason
 
   @spec metadata_title(map()) :: source_title()
   defp metadata_title(metadata) do

@@ -193,7 +193,11 @@ defmodule Lolek.ThreadsDownloader do
     end
   end
 
-  @spec handle_caption_request(map(), {:ok, String.t() | nil} | {:error, String.t()}, token_bundle()) ::
+  @spec handle_caption_request(
+          map(),
+          {:ok, String.t() | nil} | {:error, String.t()},
+          token_bundle()
+        ) ::
           {:halt, {:ok, String.t()}} | {:cont, {:ok, nil} | {:error, String.t()}}
   defp handle_caption_request(request, acc, tokens) do
     case execute_graphql_request(request, tokens) do
@@ -201,7 +205,6 @@ defmodule Lolek.ThreadsDownloader do
         case extract_caption(response.body) do
           {:ok, nil} -> {:cont, {:ok, nil}}
           {:ok, caption} -> {:halt, {:ok, caption}}
-          {:error, _reason} -> {:cont, acc}
         end
 
       {:error, reason} ->

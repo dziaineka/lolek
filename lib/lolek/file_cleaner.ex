@@ -5,6 +5,8 @@ defmodule Lolek.FileCleaner do
   use GenServer
   require Logger
 
+  @type calendar_time :: :calendar.datetime()
+
   @spec start_link() :: GenServer.on_start()
   def start_link do
     GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
@@ -69,7 +71,7 @@ defmodule Lolek.FileCleaner do
             path: String.t(),
             name: String.t(),
             size: non_neg_integer(),
-            mtime: File.calendar_time()
+            mtime: calendar_time()
           }
         ]
   defp cache_entries(downloads_dir) do
@@ -150,7 +152,7 @@ defmodule Lolek.FileCleaner do
     end
   end
 
-  @spec path_mtime(String.t()) :: File.calendar_time()
+  @spec path_mtime(String.t()) :: calendar_time()
   defp path_mtime(path) do
     case File.lstat(path) do
       {:ok, %File.Stat{mtime: mtime}} -> mtime

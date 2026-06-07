@@ -105,7 +105,7 @@ defmodule Lolek.ProcessingLimiter do
     state =
       state
       |> remove_waiter(monitor_ref)
-      |> release_active(monitor_ref)
+      |> then(&release_active(monitor_ref, &1))
       |> grant_waiting()
 
     {:noreply, state}

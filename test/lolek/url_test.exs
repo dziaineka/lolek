@@ -2,7 +2,7 @@ defmodule Lolek.UrlTest do
   use ExUnit.Case, async: false
 
   setup do
-    original_allowed_urls_regex = Application.get_env(:lolek, :allowed_urls_regex)
+    original_allowed_urls_regex = Application.fetch_env!(:lolek, :allowed_urls_regex)
     Application.put_env(:lolek, :allowed_urls_regex, "threads\\.com")
 
     on_exit(fn ->

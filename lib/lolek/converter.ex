@@ -364,15 +364,15 @@ defmodule Lolek.Converter do
 
   @spec h264_encoder() :: {:ok, h264_encoder()} | {:error, term()}
   defp h264_encoder do
-    case Application.get_env(:lolek, :hw_acceleration, "none") do
-      value when value in ["", "none"] ->
+    case Application.fetch_env!(:lolek, :hw_acceleration) do
+      "none" ->
         {:ok, :software}
 
       "vaapi" ->
-        {:ok, {:vaapi, Application.get_env(:lolek, :hw_device, "/dev/dri/renderD128")}}
+        {:ok, {:vaapi, Application.fetch_env!(:lolek, :hw_device)}}
 
       "qsv" ->
-        {:ok, {:qsv, Application.get_env(:lolek, :hw_device, "/dev/dri/renderD128")}}
+        {:ok, {:qsv, Application.fetch_env!(:lolek, :hw_device)}}
 
       value ->
         {:error, {:unsupported_hw_acceleration, value}}

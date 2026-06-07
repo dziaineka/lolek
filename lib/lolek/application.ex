@@ -31,7 +31,7 @@ defmodule Lolek.Application do
 
   @spec metrics_children() :: [module()]
   defp metrics_children do
-    if Application.get_env(:lolek, :metrics_enabled, false) do
+    if Application.fetch_env!(:lolek, :metrics_enabled) do
       [Lolek.Metrics, Lolek.MetricsEndpoint]
     else
       []

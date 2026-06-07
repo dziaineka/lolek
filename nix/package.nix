@@ -55,7 +55,7 @@ rec {
       inherit version;
       src = root;
       inherit elixir;
-      hash = "sha256-Qjtga/MGHD7lHylMNtGD343G4YHLxHPLnJGIt4/W6ow=";
+      hash = "sha256-x1H+2vlwhoOucbUqzmlOdVXB302UWfdiFIC0zknzkrs=";
     };
     doCheck = true;
     checkPhase = ''
@@ -67,6 +67,7 @@ rec {
       export MIX_DEPS_PATH="$TMPDIR/deps"
       export REBAR_GLOBAL_CONFIG_DIR="$TMPDIR/rebar3"
       export REBAR_CACHE_DIR="$TMPDIR/rebar3.cache"
+      export LOLEK_BOT_TOKEN="test_token"
 
       cp -R ${testSrc}/test test
       mix test

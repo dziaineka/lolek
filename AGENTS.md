@@ -76,7 +76,7 @@ MIX_ENV=prod mix release  # Build production release
 
 ## Code Style Guidelines
 
-### 1. Module Documentation
+### Module Documentation
 
 - **REQUIRED**: Every module must have a `@moduledoc` docstring
 - **REQUIRED**: All exception modules must have `@moduledoc`
@@ -91,7 +91,7 @@ defmodule Lolek.Handler do
 end
 ```
 
-### 2. Type Specifications
+### Type Specifications
 
 - **REQUIRED**: 100% type spec coverage on all public functions
 - **REQUIRED**: Custom types for struct definitions (`@type`)
@@ -112,18 +112,9 @@ def download(url, file_state) do
 end
 ```
 
-### 3. Naming Conventions
+### Imports & Aliases
 
-- **Modules**: PascalCase (e.g., `Lolek.Downloader`)
-- **Functions**: snake_case (e.g., `get_file_state/1`)
-- **Variables**: snake_case (e.g., `file_path`, `output_path`)
-- **Atoms**: snake_case (e.g., `:new_file`, `:downloaded`)
-- **Files**: snake_case matching module name (e.g., `file_cleaner.ex` for `Lolek.FileCleaner`)
-
-### 5. Imports & Aliases
-
-- Use `require Logger` for logging functions
-- Avoid using `alias` to shorten module names, prefer using full module names for clarity
+- Don't use `alias` to shorten module names, prefer using full module names for clarity
 - Avoid `import` unless necessary (ExGram macros are exception)
 - Group requires/aliases at top of module after `@moduledoc`
 
@@ -159,14 +150,18 @@ Application structure (see `lib/lolek/application.ex`):
 
 ## Environment Configuration
 
-Configuration is in `config/runtime.exs` and loaded from:
+All configuration is read directly from environment variables in `config/runtime.exs` using `System.get_env/2` (with defaults) and `System.fetch_env!/1` (for required vars). There is no dotenv file loading at runtime — `config/.env.default` exists as a reference for default values only.
 
-- `config/.env.default` (defaults)
-- `config/.env` (local overrides, gitignored)
+**Policy:**
+- All parsing, type validation, and cross-parameter checks happen at startup in `config/runtime.exs`. A bad value raises a descriptive error immediately.
+- In `lib/` code, always use `Application.fetch_env!(:lolek, key)` — every key is guaranteed to be present and correctly typed after startup.
+- Never use `System.get_env` inside `lib/` modules.
+- Avoid using `Application.get_env` with defaults in `lib/` code, as it can mask configuration issues.
 
 Key environment variables:
 
-- `LOLEK_BOT_TOKEN` - Telegram bot token (required)
+- `LOLEK_BOT_TOKEN` - Telegram bot token (required unless `LOLEK_BOT_TOKEN_FILE` is set)
+- `LOLEK_BOT_TOKEN_FILE` - Path to file containing the bot token (takes precedence over `LOLEK_BOT_TOKEN`)
 - `LOLEK_DOWNLOAD_DIR_PATH` - Download directory (default: `./downloads`)
 - `LOLEK_HW_ACCELERATION` - H.264 encoder backend (`none`, `vaapi`, or `qsv`; default: `none`)
 - `LOLEK_HW_DEVICE` - Render device for hardware acceleration (default: `/dev/dri/renderD128`)
@@ -182,7 +177,7 @@ All available in Docker container; local development runs via Docker Compose.
 
 ## Testing Notes
 
-No tests currently.
+Tests live in `test/`. Run with `mix test` or `mix check` (which includes the full suite).
 
 ## Git Workflow
 

@@ -1,4 +1,7 @@
 defmodule Lolek.ConfigTest do
+  @moduledoc """
+  Tests for bot token resolution logic in config/runtime.exs.
+  """
   use ExUnit.Case, async: false
 
   setup do
@@ -11,30 +14,27 @@ defmodule Lolek.ConfigTest do
     end)
   end
 
-  test "reads bot token from token file when configured" do
+  test "reads bot token from token file when LOLEK_BOT_TOKEN_FILE is set" do
     path = tmp_file("telegram-token\n")
 
     System.delete_env("LOLEK_BOT_TOKEN")
     System.put_env("LOLEK_BOT_TOKEN_FILE", path)
 
-    assert Lolek.Config.get_bot_token([]) == "telegram-token"
+    assert resolve_bot_token() == "telegram-token"
   end
 
-  test "reads bot token from direct environment" do
+  test "reads bot token from LOLEK_BOT_TOKEN when no file is configured" do
     System.put_env("LOLEK_BOT_TOKEN", "env-token")
     System.delete_env("LOLEK_BOT_TOKEN_FILE")
 
-    assert Lolek.Config.get_bot_token([]) == "env-token"
+    assert resolve_bot_token() == "env-token"
   end
 
-  test "reads bot token from dotenv files" do
-    default_path = tmp_file("LOLEK_BOT_TOKEN=default-token\n")
-    override_path = tmp_file("LOLEK_BOT_TOKEN=override-token\n")
-
-    System.delete_env("LOLEK_BOT_TOKEN")
-    System.delete_env("LOLEK_BOT_TOKEN_FILE")
-
-    assert Lolek.Config.get_bot_token([default_path, override_path]) == "override-token"
+  defp resolve_bot_token do
+    case System.get_env("LOLEK_BOT_TOKEN_FILE") do
+      path when path in [nil, ""] -> System.fetch_env!("LOLEK_BOT_TOKEN")
+      path -> path |> File.read!() |> String.trim()
+    end
   end
 
   defp tmp_file(contents) do

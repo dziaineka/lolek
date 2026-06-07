@@ -33,7 +33,6 @@ defmodule Lolek.MixProject do
       {:tesla, "1.20.0"},
       {:hackney, "1.25.0"},
       {:jason, "1.4.5"},
-      {:dotenv_config, "2.3.3"},
       {:erlexec, "2.3.2"},
       {:ex_check, "0.16.0", only: [:dev, :test], runtime: false},
       {:credo, ">= 0.0.0", only: [:dev, :test], runtime: false},

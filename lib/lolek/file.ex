@@ -151,7 +151,7 @@ defmodule Lolek.File do
 
   @spec get_folder_path(String.t()) :: {:ok, String.t()}
   def get_folder_path(url) do
-    download_path = Application.get_env(:lolek, :download_path)
+    download_path = Application.fetch_env!(:lolek, :download_path)
     folder_name = Lolek.Url.to_folder_name(url)
     {:ok, Path.join(download_path, folder_name)}
   end

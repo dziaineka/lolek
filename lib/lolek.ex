@@ -97,7 +97,7 @@ defmodule Lolek do
           {:ok, {:file_content, File.Stream.t(), String.t()} | String.t(), (-> :ok)}
           | {:error, term()}
   defp upload_file(file_path, context) do
-    if Application.get_env(:lolek, :telegram_local_file_uploads, false) do
+    if Application.fetch_env!(:lolek, :telegram_local_file_uploads) do
       local_upload_file(file_path, context)
     else
       {:ok,
@@ -271,7 +271,7 @@ defmodule Lolek do
 
   @spec source_caption(keyword()) :: String.t() | nil
   defp source_caption(context) do
-    with true <- Application.get_env(:lolek, :post_source_caption, false),
+    with true <- Application.fetch_env!(:lolek, :post_source_caption),
          source_caption when is_binary(source_caption) and source_caption != "" <-
            Keyword.get(context, :source_caption) do
       source_caption
@@ -282,7 +282,7 @@ defmodule Lolek do
 
   @spec requester_caption(keyword()) :: String.t() | nil
   defp requester_caption(context) do
-    with true <- Application.get_env(:lolek, :post_requester_caption, false),
+    with true <- Application.fetch_env!(:lolek, :post_requester_caption),
          requester when is_binary(requester) <- Keyword.get(context, :requester_name),
          started_at when is_integer(started_at) <- Keyword.get(context, :started_at) do
       "#{requester} requested, processed in #{elapsed_seconds(started_at)}s"

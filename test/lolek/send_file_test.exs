@@ -209,6 +209,7 @@ defmodule Lolek.SendFileTest do
       Application.put_env(:lolek, :telegram_client, TelegramClient)
       Application.put_env(:lolek, :telegram_test_result, {:ok, response})
       Application.put_env(:lolek, :telegram_test_parent, self())
+      Application.put_env(:lolek, :post_requester_caption, true)
 
       context = [requester_name: "alice", started_at: System.monotonic_time()]
 
@@ -237,6 +238,7 @@ defmodule Lolek.SendFileTest do
       Application.put_env(:lolek, :telegram_test_result, {:ok, response})
       Application.put_env(:lolek, :telegram_test_parent, self())
       Application.put_env(:lolek, :post_source_caption, false)
+      Application.put_env(:lolek, :post_requester_caption, true)
 
       context = [
         source_caption: "Source post text",
@@ -267,6 +269,7 @@ defmodule Lolek.SendFileTest do
       Application.put_env(:lolek, :telegram_test_result, {:ok, response})
       Application.put_env(:lolek, :telegram_test_parent, self())
       Application.put_env(:lolek, :post_source_caption, true)
+      Application.put_env(:lolek, :post_requester_caption, true)
 
       context = [
         source_caption: "Source post text\nsecond line",
@@ -297,6 +300,7 @@ defmodule Lolek.SendFileTest do
       Application.put_env(:lolek, :telegram_test_result, {:ok, response})
       Application.put_env(:lolek, :telegram_test_parent, self())
       Application.put_env(:lolek, :post_source_caption, true)
+      Application.put_env(:lolek, :post_requester_caption, true)
 
       context = [
         source_caption: String.duplicate("a", 2_000),
@@ -322,6 +326,7 @@ defmodule Lolek.SendFileTest do
     parent = Application.fetch_env(:lolek, :telegram_test_parent)
     local_file_uploads = Application.fetch_env(:lolek, :telegram_local_file_uploads)
     post_source_caption = Application.fetch_env(:lolek, :post_source_caption)
+    post_requester_caption = Application.fetch_env(:lolek, :post_requester_caption)
 
     try do
       fun.()
@@ -332,6 +337,7 @@ defmodule Lolek.SendFileTest do
       restore_app_env(:telegram_test_parent, parent)
       restore_app_env(:telegram_local_file_uploads, local_file_uploads)
       restore_app_env(:post_source_caption, post_source_caption)
+      restore_app_env(:post_requester_caption, post_requester_caption)
     end
   end
 

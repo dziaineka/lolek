@@ -38,6 +38,10 @@ config :lolek,
        :post_source_caption,
        :dotenv_config.get("LOLEK_POST_SOURCE_CAPTION")
 
+config :lolek,
+       :post_requester_caption,
+       :dotenv_config.get("LOLEK_POST_REQUESTER_CAPTION")
+
 config :lolek, :download_path, :dotenv_config.get("LOLEK_DOWNLOAD_DIR_PATH")
 
 config :lolek,

@@ -114,6 +114,14 @@ in
       '';
     };
 
+    postRequesterCaption = mkOption {
+      type = types.bool;
+      default = false;
+      description = ''
+        Whether to include the requester's name in Telegram media captions.
+      '';
+    };
+
     metrics = {
       enable = mkEnableOption "a local Prometheus metrics endpoint";
 
@@ -476,6 +484,7 @@ in
         LOLEK_METRICS_LISTEN_ADDRESS = cfg.metrics.listenAddress;
         LOLEK_METRICS_PORT = toString cfg.metrics.port;
         LOLEK_POST_SOURCE_CAPTION = if cfg.postSourceCaption then "true" else "false";
+        LOLEK_POST_REQUESTER_CAPTION = if cfg.postRequesterCaption then "true" else "false";
         LOLEK_DOWNLOAD_DIR_PATH = toString cfg.downloadDir;
         LOLEK_MAX_DOWNLOAD_DIR_SIZE = toString cfg.maxDownloadDirSize;
         LOLEK_MAX_FILE_SIZE_TO_SEND_TO_TELEGRAM = toString cfg.maxFileSizeToSendToTelegram;

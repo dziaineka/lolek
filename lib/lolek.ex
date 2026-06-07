@@ -271,19 +271,19 @@ defmodule Lolek do
 
   @spec source_caption(keyword()) :: String.t() | nil
   defp source_caption(context) do
-    if Application.get_env(:lolek, :post_source_caption, false) do
-      case Keyword.get(context, :source_caption) do
-        source_caption when is_binary(source_caption) and source_caption != "" -> source_caption
-        _ -> nil
-      end
+    with true <- Application.get_env(:lolek, :post_source_caption, false),
+         source_caption when is_binary(source_caption) and source_caption != "" <-
+           Keyword.get(context, :source_caption) do
+      source_caption
     else
-      nil
+      _ -> nil
     end
   end
 
   @spec requester_caption(keyword()) :: String.t() | nil
   defp requester_caption(context) do
-    with requester when is_binary(requester) <- Keyword.get(context, :requester_name),
+    with true <- Application.get_env(:lolek, :post_requester_caption, false),
+         requester when is_binary(requester) <- Keyword.get(context, :requester_name),
          started_at when is_integer(started_at) <- Keyword.get(context, :started_at) do
       "#{requester} requested, processed in #{elapsed_seconds(started_at)}s"
     else

@@ -34,7 +34,9 @@ RUN MIX_OS_DEPS_COMPILE_PARTITION_COUNT=$(($(nproc) / 2)) HEX_HTTP_TIMEOUT=120 M
 # Main Docker Image
 FROM debian:trixie-20260518-slim
 
+ENV DEBIAN_FRONTEND=noninteractive
 ENV SHELL=/bin/bash
+ENV ELIXIR_ERL_OPTIONS="+fnu"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
   ffmpeg \
@@ -42,6 +44,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   curl \
   ca-certificates \
   openssl \
+  libsctp1 \
   libncurses6 \
   libstdc++6 \
   && rm -rf /var/lib/apt/lists/*

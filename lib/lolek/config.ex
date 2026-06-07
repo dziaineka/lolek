@@ -14,6 +14,7 @@ defmodule Lolek.Config do
       {"LOLEK_METRICS_LISTEN_ADDRESS", :str},
       {"LOLEK_METRICS_PORT", :int},
       {"LOLEK_POST_SOURCE_CAPTION", :bool},
+      {"LOLEK_POST_REQUESTER_CAPTION", :bool},
       {"LOLEK_DOWNLOAD_DIR_PATH", :str},
       {"LOLEK_MAX_DOWNLOAD_DIR_SIZE", :int},
       {"LOLEK_MAX_FILE_SIZE_TO_SEND_TO_TELEGRAM", :int},

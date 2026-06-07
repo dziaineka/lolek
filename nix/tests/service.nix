@@ -113,6 +113,7 @@ pkgs.testers.nixosTest {
         startDownloadPause = 10;
         maxDownloadPause = 10;
         postSourceCaption = true;
+        postRequesterCaption = true;
         metrics = {
           enable = true;
           port = metricsPort;

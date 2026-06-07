@@ -33,7 +33,7 @@ let
     inherit root;
     fileset = sourceFiles [ (root + "/rel") ];
   };
-  version = "4.0.0";
+  version = "4.1.0";
   runtimePath = lib.makeBinPath [
     pkgs.curl
     pkgs.ffmpeg-full

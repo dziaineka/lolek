@@ -15,7 +15,7 @@ push:
 	@docker push ${LATEST}
 
 check:
-	mix check --no-skipped
+	mix check
 
 format:
 	mix format

@@ -65,8 +65,7 @@ defmodule Lolek do
     case with_upload_file(file_path, context, fn upload ->
            do_send_document(chat_id, upload, options)
          end) do
-      {:ok,
-       %ExGram.Model.Message{document: %ExGram.Model.Document{file_id: file_id}} = response} ->
+      {:ok, %ExGram.Model.Message{document: %ExGram.Model.Document{file_id: file_id}} = response} ->
         update_caption_after_send(chat_id, response, context)
         {:ok, {:sent_to_telegram_at_first, file_path, file_id}}
 
@@ -102,7 +101,7 @@ defmodule Lolek do
       local_upload_file(file_path, context)
     else
       {:ok,
-       {:file_content, File.stream!(file_path, [], @upload_chunk_size),
+       {:file_content, File.stream!(file_path, @upload_chunk_size, []),
         upload_file_name(file_path, context)}, fn -> :ok end}
     end
   end

@@ -5,7 +5,9 @@ defmodule Lolek.Command do
 
   @default_kill_timeout_seconds 5
 
-  @type result :: {:ok, keyword()} | {:error, term()}
+  @type output_chunk :: {:stdout | :stderr, [binary()]}
+  @type output :: [output_chunk()]
+  @type result :: {:ok, output()} | {:error, term()}
 
   @spec run(String.t(), [String.t()]) :: result()
   @spec run(String.t(), [String.t()], [term()]) :: result()
@@ -18,12 +20,17 @@ defmodule Lolek.Command do
       nil ->
         {:error, "#{executable} executable was not found"}
 
-      executable_path ->
-        case :exec.run([executable_path | args], exec_options) do
+      executable_path when is_binary(executable_path) ->
+        case executable_path |> exec_argv(args) |> :exec.run(exec_options) do
           {:ok, pid, os_pid} -> collect_output(executable, pid, os_pid, timeout, kill_timeout)
           {:error, reason} -> {:error, reason}
         end
     end
+  end
+
+  @spec exec_argv(String.t(), [String.t()]) :: [charlist(), ...]
+  defp exec_argv(executable_path, args) do
+    [String.to_charlist(executable_path) | Enum.map(args, &String.to_charlist/1)]
   end
 
   @spec pop_option([term()], atom(), term()) :: {term(), [term()]}
@@ -63,7 +70,7 @@ defmodule Lolek.Command do
           timeout(),
           non_neg_integer(),
           integer() | :infinity,
-          map()
+          %{stdout: [binary()], stderr: [binary()]}
         ) :: result()
   defp collect_output(executable, pid, os_pid, timeout, kill_timeout, deadline, output) do
     receive do
@@ -100,14 +107,14 @@ defmodule Lolek.Command do
     max(deadline - System.monotonic_time(:millisecond), 0)
   end
 
-  @spec output_to_keyword(%{stdout: [binary()], stderr: [binary()]}) :: keyword()
+  @spec output_to_keyword(%{stdout: [binary()], stderr: [binary()]}) :: output()
   defp output_to_keyword(output) do
     output
     |> Enum.map(fn {key, chunks} -> {key, Enum.reverse(chunks)} end)
     |> Enum.reject(fn {_key, chunks} -> chunks == [] end)
   end
 
-  @spec normalize_exit_reason(term(), keyword()) :: keyword() | term()
+  @spec normalize_exit_reason(term(), output()) :: output() | term()
   defp normalize_exit_reason({:exit_status, status}, output) do
     normalize_status(status, output)
   end
@@ -118,7 +125,7 @@ defmodule Lolek.Command do
 
   defp normalize_exit_reason(reason, _output), do: reason
 
-  @spec normalize_status(integer(), keyword()) :: keyword()
+  @spec normalize_status(integer(), output()) :: output()
   defp normalize_status(status, output) do
     status_reason =
       case :exec.status(status) do

@@ -29,7 +29,7 @@ defmodule Lolek.Application do
     Supervisor.start_link(children, opts)
   end
 
-  @spec metrics_children() :: [Supervisor.child_spec()]
+  @spec metrics_children() :: [module()]
   defp metrics_children do
     if Application.get_env(:lolek, :metrics_enabled, false) do
       [Lolek.Metrics, Lolek.MetricsEndpoint]

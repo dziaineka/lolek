@@ -7,6 +7,8 @@ defmodule Lolek.MetricsEndpoint do
 
   @request_timeout_ms 5_000
 
+  @type http_status :: 200 | 400 | 404 | 405
+
   @type state :: %{
           socket: :gen_tcp.socket(),
           acceptor: pid()
@@ -72,7 +74,7 @@ defmodule Lolek.MetricsEndpoint do
     ])
   end
 
-  @spec accept_loop(:gen_tcp.socket()) :: :ok
+  @spec accept_loop(:gen_tcp.socket()) :: no_return()
   defp accept_loop(socket) do
     case :gen_tcp.accept(socket) do
       {:ok, client} ->
@@ -114,7 +116,7 @@ defmodule Lolek.MetricsEndpoint do
     end
   end
 
-  @spec response(String.t()) :: {non_neg_integer(), String.t(), String.t()}
+  @spec response(String.t()) :: {http_status(), String.t(), String.t()}
   defp response(request) do
     case request_line(request) do
       ["GET", "/metrics", _version] ->
@@ -139,7 +141,7 @@ defmodule Lolek.MetricsEndpoint do
     |> String.split(" ", parts: 3)
   end
 
-  @spec send_response(:gen_tcp.socket(), non_neg_integer(), String.t(), String.t()) :: :ok
+  @spec send_response(:gen_tcp.socket(), http_status(), String.t(), String.t()) :: :ok
   defp send_response(client, status, body, content_type) do
     status_line = status_line(status)
 
@@ -156,12 +158,11 @@ defmodule Lolek.MetricsEndpoint do
     :ok
   end
 
-  @spec status_line(non_neg_integer()) :: String.t()
+  @spec status_line(http_status()) :: String.t()
   defp status_line(200), do: "OK"
   defp status_line(400), do: "Bad Request"
   defp status_line(404), do: "Not Found"
   defp status_line(405), do: "Method Not Allowed"
-  defp status_line(_status), do: "Error"
 
   @spec parse_ip_address(String.t()) :: {:ok, :inet.ip_address()} | {:error, term()}
   defp parse_ip_address(listen_address) do

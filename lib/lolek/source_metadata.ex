@@ -168,6 +168,7 @@ defmodule Lolek.SourceMetadata do
 
   defp sanitize_caption(caption) do
     caption
+    |> decode_html_entities()
     |> remove_urls()
     |> normalize_newlines()
     |> String.split("\n", trim: false)
@@ -185,6 +186,7 @@ defmodule Lolek.SourceMetadata do
 
   defp sanitize_title(title) do
     title
+    |> decode_html_entities()
     |> remove_urls()
     |> String.replace(~r/[\x00-\x1F\x7F\/\\:*?"<>|]/u, " ")
     |> String.replace(~r/\s+/, " ")
@@ -202,6 +204,9 @@ defmodule Lolek.SourceMetadata do
   @spec title_from_caption(source_caption()) :: source_title()
   defp title_from_caption(nil), do: nil
   defp title_from_caption(caption), do: sanitize_title(caption)
+
+  @spec decode_html_entities(String.t()) :: String.t()
+  defp decode_html_entities(text), do: HtmlEntities.decode(text)
 
   @spec remove_urls(String.t()) :: String.t()
   defp remove_urls(text), do: String.replace(text, ~r{https?://\S+}iu, "")

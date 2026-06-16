@@ -34,68 +34,77 @@ let
     fileset = sourceFiles [ (root + "/rel") ];
   };
   version = "4.1.0";
-  runtimePath = lib.makeBinPath [
-    pkgs.curl
-    pkgs.ffmpeg-full
-    pkgs.yt-dlp
-  ];
   testSrc = lib.fileset.toSource {
     inherit root;
     fileset = sourceFiles [ (root + "/test") ];
   };
+  mkLolek =
+    {
+      curl ? pkgs.curl,
+      ffmpeg-full ? pkgs.ffmpeg-full,
+      yt-dlp ? pkgs.yt-dlp,
+    }:
+    let
+      runtimePath = lib.makeBinPath [
+        curl
+        ffmpeg-full
+        yt-dlp
+      ];
+    in
+    mixRelease {
+      pname = "lolek";
+      inherit version;
+      inherit elixir src;
+
+      mixFodDeps = fetchMixDeps {
+        pname = "lolek-mix-deps";
+        inherit version;
+        src = root;
+        inherit elixir;
+        hash = "sha256-x1H+2vlwhoOucbUqzmlOdVXB302UWfdiFIC0zknzkrs=";
+      };
+      doCheck = true;
+      checkPhase = ''
+        runHook preCheck
+
+        export MIX_ENV="prod"
+        export MIX_HOME="$TMPDIR/mix"
+        export HEX_HOME="$TMPDIR/hex"
+        export MIX_DEPS_PATH="$TMPDIR/deps"
+        export REBAR_GLOBAL_CONFIG_DIR="$TMPDIR/rebar3"
+        export REBAR_CACHE_DIR="$TMPDIR/rebar3.cache"
+        export LOLEK_BOT_TOKEN="test_token"
+
+        cp -R ${testSrc}/test test
+        mix test
+
+        runHook postCheck
+      '';
+      doInstallCheck = true;
+      nativeInstallCheckInputs = [ pkgs.versionCheckHook ];
+      versionCheckProgram = "${placeholder "out"}/bin/lolek";
+      versionCheckProgramArg = "version";
+
+      postInstall = ''
+        cat >> "$out/releases/${version}/env.sh" <<'EOF'
+
+        export RELEASE_COOKIE="''${RELEASE_COOKIE:-lolek}"
+        export RELEASE_PROG="lolek"
+        export PATH="${runtimePath}:$PATH"
+        EOF
+      '';
+
+      meta = {
+        description = "Telegram bot that downloads media from URLs and uploads it to Telegram";
+        homepage = "https://github.com/skaborik/lolek_bot";
+        license = lib.licenses.mit;
+        mainProgram = "lolek";
+        platforms = systems;
+      };
+    };
 in
 rec {
-  lolek = mixRelease {
-    pname = "lolek";
-    inherit version;
-    inherit elixir src;
-
-    mixFodDeps = fetchMixDeps {
-      pname = "lolek-mix-deps";
-      inherit version;
-      src = root;
-      inherit elixir;
-      hash = "sha256-x1H+2vlwhoOucbUqzmlOdVXB302UWfdiFIC0zknzkrs=";
-    };
-    doCheck = true;
-    checkPhase = ''
-      runHook preCheck
-
-      export MIX_ENV="prod"
-      export MIX_HOME="$TMPDIR/mix"
-      export HEX_HOME="$TMPDIR/hex"
-      export MIX_DEPS_PATH="$TMPDIR/deps"
-      export REBAR_GLOBAL_CONFIG_DIR="$TMPDIR/rebar3"
-      export REBAR_CACHE_DIR="$TMPDIR/rebar3.cache"
-      export LOLEK_BOT_TOKEN="test_token"
-
-      cp -R ${testSrc}/test test
-      mix test
-
-      runHook postCheck
-    '';
-    doInstallCheck = true;
-    nativeInstallCheckInputs = [ pkgs.versionCheckHook ];
-    versionCheckProgram = "${placeholder "out"}/bin/lolek";
-    versionCheckProgramArg = "version";
-
-    postInstall = ''
-      cat >> "$out/releases/${version}/env.sh" <<'EOF'
-
-      export RELEASE_COOKIE="''${RELEASE_COOKIE:-lolek}"
-      export RELEASE_PROG="lolek"
-      export PATH="${runtimePath}:$PATH"
-      EOF
-    '';
-
-    meta = {
-      description = "Telegram bot that downloads media from URLs and uploads it to Telegram";
-      homepage = "https://github.com/skaborik/lolek_bot";
-      license = lib.licenses.mit;
-      mainProgram = "lolek";
-      platforms = systems;
-    };
-  };
+  lolek = lib.makeOverridable mkLolek { };
 
   default = lolek;
 }

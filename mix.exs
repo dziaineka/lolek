@@ -32,6 +32,7 @@ defmodule Lolek.MixProject do
       {:ex_gram, "0.66.0"},
       {:tesla, "1.20.0"},
       {:hackney, "1.25.0"},
+      {:html_entities, "0.5.2"},
       {:jason, "1.4.5"},
       {:erlexec, "2.3.2"},
       {:ex_check, "0.16.0", only: [:dev, :test], runtime: false},

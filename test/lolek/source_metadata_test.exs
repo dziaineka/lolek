@@ -13,17 +13,17 @@ defmodule Lolek.SourceMetadataTest do
 
       put_fake_yt_dlp(bin_dir, """
       printf x >> "#{calls_file}"
-      printf '%s' '{"description":"Watch https://example.com/source now\\nnext line","title":"A / Video: Title?"}'
+      printf '%s' '{"description":"&gt; Watch https://example.com/source now\\nnext &amp; line &#62;","title":"A &quot;/ Video: Title?&quot;"}'
       """)
 
       put_metadata_env(bin_dir)
 
-      assert {:ok, %{caption: "Watch now\nnext line", title: "A Video Title"}} =
+      assert {:ok, %{caption: "> Watch now\nnext & line >", title: "A Video Title"}} =
                Lolek.SourceMetadata.get_or_fetch("https://example.com/video", tmp_dir)
 
       assert File.read!(calls_file) == "x"
 
-      assert {:ok, %{"caption" => "Watch now\nnext line", "title" => "A Video Title"}} =
+      assert {:ok, %{"caption" => "> Watch now\nnext & line >", "title" => "A Video Title"}} =
                tmp_dir
                |> Path.join("source_metadata.json")
                |> File.read!()
@@ -55,12 +55,13 @@ defmodule Lolek.SourceMetadataTest do
     File.write!(
       Path.join(tmp_dir, "source_metadata.json"),
       Jason.encode!(%{
-        caption: "First line https://example.com/source\r\n  second\tline\n\n\nthird line  ",
-        title: "Cached Title"
+        caption:
+          "&gt; First &amp; line https://example.com/source\r\n  second\tline\n\n\nthird line  ",
+        title: "Cached &quot;Title&quot;"
       })
     )
 
-    assert {:ok, %{caption: "First line\nsecond line\n\nthird line", title: "Cached Title"}} =
+    assert {:ok, %{caption: "> First & line\nsecond line\n\nthird line", title: "Cached Title"}} =
              Lolek.SourceMetadata.get_or_fetch("https://example.com/video", tmp_dir)
   end
 

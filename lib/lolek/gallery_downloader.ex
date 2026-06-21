@@ -18,11 +18,14 @@ defmodule Lolek.GalleryDownloader do
                "-o",
                "extractor.ytdl.enabled=true",
                "-o",
-               "extractor.ytdl.module=yt_dlp",
-               "--dest",
-               output_dir,
-               url
-             ],
+               "extractor.ytdl.module=yt_dlp"
+             ] ++
+               extra_args() ++
+               [
+                 "--dest",
+                 output_dir,
+                 url
+               ],
              timeout: command_timeout()
            ) do
         {:ok, _output} ->
@@ -109,6 +112,23 @@ defmodule Lolek.GalleryDownloader do
       text when is_binary(text) and text != "" -> {:ok, text}
       _ -> nil
     end
+  end
+
+  @spec extra_args() :: [String.t()]
+  defp extra_args do
+    cookies =
+      case Application.fetch_env!(:lolek, :gallery_dl_cookies_file) do
+        path when is_binary(path) -> ["--cookies", path]
+        nil -> []
+      end
+
+    config_file =
+      case Application.fetch_env!(:lolek, :gallery_dl_config_file) do
+        path when is_binary(path) -> ["--config", path]
+        nil -> []
+      end
+
+    cookies ++ config_file
   end
 
   @spec command_timeout() :: pos_integer()

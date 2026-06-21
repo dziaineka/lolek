@@ -6,3 +6,4 @@ services:
       - config/.env
     volumes:
       - ./downloads:/downloads
+      - ./config/cookies.txt:/cookies.txt:ro

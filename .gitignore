@@ -44,3 +44,6 @@ downloads/
 # Nix build output symlinks
 result
 result-*
+
+# local cookies
+config/cookies.txt

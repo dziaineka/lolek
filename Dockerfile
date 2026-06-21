@@ -41,6 +41,7 @@ ENV ELIXIR_ERL_OPTIONS="+fnu"
 RUN apt-get update && apt-get install -y --no-install-recommends \
   ffmpeg \
   python3 \
+  python3-pip \
   curl \
   ca-certificates \
   openssl \
@@ -51,6 +52,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=buildcontainer /ytdlp/yt-dlp /usr/local/bin
 RUN chmod 755 /usr/local/bin/yt-dlp
+
+ARG GALLERY_DL_VERSION=1.32.3
+RUN pip3 install gallery-dl==${GALLERY_DL_VERSION} --no-cache-dir --break-system-packages \
+  && gallery-dl --version
 
 RUN useradd -r -u 999 -s /usr/sbin/nologin lolek
 

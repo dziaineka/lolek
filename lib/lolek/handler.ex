@@ -120,6 +120,7 @@ defmodule Lolek.Handler do
            timed_step("cache lookup", log_url, fn -> Lolek.File.get_file_state(folder_path) end),
          {:ok, file_state} <-
            timed_step("download", log_url, fn -> Lolek.Downloader.download(url, file_state) end),
+         send_context = enrich_gallery_context(send_context, file_state),
          {:ok, file_state} <-
            timed_step("conversion", log_url, fn ->
              Lolek.Converter.adapt_to_telegram(file_state)
@@ -135,6 +136,20 @@ defmodule Lolek.Handler do
       {:ok, file_state}
     end
   end
+
+  @spec enrich_gallery_context(keyword(), Lolek.File.file_state()) :: keyword()
+  defp enrich_gallery_context(context, {:downloaded_gallery, gallery_dir, _files}) do
+    with nil <- Keyword.get(context, :source_caption),
+         {:ok, caption} <- Lolek.GalleryDownloader.read_caption(gallery_dir) do
+      folder_path = Path.dirname(gallery_dir)
+      Lolek.SourceMetadata.cache_gallery_caption(folder_path, caption)
+      Keyword.put(context, :source_caption, caption)
+    else
+      _ -> context
+    end
+  end
+
+  defp enrich_gallery_context(context, _file_state), do: context
 
   @spec source_metadata(String.t(), String.t(), String.t()) :: Lolek.SourceMetadata.t()
   defp source_metadata(url, folder_path, log_url) do
@@ -197,12 +212,23 @@ defmodule Lolek.Handler do
 
   @spec format_file_state(term()) :: String.t()
   defp format_file_state({:ready_to_telegram, _file_path}), do: "ready_to_telegram"
+
+  defp format_file_state({:ready_to_telegram_gallery, entries}),
+    do: "ready_to_telegram_gallery:count=#{length(entries)}"
+
   defp format_file_state({:compressed, _file_path}), do: "compressed"
   defp format_file_state({:downloaded, _file_path}), do: "downloaded"
+
+  defp format_file_state({:downloaded_gallery, _gallery_dir, files}),
+    do: "downloaded_gallery:count=#{length(files)}"
+
   defp format_file_state({:new_file, _folder_path}), do: "new_file"
 
   defp format_file_state({:sent_to_telegram_at_first, _file_path, _file_id}),
     do: "sent_to_telegram_at_first"
+
+  defp format_file_state({:sent_gallery_to_telegram_at_first, _gallery_dir, entries}),
+    do: "sent_gallery_to_telegram_at_first:count=#{length(entries)}"
 
   defp format_file_state(other), do: inspect(other)
 end

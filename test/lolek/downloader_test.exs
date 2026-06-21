@@ -6,7 +6,9 @@ defmodule Lolek.DownloaderTest do
     :start_download_pause,
     :max_download_pause,
     :download_command_timeout_seconds,
-    :max_file_size_to_compress
+    :max_file_size_to_compress,
+    :gallery_download_enabled,
+    :max_file_size_to_send_to_telegram
   ]
 
   test "uses dedicated threads downloader for threads urls" do
@@ -205,6 +207,168 @@ defmodule Lolek.DownloaderTest do
       assert {:error, "File not found"} =
                Lolek.Downloader.download("https://example.com/video", {:new_file, tmp_dir})
     end)
+  end
+
+  @tag :tmp_dir
+  test "routes gallery-dl image results to downloaded_gallery state", %{tmp_dir: tmp_dir} do
+    preserve_download_env(fn ->
+      bin_dir = Path.join(tmp_dir, "bin")
+      File.mkdir_p!(bin_dir)
+
+      write_script(bin_dir, "gallery-dl", """
+      #!/bin/sh
+      dest=
+      while [ "$#" -gt 0 ]; do
+        case "$1" in --dest) shift; dest="$1" ;; esac
+        shift
+      done
+      printf photo > "$dest/photo001.jpg"
+      printf photo > "$dest/photo002.jpg"
+      """)
+
+      write_script(bin_dir, "yt-dlp", "#!/bin/sh\nexit 1")
+
+      set_gallery_env(bin_dir, true)
+
+      assert {:ok, {:downloaded_gallery, gallery_dir, files}} =
+               Lolek.Downloader.download("https://example.com/post", {:new_file, tmp_dir})
+
+      assert gallery_dir == Path.join(tmp_dir, "gallery")
+      assert length(files) == 2
+      assert Enum.all?(files, &String.ends_with?(&1, ".jpg"))
+    end)
+  end
+
+  @tag :tmp_dir
+  test "promotes single mp4 from gallery-dl to downloaded state", %{tmp_dir: tmp_dir} do
+    preserve_download_env(fn ->
+      bin_dir = Path.join(tmp_dir, "bin")
+      File.mkdir_p!(bin_dir)
+
+      write_script(bin_dir, "gallery-dl", """
+      #!/bin/sh
+      dest=
+      while [ "$#" -gt 0 ]; do
+        case "$1" in --dest) shift; dest="$1" ;; esac
+        shift
+      done
+      printf videodata > "$dest/video001.mp4"
+      """)
+
+      write_script(bin_dir, "yt-dlp", "#!/bin/sh\nexit 1")
+
+      set_gallery_env(bin_dir, true)
+
+      assert {:ok, {:downloaded, file_path}} =
+               Lolek.Downloader.download("https://example.com/post", {:new_file, tmp_dir})
+
+      assert Path.basename(file_path) == "downloaded.mp4"
+      assert Path.dirname(file_path) == tmp_dir
+      assert File.read!(file_path) == "videodata"
+    end)
+  end
+
+  @tag :tmp_dir
+  test "falls back to yt-dlp when gallery-dl returns no files", %{tmp_dir: tmp_dir} do
+    preserve_download_env(fn ->
+      bin_dir = Path.join(tmp_dir, "bin")
+      File.mkdir_p!(bin_dir)
+
+      write_script(bin_dir, "gallery-dl", """
+      #!/bin/sh
+      dest=
+      while [ "$#" -gt 0 ]; do
+        case "$1" in --dest) shift; dest="$1" ;; esac
+        shift
+      done
+      printf meta > "$dest/post.json"
+      """)
+
+      write_script(bin_dir, "yt-dlp", """
+      #!/bin/sh
+      for arg in "$@"; do
+        if [ "$prev" = "-o" ]; then printf video > "$arg"; fi
+        prev="$arg"
+      done
+      """)
+
+      set_gallery_env(bin_dir, true)
+
+      assert {:ok, {:downloaded, file_path}} =
+               Lolek.Downloader.download("https://example.com/post", {:new_file, tmp_dir})
+
+      assert Path.basename(file_path) == "downloaded.mp4"
+    end)
+  end
+
+  @tag :tmp_dir
+  test "falls back to yt-dlp when gallery-dl fails", %{tmp_dir: tmp_dir} do
+    preserve_download_env(fn ->
+      bin_dir = Path.join(tmp_dir, "bin")
+      File.mkdir_p!(bin_dir)
+
+      write_script(bin_dir, "gallery-dl", "#!/bin/sh\nexit 1")
+
+      write_script(bin_dir, "yt-dlp", """
+      #!/bin/sh
+      for arg in "$@"; do
+        if [ "$prev" = "-o" ]; then printf video > "$arg"; fi
+        prev="$arg"
+      done
+      """)
+
+      set_gallery_env(bin_dir, true)
+
+      assert {:ok, {:downloaded, file_path}} =
+               Lolek.Downloader.download("https://example.com/post", {:new_file, tmp_dir})
+
+      assert Path.basename(file_path) == "downloaded.mp4"
+    end)
+  end
+
+  @tag :tmp_dir
+  test "skips gallery-dl when gallery download is disabled", %{tmp_dir: tmp_dir} do
+    preserve_download_env(fn ->
+      bin_dir = Path.join(tmp_dir, "bin")
+      File.mkdir_p!(bin_dir)
+
+      write_script(bin_dir, "gallery-dl", """
+      #!/bin/sh
+      echo "should not be called" >&2
+      exit 99
+      """)
+
+      write_script(bin_dir, "yt-dlp", """
+      #!/bin/sh
+      for arg in "$@"; do
+        if [ "$prev" = "-o" ]; then printf video > "$arg"; fi
+        prev="$arg"
+      done
+      """)
+
+      set_gallery_env(bin_dir, false)
+
+      assert {:ok, {:downloaded, _file_path}} =
+               Lolek.Downloader.download("https://example.com/post", {:new_file, tmp_dir})
+    end)
+  end
+
+  defp set_gallery_env(bin_dir, gallery_enabled) do
+    Application.put_env(:lolek, :gallery_download_enabled, gallery_enabled)
+    Application.put_env(:lolek, :max_file_size_to_send_to_telegram, 100_000)
+    Application.put_env(:lolek, :max_download_tries, 1)
+    Application.put_env(:lolek, :start_download_pause, 0)
+    Application.put_env(:lolek, :max_download_pause, 0)
+    Application.put_env(:lolek, :download_command_timeout_seconds, 5)
+    Application.put_env(:lolek, :max_file_size_to_compress, 12_345)
+    System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
+    {:ok, _apps} = Application.ensure_all_started(:erlexec)
+  end
+
+  defp write_script(bin_dir, name, content) do
+    path = Path.join(bin_dir, name)
+    File.write!(path, content)
+    File.chmod!(path, 0o755)
   end
 
   defp preserve_download_env(fun) do

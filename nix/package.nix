@@ -43,12 +43,14 @@ let
       curl ? pkgs.curl,
       ffmpeg-full ? pkgs.ffmpeg-full,
       yt-dlp ? pkgs.yt-dlp,
+      gallery-dl ? pkgs.gallery-dl,
     }:
     let
       runtimePath = lib.makeBinPath [
         curl
         ffmpeg-full
         yt-dlp
+        gallery-dl
       ];
     in
     mixRelease {

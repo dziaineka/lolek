@@ -56,6 +56,7 @@ telegram_local_file_uploads = parse_bool.("LOLEK_TELEGRAM_LOCAL_FILE_UPLOADS", "
 metrics_enabled = parse_bool.("LOLEK_METRICS_ENABLED", "false")
 post_source_caption = parse_bool.("LOLEK_POST_SOURCE_CAPTION", "false")
 post_requester_caption = parse_bool.("LOLEK_POST_REQUESTER_CAPTION", "false")
+gallery_download_enabled = parse_bool.("LOLEK_GALLERY_DOWNLOAD_ENABLED", "false")
 
 metrics_port = parse_pos_int.("LOLEK_METRICS_PORT", "9568")
 max_download_dir_size = parse_non_neg_int.("LOLEK_MAX_DOWNLOAD_DIR_SIZE", "5368709120")
@@ -114,6 +115,7 @@ config :lolek, :metrics_listen_address, metrics_listen_address
 config :lolek, :metrics_port, metrics_port
 config :lolek, :post_source_caption, post_source_caption
 config :lolek, :post_requester_caption, post_requester_caption
+config :lolek, :gallery_download_enabled, gallery_download_enabled
 config :lolek, :download_path, download_path
 config :lolek, :max_download_dir_size, max_download_dir_size
 config :lolek, :max_file_size_to_send_to_telegram, max_file_size_to_send_to_telegram

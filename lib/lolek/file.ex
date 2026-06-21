@@ -7,13 +7,19 @@ defmodule Lolek.File do
   @ready_to_telegram "ready_to_telegram"
   @compressed_name "compressed.mp4"
   @downloaded_name "downloaded"
+  @gallery_subdir "gallery"
+  @gallery_manifest "gallery_manifest.json"
 
   @type file_state ::
           {:ready_to_telegram, String.t()}
+          | {:ready_to_telegram_gallery, [{tg_file_id :: String.t(), ext :: String.t()}]}
           | {:compressed, String.t()}
           | {:downloaded, String.t()}
+          | {:downloaded_gallery, gallery_dir :: String.t(), files :: [String.t()]}
           | {:new_file, String.t()}
           | {:sent_to_telegram_at_first, file_path :: String.t(), tg_file_id :: String.t()}
+          | {:sent_gallery_to_telegram_at_first, gallery_dir :: String.t(),
+             [{ext :: String.t(), tg_file_id :: String.t()}]}
 
   @spec get_video_width_and_height(String.t()) :: :error | {:ok, {integer(), integer()}}
   def get_video_width_and_height(file_path) do
@@ -145,6 +151,23 @@ defmodule Lolek.File do
     end
   end
 
+  def move_to_ready_to_telegram({:sent_gallery_to_telegram_at_first, gallery_dir, entries}) do
+    ready_path = gallery_dir |> Path.dirname() |> Path.join(@ready_to_telegram)
+    manifest_path = Path.join(ready_path, @gallery_manifest)
+
+    manifest =
+      Enum.map(entries, fn {ext, file_id} ->
+        %{"file_id" => file_id, "ext" => ext}
+      end)
+
+    with :ok <- File.mkdir_p(ready_path) do
+      case File.write(manifest_path, Jason.encode!(manifest)) do
+        :ok -> :ok
+        {:error, reason} -> {:error, {:gallery_manifest_write, reason}}
+      end
+    end
+  end
+
   def move_to_ready_to_telegram(_another_file_state) do
     :ok
   end
@@ -160,7 +183,8 @@ defmodule Lolek.File do
   def get_file_state(folder_path) do
     with :not_ready <- check_if_ready_to_tg(folder_path),
          :not_compressed <- check_if_compressed(folder_path),
-         :not_downloaded <- check_if_downloaded(folder_path) do
+         :not_downloaded <- check_if_downloaded(folder_path),
+         :not_gallery <- check_if_gallery(folder_path) do
       {:ok, {:new_file, folder_path}}
     else
       {:exists, state} ->
@@ -171,7 +195,16 @@ defmodule Lolek.File do
   @spec check_if_ready_to_tg(String.t()) :: :not_ready | {:exists, Lolek.File.file_state()}
   defp check_if_ready_to_tg(folder_path) do
     ready_to_telegram_path = Path.join(folder_path, @ready_to_telegram)
+    manifest_path = Path.join(ready_to_telegram_path, @gallery_manifest)
 
+    case read_gallery_manifest(manifest_path) do
+      {:ok, [_ | _] = entries} -> {:exists, {:ready_to_telegram_gallery, entries}}
+      _ -> check_single_file_cache(ready_to_telegram_path)
+    end
+  end
+
+  @spec check_single_file_cache(String.t()) :: :not_ready | {:exists, Lolek.File.file_state()}
+  defp check_single_file_cache(ready_to_telegram_path) do
     case File.ls(ready_to_telegram_path) do
       {:ok, file_names} ->
         Enum.find_value(file_names, :not_ready, fn file_name ->
@@ -181,6 +214,34 @@ defmodule Lolek.File do
 
       _ ->
         :not_ready
+    end
+  end
+
+  @spec read_gallery_manifest(String.t()) ::
+          {:ok, [{String.t(), String.t()}]} | {:error, term()}
+  defp read_gallery_manifest(manifest_path) do
+    with {:ok, content} <- File.read(manifest_path),
+         {:ok, entries} when is_list(entries) <- Jason.decode(content) do
+      parsed =
+        Enum.flat_map(entries, fn
+          %{"file_id" => fid, "ext" => ext} when is_binary(fid) and is_binary(ext) ->
+            [{fid, ext}]
+
+          _ ->
+            []
+        end)
+
+      {:ok, parsed}
+    end
+  end
+
+  @spec check_if_gallery(String.t()) :: :not_gallery | {:exists, Lolek.File.file_state()}
+  defp check_if_gallery(folder_path) do
+    gallery_dir = Path.join(folder_path, @gallery_subdir)
+
+    case Lolek.GalleryDownloader.list_media_files(gallery_dir) do
+      [] -> :not_gallery
+      files -> {:exists, {:downloaded_gallery, gallery_dir, files}}
     end
   end
 

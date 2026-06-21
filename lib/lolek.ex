@@ -6,6 +6,8 @@ defmodule Lolek do
   @max_caption_length 1024
   @caption_separator "\n\n"
   @max_upload_file_name_length 180
+  @max_media_group_size 10
+  @gif_extensions ~w(.gif)
 
   require Logger
 
@@ -30,6 +32,155 @@ defmodule Lolek do
       ".mp4" -> send_video_file(chat_id, file_path, context)
       _ -> send_document_file(chat_id, file_path, context)
     end
+  end
+
+  def send_file(chat_id, {:downloaded_gallery, gallery_dir, [file_path]}, context) do
+    send_single_gallery_file(chat_id, gallery_dir, file_path, context)
+  end
+
+  def send_file(chat_id, {:downloaded_gallery, gallery_dir, files}, context) do
+    send_gallery_files(chat_id, gallery_dir, files, context)
+  end
+
+  def send_file(chat_id, {:ready_to_telegram_gallery, entries}, context) do
+    send_cached_gallery(chat_id, entries, context)
+  end
+
+  @spec send_single_gallery_file(integer(), String.t(), String.t(), keyword()) ::
+          {:ok, Lolek.File.file_state()} | {:error, term()}
+  defp send_single_gallery_file(chat_id, gallery_dir, file_path, context) do
+    options = add_caption([], context)
+    ext = file_path |> Path.extname() |> String.downcase()
+
+    upload =
+      {:file_content, File.stream!(file_path, @upload_chunk_size, []), Path.basename(file_path)}
+
+    case send_gallery_single_upload(chat_id, ext, upload, options) do
+      {:ok, response} ->
+        case extract_single_file_id(response) do
+          {:ok, file_id} ->
+            {:ok, {:sent_gallery_to_telegram_at_first, gallery_dir, [{ext, file_id}]}}
+
+          :error ->
+            {:error, {:unexpected_telegram_response, response}}
+        end
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
+  @spec send_gallery_single_upload(integer(), String.t(), term(), keyword()) ::
+          {:ok, term()} | {:error, term()}
+  defp send_gallery_single_upload(chat_id, ext, upload, options) when ext in @gif_extensions do
+    call_telegram(fn -> Lolek.Telegram.send_animation(chat_id, upload, options) end)
+  end
+
+  defp send_gallery_single_upload(chat_id, _ext, upload, options) do
+    call_telegram(fn -> Lolek.Telegram.send_photo(chat_id, upload, options) end)
+  end
+
+  @spec send_gallery_files(integer(), String.t(), [String.t()], keyword()) ::
+          {:ok, Lolek.File.file_state()} | {:error, term()}
+  defp send_gallery_files(chat_id, gallery_dir, files, context) do
+    files
+    |> Enum.chunk_every(@max_media_group_size)
+    |> Enum.with_index()
+    |> Enum.reduce_while({:ok, []}, fn {batch, idx}, {:ok, acc_entries} ->
+      cap = if idx == 0, do: caption(context), else: nil
+      media = Enum.map(batch, &file_to_input_media(&1, cap))
+
+      case send_media_group_batch(chat_id, media) do
+        {:ok, messages} when is_list(messages) ->
+          entries = extract_media_group_entries(batch, messages)
+          {:cont, {:ok, acc_entries ++ entries}}
+
+        {:ok, other} ->
+          {:halt, {:error, {:unexpected_telegram_response, other}}}
+
+        {:error, _} = error ->
+          {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, entries} -> {:ok, {:sent_gallery_to_telegram_at_first, gallery_dir, entries}}
+      error -> error
+    end
+  end
+
+  @spec send_media_group_batch(integer(), [term()]) :: {:ok, term()} | {:error, term()}
+  defp send_media_group_batch(chat_id, media) do
+    call_telegram(fn -> Lolek.Telegram.send_media_group(chat_id, media, []) end)
+  end
+
+  @spec send_cached_gallery(integer(), [{String.t(), String.t()}], keyword()) ::
+          {:ok, Lolek.File.file_state()} | {:error, term()}
+  defp send_cached_gallery(chat_id, entries, context) do
+    entries
+    |> Enum.chunk_every(@max_media_group_size)
+    |> Enum.with_index()
+    |> Enum.each(fn {batch, idx} ->
+      cap = if idx == 0, do: caption(context), else: nil
+
+      media =
+        Enum.map(batch, fn {file_id, ext} ->
+          cached_file_to_input_media(file_id, ext, cap)
+        end)
+
+      call_telegram(fn -> Lolek.Telegram.send_media_group(chat_id, media, []) end)
+    end)
+
+    {:ok, {:ready_to_telegram_gallery, entries}}
+  end
+
+  @spec file_to_input_media(String.t(), String.t() | nil) :: term()
+  defp file_to_input_media(file_path, caption) do
+    ext = file_path |> Path.extname() |> String.downcase()
+
+    upload =
+      {:file_content, File.stream!(file_path, @upload_chunk_size, []), Path.basename(file_path)}
+
+    if ext in @gif_extensions do
+      %ExGram.Model.InputMediaDocument{type: "document", media: upload, caption: caption}
+    else
+      %ExGram.Model.InputMediaPhoto{type: "photo", media: upload, caption: caption}
+    end
+  end
+
+  @spec cached_file_to_input_media(String.t(), String.t(), String.t() | nil) :: term()
+  defp cached_file_to_input_media(file_id, ext, caption) do
+    if ext in @gif_extensions do
+      %ExGram.Model.InputMediaDocument{type: "document", media: file_id, caption: caption}
+    else
+      %ExGram.Model.InputMediaPhoto{type: "photo", media: file_id, caption: caption}
+    end
+  end
+
+  @spec extract_single_file_id(term()) :: {:ok, String.t()} | :error
+  defp extract_single_file_id(%ExGram.Model.Message{photo: [_ | _] = sizes}) do
+    {:ok, List.last(sizes).file_id}
+  end
+
+  defp extract_single_file_id(%ExGram.Model.Message{
+         animation: %ExGram.Model.Animation{file_id: fid}
+       }) do
+    {:ok, fid}
+  end
+
+  defp extract_single_file_id(_), do: :error
+
+  @spec extract_media_group_entries([String.t()], [term()]) :: [{String.t(), String.t()}]
+  defp extract_media_group_entries(file_paths, messages) do
+    file_paths
+    |> Enum.zip(messages)
+    |> Enum.flat_map(fn {file_path, message} ->
+      ext = file_path |> Path.extname() |> String.downcase()
+
+      case extract_single_file_id(message) do
+        {:ok, fid} -> [{ext, fid}]
+        :error -> []
+      end
+    end)
   end
 
   @spec send_video_file(integer(), String.t(), keyword()) ::

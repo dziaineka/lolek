@@ -4,6 +4,7 @@ defmodule Lolek.Downloader do
   """
   require Logger
   @downloaded_name "downloaded.mp4"
+  @gallery_subdir "gallery"
   @threads_hosts ["threads.com", "www.threads.com", "threads.net", "www.threads.net"]
 
   @type formats_probe :: :not_probed | :has_formats | :no_formats | :inconclusive
@@ -12,14 +13,24 @@ defmodule Lolek.Downloader do
   @spec download(String.t(), Lolek.File.file_state()) ::
           {:ok, Lolek.File.file_state()} | {:error, download_error()}
   def download(url, {:new_file, output_path}) do
-    max_tries = Application.fetch_env!(:lolek, :max_download_tries)
-    pause = Application.fetch_env!(:lolek, :start_download_pause)
-    max_pause = Application.fetch_env!(:lolek, :max_download_pause)
-    download(url, output_path, 1, max_tries, pause, max_pause, :not_probed)
+    case try_gallery_download(url, output_path) do
+      {:ok, _} = success -> success
+      {:error, _} -> download_with_ytdlp(url, output_path)
+    end
   end
 
   def download(_url, another_file_state) do
     {:ok, another_file_state}
+  end
+
+  @spec download_with_ytdlp(String.t(), String.t()) ::
+          {:ok, Lolek.File.file_state()} | {:error, download_error()}
+  defp download_with_ytdlp(url, output_path) do
+    max_tries = Application.fetch_env!(:lolek, :max_download_tries)
+    pause = Application.fetch_env!(:lolek, :start_download_pause)
+    max_pause = Application.fetch_env!(:lolek, :max_download_pause)
+
+    download(url, output_path, 1, max_tries, pause, max_pause, :not_probed)
   end
 
   @spec download(
@@ -65,6 +76,57 @@ defmodule Lolek.Downloader do
         else
           {:error, download_error(log_url, error_reason)}
         end
+    end
+  end
+
+  @spec try_gallery_download(String.t(), String.t()) ::
+          {:ok, Lolek.File.file_state()} | {:error, term()}
+  defp try_gallery_download(url, output_path) do
+    if Application.fetch_env!(:lolek, :gallery_download_enabled) do
+      gallery_dir = Path.join(output_path, @gallery_subdir)
+      log_url = Lolek.Url.normalize_for_log(url)
+
+      case Lolek.GalleryDownloader.download(url, gallery_dir) do
+        {:ok, [_ | _] = files} ->
+          Logger.info("Gallery download found #{length(files)} file(s) for url: #{log_url}")
+          route_gallery_files(files, gallery_dir, output_path)
+
+        {:ok, []} ->
+          Logger.info("Gallery download found no files for url: #{log_url}")
+          {:error, :no_gallery_files}
+
+        {:error, reason} ->
+          Logger.warning(
+            "Gallery download failed for url: #{log_url}; reason: #{inspect(reason)}"
+          )
+
+          {:error, {:gallery_dl_error, reason}}
+      end
+    else
+      {:error, :gallery_disabled}
+    end
+  end
+
+  @spec route_gallery_files([String.t()], String.t(), String.t()) ::
+          {:ok, Lolek.File.file_state()} | {:error, term()}
+  defp route_gallery_files(files, gallery_dir, output_path) do
+    {videos, images} = Enum.split_with(files, &Lolek.GalleryDownloader.video_file?/1)
+    mp4_videos = Enum.filter(videos, fn p -> Path.extname(p) |> String.downcase() == ".mp4" end)
+
+    cond do
+      images != [] ->
+        {:ok, {:downloaded_gallery, gallery_dir, images}}
+
+      match?([_], mp4_videos) ->
+        dest = Path.join(output_path, @downloaded_name)
+
+        case File.rename(hd(mp4_videos), dest) do
+          :ok -> {:ok, {:downloaded, dest}}
+          {:error, reason} -> {:error, {:rename_gallery_video, reason}}
+        end
+
+      true ->
+        {:error, :no_usable_gallery_files}
     end
   end
 

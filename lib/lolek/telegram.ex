@@ -5,6 +5,9 @@ defmodule Lolek.Telegram do
 
   @callback send_video(integer(), term(), keyword()) :: {:ok, term()} | {:error, term()}
   @callback send_document(integer(), term(), keyword()) :: {:ok, term()} | {:error, term()}
+  @callback send_photo(integer(), term(), keyword()) :: {:ok, term()} | {:error, term()}
+  @callback send_animation(integer(), term(), keyword()) :: {:ok, term()} | {:error, term()}
+  @callback send_media_group(integer(), [term()], keyword()) :: {:ok, term()} | {:error, term()}
   @callback edit_message_caption(integer(), integer(), keyword()) ::
               {:ok, term()} | {:error, term()}
 
@@ -18,6 +21,24 @@ defmodule Lolek.Telegram do
   @spec send_document(integer(), term(), keyword()) :: {:ok, term()} | {:error, term()}
   def send_document(chat_id, document, options) do
     client().send_document(chat_id, document, options)
+  end
+
+  @doc "Sends a photo to the given chat."
+  @spec send_photo(integer(), term(), keyword()) :: {:ok, term()} | {:error, term()}
+  def send_photo(chat_id, photo, options) do
+    client().send_photo(chat_id, photo, options)
+  end
+
+  @doc "Sends an animation (GIF) to the given chat."
+  @spec send_animation(integer(), term(), keyword()) :: {:ok, term()} | {:error, term()}
+  def send_animation(chat_id, animation, options) do
+    client().send_animation(chat_id, animation, options)
+  end
+
+  @doc "Sends a media group (album) to the given chat."
+  @spec send_media_group(integer(), [term()], keyword()) :: {:ok, term()} | {:error, term()}
+  def send_media_group(chat_id, media, options) do
+    client().send_media_group(chat_id, media, options)
   end
 
   @doc "Edits the caption of a previously sent message."

@@ -69,6 +69,18 @@ defmodule Lolek.SourceMetadata do
     end
   end
 
+  @spec cache_gallery_caption(String.t(), String.t()) :: :ok
+  def cache_gallery_caption(folder_path, raw_caption) do
+    metadata = sanitize_metadata(%{caption: raw_caption, title: nil})
+
+    _ =
+      with :ok <- File.mkdir_p(folder_path) do
+        File.write(metadata_file_path(folder_path), Jason.encode!(metadata))
+      end
+
+    :ok
+  end
+
   @spec fetch_threads_metadata(String.t()) :: {:ok, t()} | {:error, term()}
   defp fetch_threads_metadata(url) do
     with {:ok, caption} <- Lolek.ThreadsDownloader.caption(url) do

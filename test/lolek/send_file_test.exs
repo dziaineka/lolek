@@ -19,6 +19,24 @@ defmodule Lolek.SendFileTest do
     end
 
     @impl true
+    def send_photo(chat_id, photo, options) do
+      record_call({:send_photo, chat_id, photo, options})
+      Application.fetch_env!(:lolek, :telegram_test_result)
+    end
+
+    @impl true
+    def send_animation(chat_id, animation, options) do
+      record_call({:send_animation, chat_id, animation, options})
+      Application.fetch_env!(:lolek, :telegram_test_result)
+    end
+
+    @impl true
+    def send_media_group(chat_id, media, options) do
+      record_call({:send_media_group, chat_id, media, options})
+      Application.fetch_env!(:lolek, :telegram_test_result)
+    end
+
+    @impl true
     def edit_message_caption(chat_id, message_id, options) do
       record_call({:edit_message_caption, chat_id, message_id, options})
       Application.fetch_env!(:lolek, :telegram_test_result)
@@ -368,6 +386,21 @@ defmodule Lolek.SendFileTest.RaisingTelegramClient do
 
   @impl true
   def send_document(_chat_id, _document, _options) do
+    raise Application.fetch_env!(:lolek, :telegram_test_error)
+  end
+
+  @impl true
+  def send_photo(_chat_id, _photo, _options) do
+    raise Application.fetch_env!(:lolek, :telegram_test_error)
+  end
+
+  @impl true
+  def send_animation(_chat_id, _animation, _options) do
+    raise Application.fetch_env!(:lolek, :telegram_test_error)
+  end
+
+  @impl true
+  def send_media_group(_chat_id, _media, _options) do
     raise Application.fetch_env!(:lolek, :telegram_test_error)
   end
 

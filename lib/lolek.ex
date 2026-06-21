@@ -87,8 +87,7 @@ defmodule Lolek do
     |> Enum.chunk_every(@max_media_group_size)
     |> Enum.with_index()
     |> Enum.reduce_while({:ok, []}, fn {batch, idx}, {:ok, acc_entries} ->
-      cap = if idx == 0, do: caption(context), else: nil
-      media = Enum.map(batch, &file_to_input_media(&1, cap))
+      media = build_gallery_media(batch, idx, context)
 
       case send_media_group_batch(chat_id, media) do
         {:ok, messages} when is_list(messages) ->
@@ -120,13 +119,7 @@ defmodule Lolek do
     |> Enum.chunk_every(@max_media_group_size)
     |> Enum.with_index()
     |> Enum.each(fn {batch, idx} ->
-      cap = if idx == 0, do: caption(context), else: nil
-
-      media =
-        Enum.map(batch, fn {file_id, ext} ->
-          cached_file_to_input_media(file_id, ext, cap)
-        end)
-
+      media = build_cached_gallery_media(batch, idx, context)
       call_telegram(fn -> Lolek.Telegram.send_media_group(chat_id, media, []) end)
     end)
 
@@ -154,6 +147,27 @@ defmodule Lolek do
     else
       %ExGram.Model.InputMediaPhoto{type: "photo", media: file_id, caption: caption}
     end
+  end
+
+  @spec build_gallery_media([String.t()], non_neg_integer(), keyword()) :: [term()]
+  defp build_gallery_media(batch, batch_idx, context) do
+    batch
+    |> Enum.with_index()
+    |> Enum.map(fn {file, file_idx} ->
+      cap = if batch_idx == 0 and file_idx == 0, do: caption(context), else: nil
+      file_to_input_media(file, cap)
+    end)
+  end
+
+  @spec build_cached_gallery_media([{String.t(), String.t()}], non_neg_integer(), keyword()) ::
+          [term()]
+  defp build_cached_gallery_media(batch, batch_idx, context) do
+    batch
+    |> Enum.with_index()
+    |> Enum.map(fn {{file_id, ext}, file_idx} ->
+      cap = if batch_idx == 0 and file_idx == 0, do: caption(context), else: nil
+      cached_file_to_input_media(file_id, ext, cap)
+    end)
   end
 
   @spec extract_single_file_id(term()) :: {:ok, String.t()} | :error

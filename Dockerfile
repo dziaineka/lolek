@@ -10,8 +10,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && rm -rf /var/lib/apt/lists/*
 
 # yt-dlp source (https://github.com/yt-dlp/yt-dlp)
-ARG YT_DLP_VERSION=2026.03.17
-ARG YT_DLP_SHA256=3bda0968a01cde70d26720653003b28553c71be14dcb2e5f4c24e9921fdad745
+ARG YT_DLP_VERSION=2026.06.09
+ARG YT_DLP_SHA256=e5d57466682cfa9d61e9cf7c8a4f09b00f4a62af37d3bbdc4bcffdf63615feac
 RUN wget -O yt-dlp https://github.com/yt-dlp/yt-dlp/releases/download/${YT_DLP_VERSION}/yt-dlp \
 && echo "${YT_DLP_SHA256}  yt-dlp" | sha256sum -c
 

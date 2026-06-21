@@ -33,7 +33,7 @@ let
     inherit root;
     fileset = sourceFiles [ (root + "/rel") ];
   };
-  version = "4.1.1";
+  version = "5.0.0";
   testSrc = lib.fileset.toSource {
     inherit root;
     fileset = sourceFiles [ (root + "/test") ];

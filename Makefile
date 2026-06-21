@@ -1,5 +1,5 @@
 start_compose:
-	docker-compose up --build
+	docker compose up --build
 
 NAME   := skaborik/lolek_bot
 TAG    := $$(git describe --tags --abbrev=0)

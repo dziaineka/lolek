@@ -110,6 +110,112 @@ defmodule Lolek.ThreadsDownloaderTest do
              requests
   end
 
+  test "extracts all media items from carousel with images only" do
+    body =
+      Jason.encode!(%{
+        "data" => %{
+          "carousel_media" => [
+            %{
+              "image_versions2" => %{
+                "candidates" => [%{"url" => "https://cdn.example.com/1.jpg"}]
+              }
+            },
+            %{
+              "image_versions2" => %{
+                "candidates" => [%{"url" => "https://cdn.example.com/2.jpg"}]
+              }
+            }
+          ]
+        }
+      })
+
+    assert {:ok, items} = Lolek.ThreadsDownloader.extract_all_media_items(body)
+    assert length(items) == 2
+    assert Enum.all?(items, &(&1.ext == ".jpg"))
+
+    assert Enum.map(items, & &1.url) == [
+             "https://cdn.example.com/1.jpg",
+             "https://cdn.example.com/2.jpg"
+           ]
+  end
+
+  test "extracts all media items from carousel with mixed video and image" do
+    body =
+      Jason.encode!(%{
+        "data" => %{
+          "carousel_media" => [
+            %{"video_versions" => [%{"url" => "https://cdn.example.com/1.mp4"}]},
+            %{
+              "image_versions2" => %{
+                "candidates" => [%{"url" => "https://cdn.example.com/2.jpg"}]
+              }
+            }
+          ]
+        }
+      })
+
+    assert {:ok, [%{ext: ".mp4"}, %{ext: ".jpg"}]} =
+             Lolek.ThreadsDownloader.extract_all_media_items(body)
+  end
+
+  test "video takes priority over image when carousel item has both" do
+    body =
+      Jason.encode!(%{
+        "data" => %{
+          "carousel_media" => [
+            %{
+              "video_versions" => [%{"url" => "https://cdn.example.com/1.mp4"}],
+              "image_versions2" => %{
+                "candidates" => [%{"url" => "https://cdn.example.com/thumb.jpg"}]
+              }
+            }
+          ]
+        }
+      })
+
+    assert {:ok, [%{ext: ".mp4", url: "https://cdn.example.com/1.mp4"}]} =
+             Lolek.ThreadsDownloader.extract_all_media_items(body)
+  end
+
+  test "extracts single image from post without carousel" do
+    body =
+      Jason.encode!(%{
+        "data" => %{
+          "post" => %{
+            "image_versions2" => %{
+              "candidates" => [%{"url" => "https://cdn.example.com/photo.jpg"}]
+            }
+          }
+        }
+      })
+
+    assert {:ok, [%{ext: ".jpg", url: "https://cdn.example.com/photo.jpg"}]} =
+             Lolek.ThreadsDownloader.extract_all_media_items(body)
+  end
+
+  test "extracts single video from post without carousel" do
+    body =
+      Jason.encode!(%{
+        "data" => %{
+          "post" => %{
+            "video_versions" => [%{"url" => "https://cdn.example.com/video.mp4"}]
+          }
+        }
+      })
+
+    assert {:ok, [%{ext: ".mp4", url: "https://cdn.example.com/video.mp4"}]} =
+             Lolek.ThreadsDownloader.extract_all_media_items(body)
+  end
+
+  test "returns empty list when no media items in response" do
+    body = Jason.encode!(%{"data" => %{"post" => %{"pk" => "123"}}})
+    assert {:ok, []} = Lolek.ThreadsDownloader.extract_all_media_items(body)
+  end
+
+  test "returns error for malformed json in extract_all_media_items" do
+    assert {:error, _} = Lolek.ThreadsDownloader.extract_all_media_items("{bad json}")
+  end
+
   test "normalizes media route back to canonical post url" do
     assert {:ok, "https://www.threads.com/@helga_bri/post/DXum65XjCcD"} =
              Lolek.ThreadsDownloader.normalize_url(

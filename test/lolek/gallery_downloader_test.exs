@@ -106,7 +106,7 @@ defmodule Lolek.GalleryDownloaderTest do
 
   describe "list_media_files/1" do
     @tag :tmp_dir
-    test "returns only image files, not videos", %{tmp_dir: tmp_dir} do
+    test "returns both image and video files", %{tmp_dir: tmp_dir} do
       preserve_env(fn ->
         Application.put_env(:lolek, :max_file_size_to_send_to_telegram, 1000)
 
@@ -119,8 +119,11 @@ defmodule Lolek.GalleryDownloaderTest do
         end
 
         files = Lolek.GalleryDownloader.list_media_files(tmp_dir)
-        assert length(files) == 5
-        assert Enum.all?(files, fn p -> Path.extname(p) in ~w(.jpg .png .gif .webp .avif) end)
+        assert length(files) == 10
+
+        assert Enum.all?(files, fn p ->
+                 Path.extname(p) in ~w(.jpg .png .gif .webp .avif .mp4 .mkv .webm .mov .m4v)
+               end)
       end)
     end
 

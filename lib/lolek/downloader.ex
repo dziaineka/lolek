@@ -86,7 +86,7 @@ defmodule Lolek.Downloader do
       gallery_dir = Path.join(output_path, @gallery_subdir)
       log_url = Lolek.Url.normalize_for_log(url)
 
-      case Lolek.GalleryDownloader.download(url, gallery_dir) do
+      case do_gallery_download(url, gallery_dir) do
         {:ok, [_ | _] = files} ->
           Logger.info("Gallery download found #{length(files)} file(s) for url: #{log_url}")
           route_gallery_files(files, gallery_dir, output_path)
@@ -107,6 +107,14 @@ defmodule Lolek.Downloader do
     end
   end
 
+  @spec do_gallery_download(String.t(), String.t()) :: {:ok, [String.t()]} | {:error, term()}
+  defp do_gallery_download(url, gallery_dir) do
+    case downloader_module(url) do
+      Lolek.ThreadsDownloader -> Lolek.ThreadsDownloader.download_gallery(url, gallery_dir)
+      :yt_dlp -> Lolek.GalleryDownloader.download(url, gallery_dir)
+    end
+  end
+
   @spec route_gallery_files([String.t()], String.t(), String.t()) ::
           {:ok, Lolek.File.file_state()} | {:error, term()}
   defp route_gallery_files(files, gallery_dir, output_path) do
@@ -115,7 +123,7 @@ defmodule Lolek.Downloader do
 
     cond do
       images != [] ->
-        {:ok, {:downloaded_gallery, gallery_dir, images}}
+        {:ok, {:downloaded_gallery, gallery_dir, files}}
 
       match?([_], mp4_videos) ->
         dest = Path.join(output_path, @downloaded_name)

@@ -43,7 +43,9 @@ defmodule Lolek.GalleryDownloader do
 
     dir
     |> collect_files()
-    |> Enum.filter(fn path -> image_file?(path) and within_size_limit?(path, max_size) end)
+    |> Enum.filter(fn path ->
+      (image_file?(path) or video_file?(path)) and within_size_limit?(path, max_size)
+    end)
     |> Enum.sort()
   end
 

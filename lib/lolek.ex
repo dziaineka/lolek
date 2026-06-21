@@ -133,19 +133,29 @@ defmodule Lolek do
     upload =
       {:file_content, File.stream!(file_path, @upload_chunk_size, []), Path.basename(file_path)}
 
-    if ext in @gif_extensions do
-      %ExGram.Model.InputMediaDocument{type: "document", media: upload, caption: caption}
-    else
-      %ExGram.Model.InputMediaPhoto{type: "photo", media: upload, caption: caption}
+    cond do
+      ext in @gif_extensions ->
+        %ExGram.Model.InputMediaDocument{type: "document", media: upload, caption: caption}
+
+      Lolek.GalleryDownloader.video_file?(file_path) ->
+        %ExGram.Model.InputMediaVideo{type: "video", media: upload, caption: caption}
+
+      true ->
+        %ExGram.Model.InputMediaPhoto{type: "photo", media: upload, caption: caption}
     end
   end
 
   @spec cached_file_to_input_media(String.t(), String.t(), String.t() | nil) :: term()
   defp cached_file_to_input_media(file_id, ext, caption) do
-    if ext in @gif_extensions do
-      %ExGram.Model.InputMediaDocument{type: "document", media: file_id, caption: caption}
-    else
-      %ExGram.Model.InputMediaPhoto{type: "photo", media: file_id, caption: caption}
+    cond do
+      ext in @gif_extensions ->
+        %ExGram.Model.InputMediaDocument{type: "document", media: file_id, caption: caption}
+
+      Lolek.GalleryDownloader.video_file?("x#{ext}") ->
+        %ExGram.Model.InputMediaVideo{type: "video", media: file_id, caption: caption}
+
+      true ->
+        %ExGram.Model.InputMediaPhoto{type: "photo", media: file_id, caption: caption}
     end
   end
 
@@ -178,6 +188,10 @@ defmodule Lolek do
   defp extract_single_file_id(%ExGram.Model.Message{
          animation: %ExGram.Model.Animation{file_id: fid}
        }) do
+    {:ok, fid}
+  end
+
+  defp extract_single_file_id(%ExGram.Model.Message{video: %ExGram.Model.Video{file_id: fid}}) do
     {:ok, fid}
   end
 

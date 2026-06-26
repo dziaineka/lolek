@@ -1,5 +1,5 @@
 #### Builder
-FROM hexpm/elixir:1.20.0-erlang-29.0.1-debian-trixie-20260518-slim AS buildcontainer
+FROM hexpm/elixir:1.20.2-erlang-29.0.2-debian-trixie-20260623-slim AS buildcontainer
 
 RUN mkdir /ytdlp
 WORKDIR /ytdlp
@@ -32,7 +32,7 @@ COPY lib ./lib
 RUN MIX_OS_DEPS_COMPILE_PARTITION_COUNT=$(($(nproc) / 2)) HEX_HTTP_TIMEOUT=120 MIX_ENV=prod mix release
 
 # Main Docker Image
-FROM debian:trixie-20260518-slim
+FROM debian:trixie-20260623-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV SHELL=/bin/bash

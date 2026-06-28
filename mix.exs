@@ -30,8 +30,7 @@ defmodule Lolek.MixProject do
   defp deps do
     [
       {:ex_gram, "0.67.0"},
-      {:tesla, "1.20.0"},
-      {:hackney, "1.25.0"},
+      {:req, "0.5.18"},
       {:html_entities, "0.5.2"},
       {:jason, "1.4.5"},
       {:erlexec, "2.3.4"},

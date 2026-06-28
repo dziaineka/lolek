@@ -413,28 +413,24 @@ defmodule Lolek.ThreadsDownloader do
   @spec get(String.t(), [{String.t(), String.t()}]) ::
           {:ok, http_response()} | {:error, String.t()}
   defp get(url, headers) do
-    case Tesla.get(client(), url, headers: headers) do
-      {:ok, %Tesla.Env{status: status, body: body, headers: response_headers}}
-      when status in 200..299 ->
-        {:ok, %{status: status, body: to_string(body), headers: response_headers}}
+    all_headers = [{"user-agent", @threads_ua} | headers]
 
-      {:ok, %Tesla.Env{status: status}} ->
+    case Req.get(url, headers: all_headers, max_redirects: 5) do
+      {:ok, %Req.Response{status: status, body: body, headers: response_headers}}
+      when status in 200..299 ->
+        headers_list =
+          Enum.flat_map(response_headers, fn {name, values} ->
+            Enum.map(values, &{name, &1})
+          end)
+
+        {:ok, %{status: status, body: to_string(body), headers: headers_list}}
+
+      {:ok, %Req.Response{status: status}} ->
         {:error, "HTTP GET failed with status #{status}"}
 
-      {:error, reason} ->
-        {:error, format_error(reason)}
+      {:error, exception} ->
+        {:error, format_error(exception)}
     end
-  end
-
-  @spec client() :: Tesla.Client.t()
-  defp client do
-    Tesla.client(
-      [
-        {Tesla.Middleware.FollowRedirects, max_redirects: 5},
-        {Tesla.Middleware.Headers, [{"user-agent", @threads_ua}]}
-      ],
-      Tesla.Adapter.Hackney
-    )
   end
 
   @spec normalize_host(String.t()) :: String.t()
@@ -622,7 +618,7 @@ defmodule Lolek.ThreadsDownloader do
   end
 
   @spec format_error(term()) :: String.t()
-  defp format_error(reason) when is_binary(reason), do: reason
+  defp format_error(reason) when is_exception(reason), do: Exception.message(reason)
   defp format_error(reason), do: inspect(reason)
 
   @spec validate_graphql_response(String.t()) :: :ok | {:error, String.t()}

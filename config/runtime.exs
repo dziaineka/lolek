@@ -112,12 +112,8 @@ config :logger, level: :info
 
 config :ex_gram,
   token: bot_token,
-  base_url: telegram_base_url
-
-config :ex_gram, Tesla.Middleware.Logger,
-  format: {Lolek.TelegramLog, :format_request},
-  level: &Lolek.TelegramLog.tesla_log_level/1,
-  debug: false
+  base_url: telegram_base_url,
+  adapter: ExGram.Adapter.Req
 
 config :lolek, :bot_token, bot_token
 config :lolek, :telegram_local_file_uploads, telegram_local_file_uploads

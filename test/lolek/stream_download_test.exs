@@ -2,7 +2,7 @@ defmodule Lolek.StreamDownloadTest do
   use ExUnit.Case, async: true
 
   setup_all do
-    {:ok, _apps} = Application.ensure_all_started(:hackney)
+    {:ok, _apps} = Application.ensure_all_started(:req)
     :ok
   end
 

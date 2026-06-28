@@ -149,20 +149,34 @@ defmodule Lolek.Downloader do
       :yt_dlp ->
         Lolek.Command.run(
           "yt-dlp",
-          [
-            "--format-sort",
-            "+vcodec:h264,+acodec:aac",
-            "--remux-video",
-            "mp4",
-            "--max-filesize",
-            max_download_file_size(),
-            "--no-playlist",
-            "-o",
-            output_file_path,
-            url
-          ],
+          yt_dlp_cookies_args() ++
+            [
+              "--format-sort",
+              "+vcodec:h264,+acodec:aac",
+              "--remux-video",
+              "mp4",
+              "--max-filesize",
+              max_download_file_size(),
+              "--no-playlist",
+              "-o",
+              output_file_path,
+              url
+            ],
           timeout: command_timeout(:download_command_timeout_seconds)
         )
+    end
+  end
+
+  @spec yt_dlp_cookies_args() :: [String.t()]
+  defp yt_dlp_cookies_args do
+    case Application.fetch_env!(:lolek, :yt_dlp_cookies_file) do
+      path when is_binary(path) ->
+        writable = Path.join(System.tmp_dir!(), "yt_dlp_cookies.txt")
+        unless File.exists?(writable), do: File.copy!(path, writable)
+        ["--cookies", writable]
+
+      nil ->
+        []
     end
   end
 
@@ -202,14 +216,15 @@ defmodule Lolek.Downloader do
   defp probe_formats(url) do
     case Lolek.Command.run(
            "yt-dlp",
-           [
-             "--simulate",
-             "--ignore-no-formats-error",
-             "--print",
-             "%(formats)#j",
-             "--no-playlist",
-             url
-           ],
+           yt_dlp_cookies_args() ++
+             [
+               "--simulate",
+               "--ignore-no-formats-error",
+               "--print",
+               "%(formats)#j",
+               "--no-playlist",
+               url
+             ],
            timeout: command_timeout(:download_command_timeout_seconds)
          ) do
       {:ok, output} -> parse_formats_probe(output)

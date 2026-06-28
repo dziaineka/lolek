@@ -92,12 +92,13 @@ defmodule Lolek.SourceMetadata do
   defp fetch_yt_dlp_metadata(url) do
     case Lolek.Command.run(
            "yt-dlp",
-           [
-             "--dump-single-json",
-             "--skip-download",
-             "--no-playlist",
-             url
-           ],
+           yt_dlp_cookies_args() ++
+             [
+               "--dump-single-json",
+               "--skip-download",
+               "--no-playlist",
+               url
+             ],
            timeout: command_timeout(:download_command_timeout_seconds)
          ) do
       {:ok, result} ->
@@ -248,5 +249,18 @@ defmodule Lolek.SourceMetadata do
     :lolek
     |> Application.fetch_env!(config_key)
     |> :timer.seconds()
+  end
+
+  @spec yt_dlp_cookies_args() :: [String.t()]
+  defp yt_dlp_cookies_args do
+    case Application.fetch_env!(:lolek, :yt_dlp_cookies_file) do
+      path when is_binary(path) ->
+        writable = Path.join(System.tmp_dir!(), "yt_dlp_cookies.txt")
+        unless File.exists?(writable), do: File.copy!(path, writable)
+        ["--cookies", writable]
+
+      nil ->
+        []
+    end
   end
 end

@@ -64,6 +64,11 @@ gallery_download_enabled = parse_bool.("LOLEK_GALLERY_DOWNLOAD_ENABLED", "false"
 # in-container path (e.g. /cookies.txt).
 gallery_dl_cookies_file = System.get_env("LOLEK_GALLERY_DL_COOKIES_FILE")
 
+# Optional: path to a Netscape-format cookies.txt file for yt-dlp. Required for Instagram
+# and other sites that restrict access without authentication. Mount the file into the
+# container and set this to its in-container path (e.g. /cookies.txt).
+yt_dlp_cookies_file = System.get_env("LOLEK_YT_DLP_COOKIES_FILE")
+
 # Optional: path to an additional gallery-dl JSON config file. Useful for per-extractor
 # settings such as rate limits, filename templates, or post-processor hooks.
 # Full option reference: https://github.com/mikf/gallery-dl/blob/master/docs/configuration.rst
@@ -124,6 +129,7 @@ config :lolek, :post_source_caption, post_source_caption
 config :lolek, :post_requester_caption, post_requester_caption
 config :lolek, :gallery_download_enabled, gallery_download_enabled
 config :lolek, :gallery_dl_cookies_file, gallery_dl_cookies_file
+config :lolek, :yt_dlp_cookies_file, yt_dlp_cookies_file
 config :lolek, :gallery_dl_config_file, gallery_dl_config_file
 config :lolek, :download_path, download_path
 config :lolek, :max_download_dir_size, max_download_dir_size

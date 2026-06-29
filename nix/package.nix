@@ -63,7 +63,7 @@ let
         inherit version;
         src = root;
         inherit elixir;
-        hash = "sha256-6ew0oL2SqwU8UhbbDNo2eX9ChEuUVv9PhSLtMGjnmFk=";
+        hash = "sha256-gY+bwmqn/6FiKIluWCsDnl8PkaIYS94inTIa0d16fB4=";
       };
       doCheck = true;
       checkPhase = ''

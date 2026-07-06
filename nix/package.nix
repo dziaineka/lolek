@@ -49,6 +49,7 @@ let
       runtimePath = lib.makeBinPath [
         curl
         ffmpeg-full
+        pkgs.getconf
         yt-dlp
         gallery-dl
       ];
@@ -66,6 +67,7 @@ let
         hash = "sha256-gY+bwmqn/6FiKIluWCsDnl8PkaIYS94inTIa0d16fB4=";
       };
       doCheck = true;
+      nativeCheckInputs = [ pkgs.getconf ];
       checkPhase = ''
         runHook preCheck
 

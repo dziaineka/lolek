@@ -5,7 +5,7 @@ defmodule Lolek do
   @upload_chunk_size 64 * 1024
   @max_caption_length 1024
   @caption_separator "\n\n"
-  @max_upload_file_name_length 180
+  @max_upload_file_name_bytes 180
   @max_media_group_size 10
   @gif_extensions ~w(.gif)
 
@@ -340,23 +340,83 @@ defmodule Lolek do
   @spec titled_file_name(String.t(), String.t()) :: String.t()
   defp titled_file_name(file_path, title) do
     extname = Path.extname(file_path)
-    max_title_length = max(@max_upload_file_name_length - String.length(extname), 1)
+    max_file_name_bytes = max_upload_file_name_bytes(file_path)
+    max_title_bytes = max(max_file_name_bytes - byte_size(extname), 0)
 
     title =
       title
       |> sanitize_upload_title()
-      |> String.slice(0, max_title_length)
+      |> strip_trailing_extname(extname)
+      |> truncate_utf8_bytes(max_title_bytes)
       |> String.trim()
 
     cond do
       title == "" ->
         Path.basename(file_path)
 
-      String.ends_with?(String.downcase(title), String.downcase(extname)) ->
-        title
-
       true ->
         title <> extname
+    end
+  end
+
+  @spec max_upload_file_name_bytes(String.t()) :: pos_integer()
+  defp max_upload_file_name_bytes(file_path) do
+    # Respect the local alias filesystem while keeping names conservative for
+    # clients that later save the Telegram file elsewhere.
+    file_path
+    |> Path.dirname()
+    |> filesystem_name_max()
+    |> min(@max_upload_file_name_bytes)
+  end
+
+  @spec filesystem_name_max(String.t()) :: pos_integer()
+  defp filesystem_name_max(path) do
+    case System.cmd("getconf", ["NAME_MAX", path], stderr_to_stdout: true) do
+      {output, 0} ->
+        case Integer.parse(String.trim(output)) do
+          {value, ""} when value > 0 -> value
+          _ -> @max_upload_file_name_bytes
+        end
+
+      _ ->
+        @max_upload_file_name_bytes
+    end
+  rescue
+    ErlangError -> @max_upload_file_name_bytes
+  end
+
+  @spec strip_trailing_extname(String.t(), String.t()) :: String.t()
+  defp strip_trailing_extname(title, ""), do: title
+
+  defp strip_trailing_extname(title, extname) do
+    if String.ends_with?(String.downcase(title), String.downcase(extname)) do
+      String.slice(title, 0, String.length(title) - String.length(extname))
+    else
+      title
+    end
+  end
+
+  @spec truncate_utf8_bytes(String.t(), non_neg_integer()) :: String.t()
+  defp truncate_utf8_bytes(_string, 0), do: ""
+
+  defp truncate_utf8_bytes(string, max_bytes) do
+    if byte_size(string) <= max_bytes do
+      string
+    else
+      string
+      |> String.graphemes()
+      |> Enum.reduce_while({[], 0}, fn grapheme, {graphemes, size} ->
+        new_size = size + byte_size(grapheme)
+
+        if new_size > max_bytes do
+          {:halt, {graphemes, size}}
+        else
+          {:cont, {[grapheme | graphemes], new_size}}
+        end
+      end)
+      |> elem(0)
+      |> Enum.reverse()
+      |> Enum.join()
     end
   end
 

@@ -184,6 +184,42 @@ defmodule Lolek.SendFileTest do
     end)
   end
 
+  test "keeps local upload file names within byte limits after Unicode decomposition" do
+    preserve_telegram_env(fn ->
+      file_path = tmp_file("compressed.mp4", "media")
+      extname = Path.extname(file_path)
+      max_upload_file_name_bytes = min(180, name_max(Path.dirname(file_path)))
+      # This precomposed character expands under NFD, so original-byte truncation
+      # can still produce a name that is too long after filesystem decomposition.
+      source_title = String.duplicate("Ǖ", 100)
+
+      response = %ExGram.Model.Message{
+        video: %ExGram.Model.Video{file_id: "telegram-file-id"}
+      }
+
+      Application.put_env(:lolek, :telegram_client, TelegramClient)
+      Application.put_env(:lolek, :telegram_test_result, {:ok, response})
+      Application.put_env(:lolek, :telegram_test_parent, self())
+      Application.put_env(:lolek, :telegram_local_file_uploads, true)
+
+      context = [source_title: source_title]
+
+      assert byte_size(source_title <> extname) > max_upload_file_name_bytes
+
+      assert {:ok, {:sent_to_telegram_at_first, ^file_path, "telegram-file-id"}} =
+               Lolek.send_file(123, {:compressed, file_path}, context)
+
+      assert_receive {:send_video, 123, "file://" <> encoded_path, _options}
+
+      upload_file_name = encoded_path |> URI.decode() |> Path.basename()
+      assert byte_size(String.normalize(upload_file_name, :nfd)) <= max_upload_file_name_bytes
+      assert String.valid?(upload_file_name)
+      assert String.ends_with?(upload_file_name, extname)
+      assert File.exists?(file_path)
+      assert [] = Path.wildcard(Path.join(Path.dirname(file_path), ".telegram-upload-*"))
+    end)
+  end
+
   test "streams first video uploads with larger chunks" do
     preserve_telegram_env(fn ->
       file_path = tmp_file("downloaded.mp4", "media")

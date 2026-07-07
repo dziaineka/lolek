@@ -341,13 +341,12 @@ defmodule Lolek do
   defp titled_file_name(file_path, title) do
     extname = Path.extname(file_path)
     max_file_name_bytes = max_upload_file_name_bytes(file_path)
-    max_title_bytes = max(max_file_name_bytes - byte_size(extname), 0)
 
     title =
       title
       |> sanitize_upload_title()
       |> strip_trailing_extname(extname)
-      |> truncate_utf8_bytes(max_title_bytes)
+      |> truncate_file_stem(extname, max_file_name_bytes)
       |> String.trim()
 
     cond do
@@ -396,28 +395,25 @@ defmodule Lolek do
     end
   end
 
-  @spec truncate_utf8_bytes(String.t(), non_neg_integer()) :: String.t()
-  defp truncate_utf8_bytes(_string, 0), do: ""
+  @spec truncate_file_stem(String.t(), String.t(), non_neg_integer()) :: String.t()
+  defp truncate_file_stem(stem, extname, max_file_name_bytes) do
+    stem
+    |> String.graphemes()
+    |> Enum.reduce_while("", fn grapheme, stem ->
+      candidate_stem = stem <> grapheme
 
-  defp truncate_utf8_bytes(string, max_bytes) do
-    if byte_size(string) <= max_bytes do
-      string
-    else
-      string
-      |> String.graphemes()
-      |> Enum.reduce_while({[], 0}, fn grapheme, {graphemes, size} ->
-        new_size = size + byte_size(grapheme)
+      if upload_file_name_byte_size(candidate_stem <> extname) > max_file_name_bytes do
+        {:halt, stem}
+      else
+        {:cont, candidate_stem}
+      end
+    end)
+  end
 
-        if new_size > max_bytes do
-          {:halt, {graphemes, size}}
-        else
-          {:cont, {[grapheme | graphemes], new_size}}
-        end
-      end)
-      |> elem(0)
-      |> Enum.reverse()
-      |> Enum.join()
-    end
+  @spec upload_file_name_byte_size(String.t()) :: non_neg_integer()
+  defp upload_file_name_byte_size(file_name) do
+    # Some client filesystems decompose Unicode before enforcing name limits.
+    max(byte_size(file_name), byte_size(String.normalize(file_name, :nfd)))
   end
 
   @spec sanitize_upload_title(String.t()) :: String.t()

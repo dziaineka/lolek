@@ -349,12 +349,10 @@ defmodule Lolek do
       |> truncate_file_stem(extname, max_file_name_bytes)
       |> String.trim()
 
-    cond do
-      title == "" ->
-        Path.basename(file_path)
-
-      true ->
-        title <> extname
+    if title == "" do
+      Path.basename(file_path)
+    else
+      title <> extname
     end
   end
 

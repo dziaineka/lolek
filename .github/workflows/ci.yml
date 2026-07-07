@@ -24,15 +24,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@v22
-        with:
-          determinate: false
-
-      - name: Setup magic Nix cache
-        uses: DeterminateSystems/magic-nix-cache-action@v13
-        with:
-          use-flakehub: false
+      - name: Set up Nix
+        uses: ./.github/actions/setup-nix
 
       - name: Check formatting
         run: |
@@ -57,15 +50,8 @@ jobs:
           haskell: true
           tool-cache: false
 
-      - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@v22
-        with:
-          determinate: false
-
-      - name: Setup magic Nix cache
-        uses: DeterminateSystems/magic-nix-cache-action@v13
-        with:
-          use-flakehub: false
+      - name: Set up Nix
+        uses: ./.github/actions/setup-nix
 
       - name: Run test
         run: nix build .#checks.x86_64-linux.nixos-service -L
@@ -105,15 +91,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@v22
-        with:
-          determinate: false
-
-      - name: Setup magic Nix cache
-        uses: DeterminateSystems/magic-nix-cache-action@v13
-        with:
-          use-flakehub: false
+      - name: Set up Nix
+        uses: ./.github/actions/setup-nix
 
       - name: Run check
         run: nix build .#checks.x86_64-linux.mix-check -L
@@ -136,15 +115,8 @@ jobs:
           haskell: true
           tool-cache: false
 
-      - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@v22
-        with:
-          determinate: false
-
-      - name: Setup magic Nix cache
-        uses: DeterminateSystems/magic-nix-cache-action@v13
-        with:
-          use-flakehub: false
+      - name: Set up Nix
+        uses: ./.github/actions/setup-nix
 
       - name: Run test
         run: nix build .#checks.x86_64-linux.nixos-concurrency -L

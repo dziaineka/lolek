@@ -98,6 +98,26 @@ jobs:
       - name: Run make check
         run: make check
 
+  nix-mix-check:
+    name: Nix Mix check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v22
+        with:
+          determinate: false
+
+      - name: Setup magic Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@v13
+        with:
+          use-flakehub: false
+
+      - name: Run check
+        run: nix build .#checks.x86_64-linux.mix-check -L
+
   nixos-concurrency:
     name: NixOS concurrency test
     runs-on: ubuntu-latest

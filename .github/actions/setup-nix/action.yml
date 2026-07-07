@@ -1,0 +1,15 @@
+name: Set up Nix
+description: Install Nix and configure the GitHub Actions Nix cache.
+
+runs:
+  using: composite
+  steps:
+    - name: Install Nix
+      uses: DeterminateSystems/nix-installer-action@v22
+      with:
+        determinate: false
+
+    - name: Setup magic Nix cache
+      uses: DeterminateSystems/magic-nix-cache-action@v13
+      with:
+        use-flakehub: false

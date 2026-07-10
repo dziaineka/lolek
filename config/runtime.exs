@@ -94,6 +94,7 @@ max_concurrent_downloads_per_chat = parse_pos_int.("LOLEK_MAX_CONCURRENT_DOWNLOA
 max_video_requests_per_chat_per_minute =
   parse_pos_int.("LOLEK_MAX_VIDEO_REQUESTS_PER_CHAT_PER_MINUTE", "10")
 
+max_message_delay_seconds = parse_pos_int.("LOLEK_MAX_MESSAGE_DELAY_SECONDS", "300")
 download_command_timeout_seconds = parse_pos_int.("LOLEK_DOWNLOAD_COMMAND_TIMEOUT_SECONDS", "300")
 convert_command_timeout_seconds = parse_pos_int.("LOLEK_CONVERT_COMMAND_TIMEOUT_SECONDS", "300")
 probe_command_timeout_seconds = parse_pos_int.("LOLEK_PROBE_COMMAND_TIMEOUT_SECONDS", "15")
@@ -141,6 +142,7 @@ config :lolek, :max_duration_to_compress, max_duration_to_compress
 config :lolek, :max_concurrent_downloads, max_concurrent_downloads
 config :lolek, :max_concurrent_downloads_per_chat, max_concurrent_downloads_per_chat
 config :lolek, :max_video_requests_per_chat_per_minute, max_video_requests_per_chat_per_minute
+config :lolek, :max_message_delay_seconds, max_message_delay_seconds
 config :lolek, :download_command_timeout_seconds, download_command_timeout_seconds
 config :lolek, :convert_command_timeout_seconds, convert_command_timeout_seconds
 config :lolek, :probe_command_timeout_seconds, probe_command_timeout_seconds

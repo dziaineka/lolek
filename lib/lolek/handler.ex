@@ -26,18 +26,31 @@ defmodule Lolek.Handler do
   # {:update, update} → This tuple will match as a default handle
 
   @impl true
-  def handle({:command, :start, _msg}, context) do
-    answer(context, "Hi! Send me an url and I will try to show media from it.")
+  def handle({:command, :start, %ExGram.Model.Message{} = message}, context) do
+    with_fresh_message(message, fn ->
+      answer(context, "Hi! Send me an url and I will try to show media from it.")
+    end)
   end
 
   def handle(
         {
           :text,
           text,
-          %ExGram.Model.Message{chat: %ExGram.Model.Chat{id: chat_id}, from: from}
+          %ExGram.Model.Message{chat: %ExGram.Model.Chat{id: chat_id}, from: from} = message
         },
         _context
       ) do
+    with_fresh_message(message, fn ->
+      handle_text_message(text, chat_id, from)
+    end)
+  end
+
+  def handle(_, _context) do
+    :ok
+  end
+
+  @spec handle_text_message(String.t(), integer(), ExGram.Model.User.t() | nil) :: :ok
+  defp handle_text_message(text, chat_id, from) do
     case Lolek.Url.extract_url(text) do
       {:ok, url} ->
         case process_admitted_url(chat_id, url, from) do
@@ -70,10 +83,6 @@ defmodule Lolek.Handler do
     end
   end
 
-  def handle(_, _context) do
-    :ok
-  end
-
   @spec process_admitted_url(integer(), String.t(), ExGram.Model.User.t() | nil) ::
           {:ok, Lolek.File.file_state()} | {:error, term()}
   defp process_admitted_url(chat_id, url, from) do
@@ -93,6 +102,34 @@ defmodule Lolek.Handler do
       process_url(chat_id, url, Lolek.Requester.display_name(from))
     end)
   end
+
+  @spec with_fresh_message(ExGram.Model.Message.t(), (-> term())) :: term()
+  defp with_fresh_message(message, fun) when is_function(fun, 0) do
+    max_delay_seconds = Application.fetch_env!(:lolek, :max_message_delay_seconds)
+
+    delay_seconds = message_delay_seconds(message)
+
+    if delay_seconds > max_delay_seconds do
+      Lolek.Metrics.record_message_result(:stale_message)
+
+      Logger.warning(
+        "Dropping stale Telegram message from chat #{inspect(message_chat_id(message))}; " <>
+          "delay_seconds=#{delay_seconds}; max_delay_seconds=#{max_delay_seconds}"
+      )
+
+      :ok
+    else
+      fun.()
+    end
+  end
+
+  @spec message_delay_seconds(ExGram.Model.Message.t()) :: integer()
+  defp message_delay_seconds(%ExGram.Model.Message{date: date}) do
+    System.system_time(:second) - date
+  end
+
+  @spec message_chat_id(ExGram.Model.Message.t()) :: integer()
+  defp message_chat_id(%ExGram.Model.Message{chat: %ExGram.Model.Chat{id: chat_id}}), do: chat_id
 
   @spec process_url(integer(), String.t(), String.t()) ::
           {:ok, Lolek.File.file_state()} | {:error, term()}

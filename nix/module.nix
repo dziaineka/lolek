@@ -278,6 +278,15 @@ in
       description = "Maximum number of video URL requests admitted per chat per rolling minute.";
     };
 
+    maxMessageDelaySeconds = mkOption {
+      type = types.ints.positive;
+      default = 300;
+      description = ''
+        Maximum delay, in seconds, between the Telegram message timestamp and
+        local receipt time before Lolek drops the message as stale.
+      '';
+    };
+
     downloadCommandTimeout = mkOption {
       type = types.ints.positive;
       default = 300;
@@ -506,6 +515,7 @@ in
         LOLEK_MAX_CONCURRENT_DOWNLOADS = toString cfg.maxConcurrentDownloads;
         LOLEK_MAX_CONCURRENT_DOWNLOADS_PER_CHAT = toString cfg.maxConcurrentDownloadsPerChat;
         LOLEK_MAX_VIDEO_REQUESTS_PER_CHAT_PER_MINUTE = toString cfg.maxVideoRequestsPerChatPerMinute;
+        LOLEK_MAX_MESSAGE_DELAY_SECONDS = toString cfg.maxMessageDelaySeconds;
         LOLEK_DOWNLOAD_COMMAND_TIMEOUT_SECONDS = toString cfg.downloadCommandTimeout;
         LOLEK_CONVERT_COMMAND_TIMEOUT_SECONDS = toString cfg.convertCommandTimeout;
         LOLEK_PROBE_COMMAND_TIMEOUT_SECONDS = toString cfg.probeCommandTimeout;

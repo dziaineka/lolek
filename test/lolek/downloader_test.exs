@@ -6,6 +6,8 @@ defmodule Lolek.DownloaderTest do
     :start_download_pause,
     :max_download_pause,
     :download_command_timeout_seconds,
+    :convert_command_timeout_seconds,
+    :probe_command_timeout_seconds,
     :max_file_size_to_compress,
     :gallery_download_enabled,
     :max_file_size_to_send_to_telegram
@@ -269,6 +271,92 @@ defmodule Lolek.DownloaderTest do
   end
 
   @tag :tmp_dir
+  test "muxes TikTok gallery video-only mp4 before returning downloaded state", %{
+    tmp_dir: tmp_dir
+  } do
+    preserve_download_env(fn ->
+      bin_dir = Path.join(tmp_dir, "bin")
+      attempts_file = Path.join(tmp_dir, "ffmpeg-attempts")
+      File.mkdir_p!(bin_dir)
+
+      write_script(bin_dir, "gallery-dl", """
+      #!/bin/sh
+      dest=
+      while [ "$#" -gt 0 ]; do
+        case "$1" in --dest) shift; dest="$1" ;; esac
+        shift
+      done
+      mkdir -p "$dest/tiktok/user"
+      printf video > "$dest/tiktok/user/video001.mp4"
+      cat > "$dest/tiktok/user/info.json" <<'JSON'
+      {
+        "category": "tiktok",
+        "video": {
+          "bitrateAudioInfo": [
+            {
+              "Bitrate": 64000,
+              "UrlList": {
+                "FallbackUrl": "https://cdn.example.test/bad-audio.m4a",
+                "MainUrl": "https://cdn.example.test/good-audio.m4a",
+                "BackupUrl": "not-a-url"
+              }
+            }
+          ]
+        }
+      }
+      JSON
+      """)
+
+      write_script(bin_dir, "ffprobe", """
+      #!/bin/sh
+      last=
+      for arg in "$@"; do last="$arg"; done
+      case "$last" in
+        *downloaded-with-audio.mp4) printf 'video\\naudio\\n' ;;
+        *) printf 'video\\n' ;;
+      esac
+      """)
+
+      write_script(bin_dir, "ffmpeg", """
+      #!/bin/sh
+      input_count=0
+      audio_url=
+      output=
+      while [ "$#" -gt 0 ]; do
+        case "$1" in
+          -i)
+            shift
+            input_count=$((input_count + 1))
+            if [ "$input_count" = 2 ]; then audio_url="$1"; fi
+            ;;
+          *)
+            output="$1"
+            ;;
+        esac
+        shift
+      done
+      printf '%s\\n' "$audio_url" >> "#{attempts_file}"
+      [ "$audio_url" = "https://cdn.example.test/good-audio.m4a" ] || exit 7
+      printf muxed > "$output"
+      """)
+
+      write_script(bin_dir, "yt-dlp", "#!/bin/sh\nexit 1")
+
+      set_gallery_env(bin_dir, true)
+
+      assert {:ok, {:downloaded, file_path}} =
+               Lolek.Downloader.download("https://example.com/post", {:new_file, tmp_dir})
+
+      assert Path.basename(file_path) == "downloaded.mp4"
+      assert File.read!(file_path) == "muxed"
+
+      assert File.read!(attempts_file) ==
+               "https://cdn.example.test/bad-audio.m4a\n" <>
+                 "https://cdn.example.test/good-audio.m4a\n"
+    end)
+  end
+
+  @tag :tmp_dir
   test "falls back to yt-dlp when gallery-dl returns no files", %{tmp_dir: tmp_dir} do
     preserve_download_env(fn ->
       bin_dir = Path.join(tmp_dir, "bin")
@@ -360,6 +448,8 @@ defmodule Lolek.DownloaderTest do
     Application.put_env(:lolek, :start_download_pause, 0)
     Application.put_env(:lolek, :max_download_pause, 0)
     Application.put_env(:lolek, :download_command_timeout_seconds, 5)
+    Application.put_env(:lolek, :convert_command_timeout_seconds, 5)
+    Application.put_env(:lolek, :probe_command_timeout_seconds, 5)
     Application.put_env(:lolek, :max_file_size_to_compress, 12_345)
     System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
     {:ok, _apps} = Application.ensure_all_started(:erlexec)

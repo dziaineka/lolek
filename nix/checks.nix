@@ -68,6 +68,10 @@ in
     inherit pkgs module package;
   };
 
+  nixos-tiktok-audio-mux = import ./tests/tiktok-audio-mux.nix {
+    inherit pkgs module package;
+  };
+
   nixos-concurrency = import ./tests/concurrency.nix {
     inherit pkgs module package;
   };

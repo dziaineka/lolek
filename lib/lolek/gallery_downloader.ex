@@ -8,32 +8,47 @@ defmodule Lolek.GalleryDownloader do
 
   @spec download(String.t(), String.t()) :: {:ok, [String.t()]} | {:error, term()}
   def download(url, output_dir) do
-    with :ok <- File.mkdir_p(output_dir) do
-      case Lolek.Command.run(
-             "gallery-dl",
-             [
-               "--no-part",
-               "--quiet",
-               "--write-info-json",
-               "-o",
-               "extractor.ytdl.enabled=true",
-               "-o",
-               "extractor.ytdl.module=yt_dlp"
-             ] ++
-               extra_args() ++
-               [
-                 "--dest",
-                 output_dir,
-                 url
-               ],
-             timeout: command_timeout()
-           ) do
-        {:ok, _output} ->
-          {:ok, list_all_media_files(output_dir)}
+    with :ok <- File.mkdir_p(output_dir),
+         :ok <- run_gallery_dl(url, output_dir) do
+      repaired_media_files(output_dir)
+    end
+  end
 
-        {:error, reason} ->
-          {:error, {:gallery_dl, reason}}
-      end
+  @spec run_gallery_dl(String.t(), String.t()) :: :ok | {:error, term()}
+  defp run_gallery_dl(url, output_dir) do
+    result =
+      Lolek.Command.run(
+        "gallery-dl",
+        [
+          "--no-part",
+          "--quiet",
+          "--write-info-json",
+          "-o",
+          "extractor.ytdl.enabled=true",
+          "-o",
+          "extractor.ytdl.module=yt_dlp"
+        ] ++
+          extra_args() ++
+          [
+            "--dest",
+            output_dir,
+            url
+          ],
+        timeout: command_timeout()
+      )
+
+    case result do
+      {:ok, _output} -> :ok
+      {:error, reason} -> {:error, {:gallery_dl, reason}}
+    end
+  end
+
+  @spec repaired_media_files(String.t()) :: {:ok, [String.t()]} | {:error, term()}
+  defp repaired_media_files(output_dir) do
+    files = list_all_media_files(output_dir)
+
+    with :ok <- repair_single_gallery_video(output_dir, files) do
+      {:ok, files}
     end
   end
 
@@ -52,6 +67,23 @@ defmodule Lolek.GalleryDownloader do
   @spec video_file?(String.t()) :: boolean()
   def video_file?(path) do
     path |> Path.extname() |> String.downcase() |> then(&(&1 in @video_extensions))
+  end
+
+  @spec repair_single_gallery_video(String.t(), [String.t()]) :: :ok | {:error, term()}
+  defp repair_single_gallery_video(gallery_dir, files) do
+    {videos, images} = Enum.split_with(files, &video_file?/1)
+    mp4_videos = Enum.filter(videos, fn p -> Path.extname(p) |> String.downcase() == ".mp4" end)
+
+    case {images, mp4_videos} do
+      {[], [file_path]} ->
+        # gallery-dl may keep adaptive TikTok audio in JSON sidecars while
+        # writing only the video stream to disk. Repair that gallery-dl output
+        # in place before the generic downloader routing promotes the MP4.
+        Lolek.TiktokAudioMuxer.maybe_mux(gallery_dir, file_path)
+
+      _ ->
+        :ok
+    end
   end
 
   @spec list_all_media_files(String.t()) :: [String.t()]

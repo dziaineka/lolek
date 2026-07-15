@@ -64,6 +64,10 @@ in
   };
 }
 // pkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+  nixos-module-url-allowlist = import ./tests/module-url-allowlist.nix {
+    inherit pkgs module package;
+  };
+
   nixos-service = import ./tests/service.nix {
     inherit pkgs module package;
   };

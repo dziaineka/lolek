@@ -12,6 +12,8 @@ defmodule Lolek.UrlTest do
         Application.put_env(:lolek, :allowed_urls_regex, original_allowed_urls_regex)
       end
     end)
+
+    %{configured_allowed_urls_regex: original_allowed_urls_regex}
   end
 
   test "extracts threads url with query string" do
@@ -59,6 +61,41 @@ defmodule Lolek.UrlTest do
              Lolek.Url.extract_url(
                "https://example.com/watch?next=https://www.youtube.com/shorts/example"
              )
+  end
+
+  test "configured allowlist rejects TikTok profile and profile-tab urls", context do
+    Application.put_env(
+      :lolek,
+      :allowed_urls_regex,
+      context.configured_allowed_urls_regex
+    )
+
+    for url <- [
+          "https://www.tiktok.com/@creator",
+          "https://www.tiktok.com/@creator/",
+          "https://www.tiktok.com/@creator?lang=en",
+          "https://www.tiktok.com/@creator/video",
+          "https://www.tiktok.com/@creator/liked"
+        ] do
+      assert {:error, :no_url} = Lolek.Url.extract_url(url)
+    end
+  end
+
+  test "configured allowlist accepts TikTok media urls", context do
+    Application.put_env(
+      :lolek,
+      :allowed_urls_regex,
+      context.configured_allowed_urls_regex
+    )
+
+    for url <- [
+          "https://www.tiktok.com/@creator/video/1234567890",
+          "https://www.tiktok.com/@creator/photo/1234567890?lang=en",
+          "https://www.tiktok.com/t/ZMexample/",
+          "https://vm.tiktok.com/ZMexample/"
+        ] do
+      assert {:ok, ^url} = Lolek.Url.extract_url(url)
+    end
   end
 
   test "threads storage key ignores media path and query string" do

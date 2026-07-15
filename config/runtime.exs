@@ -47,7 +47,7 @@ hw_device = System.get_env("LOLEK_HW_DEVICE", "/dev/dri/renderD128")
 allowed_urls_regex =
   System.get_env(
     "LOLEK_ALLOWED_URLS_REGEX",
-    "tiktok\\.com|twitter\\.com|facebook\\.com|instagram\\.com|threads\\.com|threads\\.net|coub\\.com|x\\.com|youtube\\.com\\/shorts"
+    "tiktok\\.com\\/(?:@[^/]+\\/(?:video|photo)\\/\\d+|t\\/[^/]+)|(?:vm|vt)\\.tiktok\\.com\\/[^/]+|twitter\\.com|facebook\\.com|instagram\\.com|threads\\.com|threads\\.net|coub\\.com|x\\.com|youtube\\.com\\/shorts"
   )
 
 download_path = System.get_env("LOLEK_DOWNLOAD_DIR_PATH", "./downloads")

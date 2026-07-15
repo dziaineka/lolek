@@ -57,6 +57,7 @@ metrics_enabled = parse_bool.("LOLEK_METRICS_ENABLED", "false")
 post_source_caption = parse_bool.("LOLEK_POST_SOURCE_CAPTION", "false")
 post_requester_caption = parse_bool.("LOLEK_POST_REQUESTER_CAPTION", "false")
 gallery_download_enabled = parse_bool.("LOLEK_GALLERY_DOWNLOAD_ENABLED", "false")
+max_gallery_media = parse_pos_int.("LOLEK_MAX_GALLERY_MEDIA", "50")
 
 # Optional: path to a Netscape-format cookies.txt file for gallery-dl (e.g. exported via
 # the "Get cookies.txt LOCALLY" browser extension). Required for Instagram and other sites
@@ -129,6 +130,7 @@ config :lolek, :metrics_port, metrics_port
 config :lolek, :post_source_caption, post_source_caption
 config :lolek, :post_requester_caption, post_requester_caption
 config :lolek, :gallery_download_enabled, gallery_download_enabled
+config :lolek, :max_gallery_media, max_gallery_media
 config :lolek, :gallery_dl_cookies_file, gallery_dl_cookies_file
 config :lolek, :yt_dlp_cookies_file, yt_dlp_cookies_file
 config :lolek, :gallery_dl_config_file, gallery_dl_config_file

@@ -101,6 +101,73 @@ defmodule Lolek.SendFileTest do
     end)
   end
 
+  test "limits a gallery to the configured maximum number of media files" do
+    preserve_telegram_env(fn ->
+      files = for index <- 1..3, do: tmp_file("gallery-#{index}.jpg", "media")
+
+      messages =
+        for index <- 1..2 do
+          %ExGram.Model.Message{
+            photo: [%ExGram.Model.PhotoSize{file_id: "gallery-file-#{index}"}]
+          }
+        end
+
+      Application.put_env(:lolek, :telegram_client, TelegramClient)
+      Application.put_env(:lolek, :telegram_test_result, {:ok, messages})
+      Application.put_env(:lolek, :telegram_test_parent, self())
+      Application.put_env(:lolek, :max_gallery_media, 2)
+
+      assert {:ok, {:sent_gallery_to_telegram_at_first, "/tmp/gallery", entries}} =
+               Lolek.send_file(123, {:downloaded_gallery, "/tmp/gallery", files})
+
+      assert length(entries) == 2
+      assert_receive {:send_media_group, 123, media, []}
+      assert length(media) == 2
+      refute_receive {:send_media_group, 123, _, []}
+    end)
+  end
+
+  test "sends a gallery reduced to one video through the video endpoint" do
+    preserve_telegram_env(fn ->
+      files = for index <- 1..2, do: tmp_file("gallery-#{index}.mp4", "media")
+
+      response = %ExGram.Model.Message{
+        video: %ExGram.Model.Video{file_id: "gallery-video-file"}
+      }
+
+      Application.put_env(:lolek, :telegram_client, TelegramClient)
+      Application.put_env(:lolek, :telegram_test_result, {:ok, response})
+      Application.put_env(:lolek, :telegram_test_parent, self())
+      Application.put_env(:lolek, :max_gallery_media, 1)
+
+      assert {:ok,
+              {:sent_gallery_to_telegram_at_first, "/tmp/gallery",
+               [{".mp4", "gallery-video-file"}]}} =
+               Lolek.send_file(123, {:downloaded_gallery, "/tmp/gallery", files})
+
+      assert_receive {:send_video, 123, {:file_content, %File.Stream{}, "gallery-1.mp4"}, []}
+      refute_receive {:send_media_group, 123, _, []}
+    end)
+  end
+
+  test "applies the gallery limit to cached media" do
+    preserve_telegram_env(fn ->
+      entries = for index <- 1..3, do: {"gallery-file-#{index}", ".jpg"}
+
+      Application.put_env(:lolek, :telegram_client, TelegramClient)
+      Application.put_env(:lolek, :telegram_test_result, {:ok, []})
+      Application.put_env(:lolek, :telegram_test_parent, self())
+      Application.put_env(:lolek, :max_gallery_media, 1)
+
+      assert {:ok, {:ready_to_telegram_gallery, limited_entries}} =
+               Lolek.send_file(123, {:ready_to_telegram_gallery, entries})
+
+      assert length(limited_entries) == 1
+      assert_receive {:send_photo, 123, "gallery-file-1", []}
+      refute_receive {:send_media_group, 123, _, []}
+    end)
+  end
+
   test "sends local file uris when local Telegram uploads are enabled" do
     preserve_telegram_env(fn ->
       file_path = tmp_file("downloaded with spaces.mp4", "media")
@@ -417,6 +484,7 @@ defmodule Lolek.SendFileTest do
     local_file_uploads = Application.fetch_env(:lolek, :telegram_local_file_uploads)
     post_source_caption = Application.fetch_env(:lolek, :post_source_caption)
     post_requester_caption = Application.fetch_env(:lolek, :post_requester_caption)
+    max_gallery_media = Application.fetch_env(:lolek, :max_gallery_media)
 
     try do
       fun.()
@@ -428,6 +496,7 @@ defmodule Lolek.SendFileTest do
       restore_app_env(:telegram_local_file_uploads, local_file_uploads)
       restore_app_env(:post_source_caption, post_source_caption)
       restore_app_env(:post_requester_caption, post_requester_caption)
+      restore_app_env(:max_gallery_media, max_gallery_media)
     end
   end
 

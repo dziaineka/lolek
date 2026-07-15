@@ -23,6 +23,8 @@ defmodule Lolek.GalleryDownloader do
           "--no-part",
           "--quiet",
           "--write-info-json",
+          "--range",
+          "1-#{max_gallery_media()}",
           "-o",
           "extractor.ytdl.enabled=true",
           "-o",
@@ -62,6 +64,7 @@ defmodule Lolek.GalleryDownloader do
       (image_file?(path) or video_file?(path)) and within_size_limit?(path, max_size)
     end)
     |> Enum.sort()
+    |> Enum.take(max_gallery_media())
   end
 
   @spec video_file?(String.t()) :: boolean()
@@ -96,6 +99,7 @@ defmodule Lolek.GalleryDownloader do
       (image_file?(path) or video_file?(path)) and within_size_limit?(path, max_size)
     end)
     |> Enum.sort()
+    |> Enum.take(max_gallery_media())
   end
 
   @spec read_caption(String.t()) :: {:ok, String.t()} | :error
@@ -170,5 +174,10 @@ defmodule Lolek.GalleryDownloader do
     :lolek
     |> Application.fetch_env!(:download_command_timeout_seconds)
     |> :timer.seconds()
+  end
+
+  @spec max_gallery_media() :: pos_integer()
+  defp max_gallery_media do
+    Application.fetch_env!(:lolek, :max_gallery_media)
   end
 end

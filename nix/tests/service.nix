@@ -43,6 +43,7 @@ let
   compressedVideoFileId = "fake-compressed-video-file-id";
   compressedVideoFileUniqueId = "fake-compressed-video-unique-id";
   maxFileSizeToSendToTelegram = 45000000;
+  maxGalleryMedia = 37;
   maxVideoSizeToSendToTelegram = 40000000;
   maxAudioSizeToSendToTelegram = 5000000;
   maxFileSizeToCompress = 100000000;
@@ -114,6 +115,7 @@ pkgs.testers.nixosTest {
         maxDownloadPause = 10;
         postSourceCaption = true;
         postRequesterCaption = true;
+        inherit maxGalleryMedia;
         metrics = {
           enable = true;
           port = metricsPort;
@@ -189,6 +191,7 @@ pkgs.testers.nixosTest {
     passthrough_upload_file = "${passthroughUploadFile}"
     compressed_upload_file = "${compressedUploadFile}"
     max_file_size_to_send_to_telegram = ${toString maxFileSizeToSendToTelegram}
+    max_gallery_media = ${toString maxGalleryMedia}
     passthrough_media_file = "${passthroughMediaFile}"
     passthrough_media_url = "${passthroughMediaUrl}"
     passthrough_source_caption = "${passthroughSourceCaption}"
@@ -204,6 +207,11 @@ pkgs.testers.nixosTest {
     passthrough_metadata_file = "%s/source_metadata.json" % passthrough_cache_dir
     compressed_folder_name = base64.b64encode(compressed_media_url.encode()).decode().rstrip("=")
     compressed_cache_dir = "%s/%s" % (download_dir, compressed_folder_name)
+
+    machine.succeed(
+        "systemctl show ${serviceUnit} --property=Environment --value | "
+        "grep -F 'LOLEK_MAX_GALLERY_MEDIA=%s'" % max_gallery_media
+    )
 
     # The module should create the service user, group, and writable download directory.
     machine.succeed("getent passwd %s" % service_user)

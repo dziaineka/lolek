@@ -121,6 +121,12 @@ in
       '';
     };
 
+    maxGalleryMedia = mkOption {
+      type = types.ints.positive;
+      default = 50;
+      description = "Maximum number of media files downloaded and posted for one gallery.";
+    };
+
     metrics = {
       enable = mkEnableOption "a local Prometheus metrics endpoint";
 
@@ -495,6 +501,7 @@ in
         LOLEK_POST_SOURCE_CAPTION = if cfg.postSourceCaption then "true" else "false";
         LOLEK_POST_REQUESTER_CAPTION = if cfg.postRequesterCaption then "true" else "false";
         LOLEK_GALLERY_DOWNLOAD_ENABLED = if cfg.galleryDownloadEnabled then "true" else "false";
+        LOLEK_MAX_GALLERY_MEDIA = toString cfg.maxGalleryMedia;
         LOLEK_DOWNLOAD_DIR_PATH = toString cfg.downloadDir;
         LOLEK_MAX_DOWNLOAD_DIR_SIZE = toString cfg.maxDownloadDirSize;
         LOLEK_MAX_FILE_SIZE_TO_SEND_TO_TELEGRAM = toString cfg.maxFileSizeToSendToTelegram;

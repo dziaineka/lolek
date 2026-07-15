@@ -31,13 +31,12 @@ let
     );
   src = lib.fileset.toSource {
     inherit root;
-    fileset = sourceFiles [ (root + "/rel") ];
+    fileset = sourceFiles [
+      (root + "/rel")
+      (root + "/test")
+    ];
   };
   version = "5.0.1";
-  testSrc = lib.fileset.toSource {
-    inherit root;
-    fileset = sourceFiles [ (root + "/test") ];
-  };
   mkLolek =
     {
       curl ? pkgs.curl,
@@ -79,7 +78,6 @@ let
         export REBAR_CACHE_DIR="$TMPDIR/rebar3.cache"
         export LOLEK_BOT_TOKEN="test_token"
 
-        cp -R ${testSrc}/test test
         mix test
 
         runHook postCheck

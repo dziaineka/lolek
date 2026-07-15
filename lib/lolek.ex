@@ -76,15 +76,28 @@ defmodule Lolek do
     call_telegram(fn -> Lolek.Telegram.send_animation(chat_id, upload, options) end)
   end
 
-  defp send_gallery_single_upload(chat_id, _ext, upload, options) do
-    call_telegram(fn -> Lolek.Telegram.send_photo(chat_id, upload, options) end)
+  defp send_gallery_single_upload(chat_id, ext, upload, options) do
+    if Lolek.GalleryDownloader.video_file?("x#{ext}") do
+      call_telegram(fn -> Lolek.Telegram.send_video(chat_id, upload, options) end)
+    else
+      call_telegram(fn -> Lolek.Telegram.send_photo(chat_id, upload, options) end)
+    end
   end
 
   @spec send_gallery_files(integer(), String.t(), [String.t()], keyword()) ::
           {:ok, Lolek.File.file_state()} | {:error, term()}
   defp send_gallery_files(chat_id, gallery_dir, files, context) do
+    case Enum.take(files, max_gallery_media()) do
+      [file] -> send_single_gallery_file(chat_id, gallery_dir, file, context)
+      limited_files -> do_send_gallery_files(chat_id, gallery_dir, limited_files, context)
+    end
+  end
+
+  @spec do_send_gallery_files(integer(), String.t(), [String.t()], keyword()) ::
+          {:ok, Lolek.File.file_state()} | {:error, term()}
+  defp do_send_gallery_files(chat_id, gallery_dir, files, context) do
     files
-    |> Enum.chunk_every(@max_media_group_size)
+    |> gallery_batches()
     |> Enum.with_index()
     |> Enum.reduce_while({:ok, []}, fn {batch, idx}, {:ok, acc_entries} ->
       media = build_gallery_media(batch, idx, context)
@@ -115,15 +128,70 @@ defmodule Lolek do
   @spec send_cached_gallery(integer(), [{String.t(), String.t()}], keyword()) ::
           {:ok, Lolek.File.file_state()} | {:error, term()}
   defp send_cached_gallery(chat_id, entries, context) do
-    entries
-    |> Enum.chunk_every(@max_media_group_size)
-    |> Enum.with_index()
-    |> Enum.each(fn {batch, idx} ->
-      media = build_cached_gallery_media(batch, idx, context)
-      call_telegram(fn -> Lolek.Telegram.send_media_group(chat_id, media, []) end)
-    end)
+    limited_entries = Enum.take(entries, max_gallery_media())
 
-    {:ok, {:ready_to_telegram_gallery, entries}}
+    case limited_entries do
+      [entry] ->
+        send_cached_gallery_single(chat_id, entry, context)
+
+      _ ->
+        limited_entries
+        |> gallery_batches()
+        |> Enum.with_index()
+        |> Enum.each(fn {batch, idx} ->
+          send_cached_gallery_batch(chat_id, batch, idx, context)
+        end)
+    end
+
+    {:ok, {:ready_to_telegram_gallery, limited_entries}}
+  end
+
+  @spec send_cached_gallery_batch(
+          integer(),
+          [{String.t(), String.t()}],
+          non_neg_integer(),
+          keyword()
+        ) ::
+          {:ok, term()} | {:error, term()}
+  defp send_cached_gallery_batch(chat_id, batch, idx, context) do
+    media = build_cached_gallery_media(batch, idx, context)
+    call_telegram(fn -> Lolek.Telegram.send_media_group(chat_id, media, []) end)
+  end
+
+  @spec send_cached_gallery_single(integer(), {String.t(), String.t()}, keyword()) ::
+          {:ok, term()} | {:error, term()}
+  defp send_cached_gallery_single(chat_id, {file_id, ext}, context) do
+    options = add_caption([], context)
+
+    cond do
+      ext in @gif_extensions ->
+        call_telegram(fn -> Lolek.Telegram.send_animation(chat_id, file_id, options) end)
+
+      Lolek.GalleryDownloader.video_file?("x#{ext}") ->
+        call_telegram(fn -> Lolek.Telegram.send_video(chat_id, file_id, options) end)
+
+      true ->
+        call_telegram(fn -> Lolek.Telegram.send_photo(chat_id, file_id, options) end)
+    end
+  end
+
+  @spec gallery_batches([term()]) :: [[term()]]
+  defp gallery_batches(items) do
+    batches = Enum.chunk_every(items, @max_media_group_size)
+
+    case Enum.reverse(batches) do
+      [[single], previous | preceding] ->
+        {moved, shortened_previous} = List.pop_at(previous, -1)
+        Enum.reverse(preceding) ++ [shortened_previous, [moved, single]]
+
+      _ ->
+        batches
+    end
+  end
+
+  @spec max_gallery_media() :: pos_integer()
+  defp max_gallery_media do
+    Application.fetch_env!(:lolek, :max_gallery_media)
   end
 
   @spec file_to_input_media(String.t(), String.t() | nil) :: term()

@@ -1,7 +1,11 @@
 defmodule Lolek.GalleryDownloaderTest do
   use ExUnit.Case
 
-  @env_keys [:max_file_size_to_send_to_telegram, :download_command_timeout_seconds]
+  @env_keys [
+    :max_file_size_to_send_to_telegram,
+    :max_gallery_media,
+    :download_command_timeout_seconds
+  ]
 
   describe "download/2" do
     @tag :tmp_dir
@@ -12,10 +16,11 @@ defmodule Lolek.GalleryDownloaderTest do
 
         write_script(bin_dir, "gallery-dl", """
         #!/bin/sh
-        dest=; ytdl_enabled=0; ytdl_module=0
+        dest=; media_range=; ytdl_enabled=0; ytdl_module=0
         while [ "$#" -gt 0 ]; do
           case "$1" in
             --dest) shift; dest="$1" ;;
+            --range) shift; media_range="$1" ;;
             -o)
               shift
               case "$1" in
@@ -28,6 +33,7 @@ defmodule Lolek.GalleryDownloaderTest do
         done
         [ "$ytdl_enabled" = "1" ] || exit 1
         [ "$ytdl_module" = "1" ] || exit 2
+        [ "$media_range" = "1-50" ] || exit 3
         printf photo > "$dest/photo.jpg"
         """)
 
@@ -154,6 +160,21 @@ defmodule Lolek.GalleryDownloaderTest do
     end
 
     @tag :tmp_dir
+    test "limits the total number of gallery media files", %{tmp_dir: tmp_dir} do
+      preserve_env(fn ->
+        Application.put_env(:lolek, :max_file_size_to_send_to_telegram, 1000)
+        Application.put_env(:lolek, :max_gallery_media, 2)
+
+        for name <- ~w(c.jpg a.jpg b.jpg) do
+          File.write!(Path.join(tmp_dir, name), "data")
+        end
+
+        files = Lolek.GalleryDownloader.list_media_files(tmp_dir)
+        assert Enum.map(files, &Path.basename/1) == ["a.jpg", "b.jpg"]
+      end)
+    end
+
+    @tag :tmp_dir
     test "returns empty list for empty or nonexistent directory", %{tmp_dir: tmp_dir} do
       preserve_env(fn ->
         Application.put_env(:lolek, :max_file_size_to_send_to_telegram, 1000)
@@ -260,6 +281,7 @@ defmodule Lolek.GalleryDownloaderTest do
     {:ok, _} = Application.ensure_all_started(:erlexec)
     Application.put_env(:lolek, :download_command_timeout_seconds, 5)
     Application.put_env(:lolek, :max_file_size_to_send_to_telegram, 1000)
+    Application.put_env(:lolek, :max_gallery_media, 50)
   end
 
   defp restore_env(key, nil), do: System.delete_env(key)

@@ -10,6 +10,7 @@ defmodule Lolek.DownloaderTest do
     :probe_command_timeout_seconds,
     :max_file_size_to_compress,
     :gallery_download_enabled,
+    :max_gallery_media,
     :max_file_size_to_send_to_telegram
   ]
 
@@ -443,6 +444,7 @@ defmodule Lolek.DownloaderTest do
 
   defp set_gallery_env(bin_dir, gallery_enabled) do
     Application.put_env(:lolek, :gallery_download_enabled, gallery_enabled)
+    Application.put_env(:lolek, :max_gallery_media, 50)
     Application.put_env(:lolek, :max_file_size_to_send_to_telegram, 100_000)
     Application.put_env(:lolek, :max_download_tries, 1)
     Application.put_env(:lolek, :start_download_pause, 0)

@@ -13,18 +13,35 @@ defmodule Lolek.Command do
   @spec run(String.t(), [String.t()], [term()]) :: result()
   def run(executable, args, options \\ []) do
     {timeout, options} = pop_option(options, :timeout, :infinity)
+    timeout = Lolek.ProcessingDeadline.limit_timeout(timeout)
     {kill_timeout, options} = pop_option(options, :kill_timeout, @default_kill_timeout_seconds)
+
+    with false <- Lolek.ProcessingDeadline.expired?(),
+         executable_path when is_binary(executable_path) <- System.find_executable(executable) do
+      Lolek.ProcessingDeadline.with_command(kill_timeout, fn ->
+        run_executable(executable, executable_path, args, options, timeout, kill_timeout)
+      end)
+    else
+      true -> {:error, :processing_deadline_exceeded}
+      nil -> {:error, "#{executable} executable was not found"}
+    end
+  end
+
+  @spec run_executable(
+          String.t(),
+          String.t(),
+          [String.t()],
+          [term()],
+          timeout(),
+          non_neg_integer()
+        ) ::
+          result()
+  defp run_executable(executable, executable_path, args, options, timeout, kill_timeout) do
     exec_options = prepare_exec_options(options, kill_timeout)
 
-    case System.find_executable(executable) do
-      nil ->
-        {:error, "#{executable} executable was not found"}
-
-      executable_path when is_binary(executable_path) ->
-        case executable_path |> exec_argv(args) |> :exec.run(exec_options) do
-          {:ok, pid, os_pid} -> collect_output(executable, pid, os_pid, timeout, kill_timeout)
-          {:error, reason} -> {:error, reason}
-        end
+    case executable_path |> exec_argv(args) |> :exec.run(exec_options) do
+      {:ok, pid, os_pid} -> collect_output(executable, pid, os_pid, timeout, kill_timeout)
+      {:error, reason} -> {:error, reason}
     end
   end
 
@@ -73,6 +90,8 @@ defmodule Lolek.Command do
           %{stdout: [binary()], stderr: [binary()]}
         ) :: result()
   defp collect_output(executable, pid, os_pid, timeout, kill_timeout, deadline, output) do
+    cancel_message = Lolek.ProcessingDeadline.cancellation_message()
+
     receive do
       {:stdout, ^os_pid, data} ->
         output = Map.update!(output, :stdout, &[data | &1])
@@ -87,6 +106,11 @@ defmodule Lolek.Command do
 
       {:DOWN, ^os_pid, :process, ^pid, reason} ->
         {:error, normalize_exit_reason(reason, output_to_keyword(output))}
+
+      ^cancel_message ->
+        # Grant erlexec another second to reap a killed pid.
+        _ = :exec.stop_and_wait(pid, (kill_timeout + 1) * 1000)
+        {:error, :processing_deadline_exceeded}
     after
       remaining_timeout(deadline) ->
         _ = :exec.stop_and_wait(pid, (kill_timeout + 1) * 1000)

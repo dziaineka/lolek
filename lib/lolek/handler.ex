@@ -41,7 +41,9 @@ defmodule Lolek.Handler do
         _context
       ) do
     with_fresh_message(message, fn ->
-      handle_text_message(text, chat_id, from)
+      with_processing_deadline(message, fn ->
+        handle_text_message(text, chat_id, from)
+      end)
     end)
   end
 
@@ -109,7 +111,7 @@ defmodule Lolek.Handler do
 
     delay_seconds = message_delay_seconds(message)
 
-    if delay_seconds > max_delay_seconds do
+    if delay_seconds >= max_delay_seconds do
       Lolek.Metrics.record_message_result(:stale_message)
 
       Logger.warning(
@@ -130,6 +132,33 @@ defmodule Lolek.Handler do
 
   @spec message_chat_id(ExGram.Model.Message.t()) :: integer()
   defp message_chat_id(%ExGram.Model.Message{chat: %ExGram.Model.Chat{id: chat_id}}), do: chat_id
+
+  @spec with_processing_deadline(ExGram.Model.Message.t(), (-> term())) :: term()
+  defp with_processing_deadline(message, fun) when is_function(fun, 0) do
+    max_delay_seconds = Application.fetch_env!(:lolek, :max_message_delay_seconds)
+    timeout = remaining_message_time(message, max_delay_seconds)
+
+    case Lolek.ProcessingDeadline.run(fun, timeout) do
+      {:error, :processing_deadline_exceeded} ->
+        Lolek.Metrics.record_message_result(:processing_deadline_exceeded)
+
+        Logger.warning(
+          "Stopping Telegram message processing for chat #{inspect(message_chat_id(message))}: " <>
+            "overall deadline exceeded; max_delay_seconds=#{max_delay_seconds}"
+        )
+
+        :ok
+
+      result ->
+        result
+    end
+  end
+
+  @spec remaining_message_time(ExGram.Model.Message.t(), pos_integer()) :: non_neg_integer()
+  defp remaining_message_time(%ExGram.Model.Message{date: date}, max_delay_seconds) do
+    deadline = :timer.seconds(date + max_delay_seconds)
+    max(deadline - System.system_time(:millisecond), 0)
+  end
 
   @spec process_url(integer(), String.t(), String.t()) ::
           {:ok, Lolek.File.file_state()} | {:error, term()}

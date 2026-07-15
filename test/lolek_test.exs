@@ -21,6 +21,12 @@ defmodule LolekTest do
     assert :ok = Lolek.Handler.handle({:text, message.text, message}, %ExGram.Cnt{})
   end
 
+  test "drops text messages when the overall deadline has elapsed" do
+    message = text_message("https://tiktok.com/video", System.system_time(:second) - 300)
+
+    assert :ok = Lolek.Handler.handle({:text, message.text, message}, %ExGram.Cnt{})
+  end
+
   test "drops start commands delayed beyond the configured maximum" do
     message = text_message("/start", System.system_time(:second) - 301)
 

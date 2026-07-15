@@ -61,6 +61,40 @@ defmodule Lolek.SendFileTest do
     end)
   end
 
+  test "does not start a Telegram request after the processing deadline" do
+    preserve_telegram_env(fn ->
+      test_pid = self()
+
+      Application.put_env(:lolek, :telegram_client, TelegramClient)
+      Application.put_env(:lolek, :telegram_test_result, {:ok, %ExGram.Model.Message{}})
+      Application.put_env(:lolek, :telegram_test_parent, test_pid)
+
+      assert {:error, :processing_deadline_exceeded} =
+               Lolek.ProcessingDeadline.run(
+                 fn ->
+                   # Model a command being cooperatively cancelled by the deadline. This lets the
+                   # worker unwind far enough to attempt the upload after its deadline has elapsed.
+                   Lolek.ProcessingDeadline.with_command(0, fn ->
+                     cancel_message = Lolek.ProcessingDeadline.cancellation_message()
+                     send(test_pid, :waiting_for_deadline)
+
+                     receive do
+                       ^cancel_message -> :ok
+                     end
+                   end)
+
+                   result = Lolek.send_file(123, {:ready_to_telegram, "/tmp/file-id.mp4"})
+                   send(test_pid, {:send_after_deadline, result})
+                 end,
+                 25
+               )
+
+      assert_receive :waiting_for_deadline
+      assert_receive {:send_after_deadline, {:error, :processing_deadline_exceeded}}
+      refute_receive {:send_video, _, _, _}
+    end)
+  end
+
   test "returns an error when Telegram raises while sending" do
     preserve_telegram_env(fn ->
       error = %ExGram.Error{code: 500, message: "Internal Error"}

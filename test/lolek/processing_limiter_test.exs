@@ -3,7 +3,8 @@ defmodule Lolek.ProcessingLimiterTest do
 
   setup do
     limiter_name = String.to_atom("#{__MODULE__}.#{System.unique_integer([:positive])}")
-    %{limiter_name: limiter_name}
+    metrics_name = String.to_atom("#{Lolek.Metrics}.#{System.unique_integer([:positive])}")
+    %{limiter_name: limiter_name, metrics_name: metrics_name}
   end
 
   test "limits globally across chats", %{limiter_name: limiter_name} do
@@ -141,6 +142,75 @@ defmodule Lolek.ProcessingLimiterTest do
              )
   end
 
+  test "tracks the active gauge across normal release", %{
+    limiter_name: limiter_name,
+    metrics_name: metrics_name
+  } do
+    start_supervised!({Lolek.Metrics, name: metrics_name})
+
+    start_supervised!(
+      {Lolek.ProcessingLimiter,
+       name: limiter_name, global_limit: 1, per_chat_limit: 1, metrics_name: metrics_name}
+    )
+
+    test_pid = self()
+
+    worker =
+      spawn(fn ->
+        Lolek.ProcessingLimiter.with_limit(
+          1,
+          fn ->
+            send(test_pid, :worker_started)
+
+            receive do
+              :release -> {:ok, :done}
+            end
+          end,
+          name: limiter_name
+        )
+      end)
+
+    assert_receive :worker_started
+    assert_active_gauge(metrics_name, 1)
+
+    monitor_ref = Process.monitor(worker)
+    send(worker, :release)
+    assert_receive {:DOWN, ^monitor_ref, :process, ^worker, :normal}
+    assert_active_gauge(metrics_name, 0)
+  end
+
+  test "releases capacity and transfers the gauge when an active worker dies", %{
+    limiter_name: limiter_name,
+    metrics_name: metrics_name
+  } do
+    start_supervised!({Lolek.Metrics, name: metrics_name})
+
+    start_supervised!(
+      {Lolek.ProcessingLimiter,
+       name: limiter_name, global_limit: 1, per_chat_limit: 1, metrics_name: metrics_name}
+    )
+
+    test_pid = self()
+    first_worker = spawn_limited_worker(limiter_name, 1, :first_started, test_pid)
+    assert_receive :first_started
+    assert_active_gauge(metrics_name, 1)
+
+    second_worker = spawn_limited_worker(limiter_name, 2, :second_started, test_pid)
+    refute_receive :second_started, 100
+
+    first_monitor = Process.monitor(first_worker)
+    Process.exit(first_worker, :kill)
+    assert_receive {:DOWN, ^first_monitor, :process, ^first_worker, :killed}
+
+    assert_receive :second_started
+    assert_active_gauge(metrics_name, 1)
+
+    second_monitor = Process.monitor(second_worker)
+    send(second_worker, :release)
+    assert_receive {:DOWN, ^second_monitor, :process, ^second_worker, :normal}
+    assert_active_gauge(metrics_name, 0)
+  end
+
   test "rejects invalid limits", %{limiter_name: limiter_name} do
     assert {:error, {:invalid_limit, :global_limit, 0}} =
              start_limiter(
@@ -171,5 +241,41 @@ defmodule Lolek.ProcessingLimiterTest do
 
     assert_receive {^result_ref, result}
     result
+  end
+
+  @spec spawn_limited_worker(atom(), integer(), atom(), pid()) :: pid()
+  defp spawn_limited_worker(limiter_name, chat_id, started_message, test_pid) do
+    spawn(fn ->
+      Lolek.ProcessingLimiter.with_limit(
+        chat_id,
+        fn ->
+          send(test_pid, started_message)
+
+          receive do
+            :release -> {:ok, :done}
+          end
+        end,
+        name: limiter_name
+      )
+    end)
+  end
+
+  @spec assert_active_gauge(atom(), non_neg_integer(), non_neg_integer()) :: :ok
+  defp assert_active_gauge(metrics_name, expected, attempts \\ 20)
+
+  defp assert_active_gauge(metrics_name, expected, attempts) when attempts > 0 do
+    metrics = Lolek.Metrics.prometheus_text(name: metrics_name)
+
+    if metrics =~ "lolek_processing_active #{expected}" do
+      :ok
+    else
+      Process.sleep(10)
+      assert_active_gauge(metrics_name, expected, attempts - 1)
+    end
+  end
+
+  defp assert_active_gauge(metrics_name, expected, 0) do
+    metrics = Lolek.Metrics.prometheus_text(name: metrics_name)
+    assert metrics =~ "lolek_processing_active #{expected}"
   end
 end

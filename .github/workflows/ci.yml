@@ -73,6 +73,19 @@ jobs:
       - name: Run check
         run: nix build .#checks.x86_64-linux.mix-check -L
 
+  nixos-module-url-allowlist:
+    name: NixOS module URL allowlist test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Nix
+        uses: ./.github/actions/setup-nix
+
+      - name: Run test
+        run: nix build .#checks.x86_64-linux.nixos-module-url-allowlist -L
+
   nixos-service:
     name: NixOS service test
     runs-on: ubuntu-latest

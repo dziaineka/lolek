@@ -9,17 +9,6 @@
 
 let
   cfg = config.services.lolek;
-  defaultAllowedUrlPatterns = [
-    "tiktok.com"
-    "twitter.com"
-    "facebook.com"
-    "instagram.com"
-    "threads.com"
-    "threads.net"
-    "coub.com"
-    "x.com"
-    "youtube.com/shorts"
-  ];
   inherit (lib)
     getExe
     mkEnableOption
@@ -212,12 +201,13 @@ in
     };
 
     allowedUrlPatterns = mkOption {
-      type = types.listOf (types.strMatching "[A-Za-z0-9._/-]+");
-      default = defaultAllowedUrlPatterns;
+      type = types.nullOr (types.listOf (types.strMatching "[A-Za-z0-9._/-]+"));
+      default = null;
       description = ''
-        Host/path suffixes accepted by the bot. Subdomains of host-only entries
-        are also accepted by the application. Query strings and fragments are
-        ignored during matching.
+        Optional host/path suffixes accepted by the bot. When null, the
+        application's default URL allowlist is used. Subdomains of host-only
+        entries are also accepted by the application. Query strings and
+        fragments are ignored during matching.
       '';
     };
 
@@ -361,7 +351,7 @@ in
   config = mkIf cfg.enable {
     assertions = [
       {
-        assertion = cfg.allowedUrlPatterns != [ ];
+        assertion = cfg.allowedUrlPatterns == null || cfg.allowedUrlPatterns != [ ];
         message = "services.lolek.allowedUrlPatterns must not be empty.";
       }
       {
@@ -521,13 +511,15 @@ in
         LOLEK_PROBE_COMMAND_TIMEOUT_SECONDS = toString cfg.probeCommandTimeout;
         LOLEK_HW_ACCELERATION = cfg.hardwareAcceleration.backend;
         LOLEK_HW_DEVICE = toString cfg.hardwareAcceleration.device;
-        LOLEK_ALLOWED_URLS_REGEX = lib.concatStringsSep "|" (map lib.escapeRegex cfg.allowedUrlPatterns);
         LOLEK_MAX_DOWNLOAD_TRIES = toString cfg.maxDownloadTries;
         LOLEK_START_DOWNLOAD_PAUSE = toString cfg.startDownloadPause;
         LOLEK_MAX_DOWNLOAD_PAUSE = toString cfg.maxDownloadPause;
       }
       // optionalAttrs (cfg.botTokenFile != null) {
         LOLEK_BOT_TOKEN_FILE = toString cfg.botTokenFile;
+      }
+      // optionalAttrs (cfg.allowedUrlPatterns != null) {
+        LOLEK_ALLOWED_URLS_REGEX = lib.concatStringsSep "|" (map lib.escapeRegex cfg.allowedUrlPatterns);
       }
       // builtins.mapAttrs (_: toString) cfg.environment;
 

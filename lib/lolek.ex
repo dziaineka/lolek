@@ -645,9 +645,13 @@ defmodule Lolek do
 
   @spec call_telegram((-> {:ok, term()} | {:error, term()})) :: {:ok, term()} | {:error, term()}
   defp call_telegram(fun) do
-    case fun.() do
-      {:error, %ExGram.Error{} = error} -> {:error, {:telegram_api, error}}
-      result -> result
+    if Lolek.ProcessingDeadline.expired?() do
+      {:error, :processing_deadline_exceeded}
+    else
+      case fun.() do
+        {:error, %ExGram.Error{} = error} -> {:error, {:telegram_api, error}}
+        result -> result
+      end
     end
   rescue
     error in ExGram.Error ->

@@ -79,4 +79,8 @@ in
   nixos-concurrency = import ./tests/concurrency.nix {
     inherit pkgs module package;
   };
+
+  nixos-deadline = import ./tests/deadline.nix {
+    inherit pkgs module package;
+  };
 }

@@ -278,8 +278,10 @@ in
       type = types.ints.positive;
       default = 300;
       description = ''
-        Maximum delay, in seconds, between the Telegram message timestamp and
-        local receipt time before Lolek drops the message as stale.
+        Maximum processing age, in seconds, measured from the Telegram message
+        timestamp. Lolek drops stale messages, stops local work, and starts no
+        new Telegram API requests after this deadline. Cleanup may finish later,
+        and a Telegram request started before the deadline may complete remotely.
       '';
     };
 

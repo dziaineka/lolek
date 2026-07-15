@@ -17,6 +17,7 @@ defmodule Lolek.ProcessingLimiter do
   @type state :: %{
           global_limit: pos_integer(),
           per_chat_limit: pos_integer(),
+          metrics_name: GenServer.server(),
           active: %{reference() => {pid(), integer()}},
           active_by_chat: %{integer() => non_neg_integer()},
           waiting: [waiter()]
@@ -39,12 +40,10 @@ defmodule Lolek.ProcessingLimiter do
     timeout = Keyword.get(opts, :timeout, :infinity)
 
     {:ok, token} = GenServer.call(server, {:acquire, self(), chat_id}, timeout)
-    Lolek.Metrics.processing_started()
 
     try do
       fun.()
     after
-      Lolek.Metrics.processing_finished()
       GenServer.cast(server, {:release, token})
     end
   end
@@ -62,6 +61,8 @@ defmodule Lolek.ProcessingLimiter do
         Application.fetch_env!(:lolek, :max_concurrent_downloads_per_chat)
       end)
 
+    metrics_name = Keyword.get(opts, :metrics_name, Lolek.Metrics)
+
     with :ok <- validate_positive_limit(:global_limit, global_limit),
          :ok <- validate_positive_limit(:per_chat_limit, per_chat_limit),
          :ok <- validate_per_chat_limit(global_limit, per_chat_limit) do
@@ -69,6 +70,7 @@ defmodule Lolek.ProcessingLimiter do
        %{
          global_limit: global_limit,
          per_chat_limit: per_chat_limit,
+         metrics_name: metrics_name,
          active: %{},
          active_by_chat: %{},
          waiting: []
@@ -141,6 +143,8 @@ defmodule Lolek.ProcessingLimiter do
 
   @spec activate(reference(), pid(), integer(), state()) :: state()
   defp activate(monitor_ref, pid, chat_id, state) do
+    Lolek.Metrics.processing_started(name: state.metrics_name)
+
     %{
       state
       | active: Map.put(state.active, monitor_ref, {pid, chat_id}),
@@ -153,6 +157,7 @@ defmodule Lolek.ProcessingLimiter do
     case Map.pop(state.active, token) do
       {{_pid, chat_id}, active} ->
         Process.demonitor(token, [:flush])
+        Lolek.Metrics.processing_finished(name: state.metrics_name)
 
         %{
           state

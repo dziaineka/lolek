@@ -98,6 +98,39 @@ defmodule Lolek.UrlTest do
     end
   end
 
+  test "configured allowlist rejects Instagram profile urls", context do
+    Application.put_env(
+      :lolek,
+      :allowed_urls_regex,
+      context.configured_allowed_urls_regex
+    )
+
+    for url <- [
+          "https://www.instagram.com/athomewith_ann/",
+          "https://www.instagram.com/athomewith_ann",
+          "https://www.instagram.com/athomewith_ann?hl=en"
+        ] do
+      assert {:error, :no_url} = Lolek.Url.extract_url(url)
+    end
+  end
+
+  test "configured allowlist accepts Instagram post, reel and tv urls", context do
+    Application.put_env(
+      :lolek,
+      :allowed_urls_regex,
+      context.configured_allowed_urls_regex
+    )
+
+    for url <- [
+          "https://www.instagram.com/p/CabcDefGHi/",
+          "https://www.instagram.com/reel/CabcDefGHi/?igsh=abc",
+          "https://www.instagram.com/reels/CabcDefGHi/",
+          "https://www.instagram.com/tv/CabcDefGHi/"
+        ] do
+      assert {:ok, ^url} = Lolek.Url.extract_url(url)
+    end
+  end
+
   test "threads storage key ignores media path and query string" do
     canonical =
       Lolek.Url.to_folder_name("https://www.threads.com/@slothconservation/post/DXu0QIympQM")

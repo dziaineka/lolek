@@ -36,7 +36,7 @@ let
       (root + "/test")
     ];
   };
-  version = "5.1.0";
+  version = "5.1.1";
   mkLolek =
     {
       curl ? pkgs.curl,

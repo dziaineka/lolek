@@ -236,8 +236,8 @@ pkgs.testers.nixosTest {
     )
 
     machine.succeed("test -s %s" % upload_file)
-    machine.succeed("grep -a 'name=\"video\"' %s" % upload_file)
-    machine.succeed("grep -a 'ftyp' %s" % upload_file)
+    machine.succeed("grep -aq 'name=\"video\"' %s" % upload_file)
+    machine.succeed("grep -aq 'ftyp' %s" % upload_file)
     machine.wait_until_succeeds("test -f %s" % shell_quote(ready_file))
     machine.succeed("test $(%s) -eq 1" % stream_count_command("v", ready_file))
     machine.succeed("test $(%s) -eq 1" % stream_count_command("a", ready_file))

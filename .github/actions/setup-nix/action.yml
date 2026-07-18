@@ -8,6 +8,10 @@ runs:
       uses: DeterminateSystems/nix-installer-action@v22
       with:
         determinate: false
+        extra-conf: |
+          auto-allocate-uids = true
+          extra-experimental-features = auto-allocate-uids cgroups
+          extra-system-features = uid-range
 
     - name: Setup magic Nix cache
       uses: DeterminateSystems/magic-nix-cache-action@v13

@@ -91,7 +91,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
-      NIX_CONFIG: system-features = benchmark big-parallel kvm nixos-test
+      NIX_CONFIG: system-features = benchmark big-parallel kvm nixos-test uid-range
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -115,7 +115,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
-      NIX_CONFIG: system-features = benchmark big-parallel kvm nixos-test
+      NIX_CONFIG: system-features = benchmark big-parallel kvm nixos-test uid-range
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -163,7 +163,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
-      NIX_CONFIG: system-features = benchmark big-parallel kvm nixos-test
+      NIX_CONFIG: system-features = benchmark big-parallel kvm nixos-test uid-range
     steps:
       - name: Checkout
         uses: actions/checkout@v6

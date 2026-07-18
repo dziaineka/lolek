@@ -131,7 +131,7 @@ in
 pkgs.testers.nixosTest {
   name = "lolek-tiktok-audio-mux";
 
-  nodes.machine =
+  containers.machine =
     { ... }:
     {
       imports = [ module ];

@@ -38,7 +38,7 @@ in
 pkgs.testers.nixosTest {
   name = "lolek-deadline";
 
-  nodes.machine =
+  containers.machine =
     { ... }:
     {
       imports = [ module ];

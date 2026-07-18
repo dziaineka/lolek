@@ -45,7 +45,7 @@ in
 pkgs.testers.nixosTest {
   name = "lolek-concurrency";
 
-  nodes.machine =
+  containers.machine =
     { ... }:
     {
       imports = [ module ];

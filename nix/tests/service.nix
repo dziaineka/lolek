@@ -89,7 +89,7 @@ in
 pkgs.testers.nixosTest {
   name = "lolek-service";
 
-  nodes.machine =
+  containers.machine =
     { ... }:
     {
       imports = [ module ];

@@ -49,7 +49,7 @@ defmodule Lolek do
   @spec send_single_gallery_file(integer(), String.t(), String.t(), keyword()) ::
           {:ok, Lolek.File.file_state()} | {:error, term()}
   defp send_single_gallery_file(chat_id, gallery_dir, file_path, context) do
-    options = add_caption([], context)
+    options = add_send_context([], context)
     ext = file_path |> Path.extname() |> String.downcase()
 
     upload =
@@ -102,7 +102,7 @@ defmodule Lolek do
     |> Enum.reduce_while({:ok, []}, fn {batch, idx}, {:ok, acc_entries} ->
       media = build_gallery_media(batch, idx, context)
 
-      case send_media_group_batch(chat_id, media) do
+      case send_media_group_batch(chat_id, media, context) do
         {:ok, messages} when is_list(messages) ->
           entries = extract_media_group_entries(batch, messages)
           {:cont, {:ok, acc_entries ++ entries}}
@@ -120,9 +120,11 @@ defmodule Lolek do
     end
   end
 
-  @spec send_media_group_batch(integer(), [term()]) :: {:ok, term()} | {:error, term()}
-  defp send_media_group_batch(chat_id, media) do
-    call_telegram(fn -> Lolek.Telegram.send_media_group(chat_id, media, []) end)
+  @spec send_media_group_batch(integer(), [term()], keyword()) ::
+          {:ok, term()} | {:error, term()}
+  defp send_media_group_batch(chat_id, media, context) do
+    options = add_message_thread_id([], context)
+    call_telegram(fn -> Lolek.Telegram.send_media_group(chat_id, media, options) end)
   end
 
   @spec send_cached_gallery(integer(), [{String.t(), String.t()}], keyword()) ::
@@ -155,13 +157,14 @@ defmodule Lolek do
           {:ok, term()} | {:error, term()}
   defp send_cached_gallery_batch(chat_id, batch, idx, context) do
     media = build_cached_gallery_media(batch, idx, context)
-    call_telegram(fn -> Lolek.Telegram.send_media_group(chat_id, media, []) end)
+    options = add_message_thread_id([], context)
+    call_telegram(fn -> Lolek.Telegram.send_media_group(chat_id, media, options) end)
   end
 
   @spec send_cached_gallery_single(integer(), {String.t(), String.t()}, keyword()) ::
           {:ok, term()} | {:error, term()}
   defp send_cached_gallery_single(chat_id, {file_id, ext}, context) do
-    options = add_caption([], context)
+    options = add_send_context([], context)
 
     cond do
       ext in @gif_extensions ->
@@ -282,7 +285,7 @@ defmodule Lolek do
   @spec send_video_file(integer(), String.t(), keyword()) ::
           {:ok, Lolek.File.file_state()} | {:error, term()}
   defp send_video_file(chat_id, file_path, context) do
-    options = get_options(file_path) |> add_caption(context)
+    options = get_options(file_path) |> add_send_context(context)
 
     case with_upload_file(file_path, context, fn upload ->
            do_send_video(chat_id, upload, options)
@@ -307,7 +310,7 @@ defmodule Lolek do
   @spec send_document_file(integer(), String.t(), keyword()) ::
           {:ok, Lolek.File.file_state()} | {:error, term()}
   defp send_document_file(chat_id, file_path, context) do
-    options = add_caption([], context)
+    options = add_send_context([], context)
 
     case with_upload_file(file_path, context, fn upload ->
            do_send_document(chat_id, upload, options)
@@ -503,7 +506,7 @@ defmodule Lolek do
   @spec send_ready_file(integer(), String.t(), String.t(), keyword()) ::
           {:ok, term()} | {:error, term()}
   defp send_ready_file(chat_id, file_id, ".mp4", context) do
-    options = [disable_notification: true] |> add_caption(context)
+    options = [disable_notification: true] |> add_send_context(context)
 
     call_telegram(fn ->
       Lolek.Telegram.send_video(chat_id, file_id, options)
@@ -511,7 +514,7 @@ defmodule Lolek do
   end
 
   defp send_ready_file(chat_id, file_id, _extname, context) do
-    options = add_caption([], context)
+    options = add_send_context([], context)
 
     call_telegram(fn -> Lolek.Telegram.send_document(chat_id, file_id, options) end)
   end
@@ -543,6 +546,24 @@ defmodule Lolek do
     case caption(context) do
       nil -> options
       caption -> Keyword.put(options, :caption, caption)
+    end
+  end
+
+  @spec add_send_context(keyword(), keyword()) :: keyword()
+  defp add_send_context(options, context) do
+    options
+    |> add_caption(context)
+    |> add_message_thread_id(context)
+  end
+
+  @spec add_message_thread_id(keyword(), keyword()) :: keyword()
+  defp add_message_thread_id(options, context) do
+    case Keyword.get(context, :message_thread_id) do
+      message_thread_id when is_integer(message_thread_id) ->
+        Keyword.put(options, :message_thread_id, message_thread_id)
+
+      _ ->
+        options
     end
   end
 

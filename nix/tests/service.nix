@@ -273,25 +273,25 @@ pkgs.testers.nixosTest {
         % (fake_events_file, fake_events_file)
     )
     machine.succeed("test -s %s" % passthrough_upload_file)
-    machine.succeed("grep -a 'name=\"video\"' %s" % passthrough_upload_file)
+    machine.succeed("grep -aq 'name=\"video\"' %s" % passthrough_upload_file)
     machine.succeed(
-        "grep -a %s %s"
+        "grep -aq %s %s"
         % (
             shell_quote(passthrough_source_caption),
             shell_quote(passthrough_upload_file),
         )
     )
     machine.succeed(
-        "grep -a %s %s"
+        "grep -aq %s %s"
         % (
             shell_quote('filename="%s.mp4"' % passthrough_source_title),
             shell_quote(passthrough_upload_file),
         )
     )
-    machine.succeed("grep -a 'ftyp' %s" % passthrough_upload_file)
+    machine.succeed("grep -aq 'ftyp' %s" % passthrough_upload_file)
     machine.succeed("test -s %s" % compressed_upload_file)
-    machine.succeed("grep -a 'name=\"video\"' %s" % compressed_upload_file)
-    machine.succeed("grep -a 'ftyp' %s" % compressed_upload_file)
+    machine.succeed("grep -aq 'name=\"video\"' %s" % compressed_upload_file)
+    machine.succeed("grep -aq 'ftyp' %s" % compressed_upload_file)
     machine.succeed(
         "test $(journalctl -u ${serviceUnit} --no-pager | grep -c 'Compressed video with libx264') -eq 1"
     )
@@ -304,14 +304,14 @@ pkgs.testers.nixosTest {
     )
     machine.succeed("test -f %s" % passthrough_ready_file)
     machine.succeed(
-        "grep -a %s %s"
+        "grep -aq %s %s"
         % (
             shell_quote('"caption":"%s"' % passthrough_source_caption),
             shell_quote(passthrough_metadata_file),
         )
     )
     machine.succeed(
-        "grep -a %s %s"
+        "grep -aq %s %s"
         % (
             shell_quote('"title":"%s"' % passthrough_source_title),
             shell_quote(passthrough_metadata_file),

@@ -135,6 +135,53 @@ defmodule Lolek.SendFileTest do
     end)
   end
 
+  test "sends uploaded media to the originating message thread" do
+    preserve_telegram_env(fn ->
+      file_path = tmp_file("downloaded.mp4", "media")
+
+      response = %ExGram.Model.Message{
+        video: %ExGram.Model.Video{file_id: "telegram-file-id"}
+      }
+
+      Application.put_env(:lolek, :telegram_client, TelegramClient)
+      Application.put_env(:lolek, :telegram_test_result, {:ok, response})
+      Application.put_env(:lolek, :telegram_test_parent, self())
+
+      context = [message_thread_id: 456]
+
+      assert {:ok, {:sent_to_telegram_at_first, ^file_path, "telegram-file-id"}} =
+               Lolek.send_file(123, {:compressed, file_path}, context)
+
+      assert_receive {:send_video, 123, _upload, options}
+      assert options[:message_thread_id] == 456
+    end)
+  end
+
+  test "sends media groups to the originating message thread" do
+    preserve_telegram_env(fn ->
+      files = for index <- 1..2, do: tmp_file("gallery-#{index}.jpg", "media")
+
+      messages =
+        for index <- 1..2 do
+          %ExGram.Model.Message{
+            photo: [%ExGram.Model.PhotoSize{file_id: "gallery-file-#{index}"}]
+          }
+        end
+
+      Application.put_env(:lolek, :telegram_client, TelegramClient)
+      Application.put_env(:lolek, :telegram_test_result, {:ok, messages})
+      Application.put_env(:lolek, :telegram_test_parent, self())
+
+      context = [message_thread_id: 456]
+
+      assert {:ok, {:sent_gallery_to_telegram_at_first, "/tmp/gallery", _entries}} =
+               Lolek.send_file(123, {:downloaded_gallery, "/tmp/gallery", files}, context)
+
+      assert_receive {:send_media_group, 123, _media, options}
+      assert options[:message_thread_id] == 456
+    end)
+  end
+
   test "limits a gallery to the configured maximum number of media files" do
     preserve_telegram_env(fn ->
       files = for index <- 1..3, do: tmp_file("gallery-#{index}.jpg", "media")

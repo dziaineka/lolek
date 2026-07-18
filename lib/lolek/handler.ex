@@ -36,13 +36,17 @@ defmodule Lolek.Handler do
         {
           :text,
           text,
-          %ExGram.Model.Message{chat: %ExGram.Model.Chat{id: chat_id}, from: from} = message
+          %ExGram.Model.Message{
+            chat: %ExGram.Model.Chat{id: chat_id},
+            from: from,
+            message_thread_id: message_thread_id
+          } = message
         },
         _context
       ) do
     with_fresh_message(message, fn ->
       with_processing_deadline(message, fn ->
-        handle_text_message(text, chat_id, from)
+        handle_text_message(text, chat_id, from, message_thread_id)
       end)
     end)
   end
@@ -51,11 +55,12 @@ defmodule Lolek.Handler do
     :ok
   end
 
-  @spec handle_text_message(String.t(), integer(), ExGram.Model.User.t() | nil) :: :ok
-  defp handle_text_message(text, chat_id, from) do
+  @spec handle_text_message(String.t(), integer(), ExGram.Model.User.t() | nil, integer() | nil) ::
+          :ok
+  defp handle_text_message(text, chat_id, from, message_thread_id) do
     case Lolek.Url.extract_url(text) do
       {:ok, url} ->
-        case process_admitted_url(chat_id, url, from) do
+        case process_admitted_url(chat_id, url, from, message_thread_id) do
           {:ok, _file_state} ->
             Lolek.Metrics.record_message_result(:ok)
             :ok
@@ -85,23 +90,33 @@ defmodule Lolek.Handler do
     end
   end
 
-  @spec process_admitted_url(integer(), String.t(), ExGram.Model.User.t() | nil) ::
+  @spec process_admitted_url(
+          integer(),
+          String.t(),
+          ExGram.Model.User.t() | nil,
+          integer() | nil
+        ) ::
           {:ok, Lolek.File.file_state()} | {:error, term()}
-  defp process_admitted_url(chat_id, url, from) do
+  defp process_admitted_url(chat_id, url, from, message_thread_id) do
     if Lolek.ChatRateLimiter.admit?(chat_id) do
       Lolek.UrlProcessing.process(url, fn ->
-        process_url_with_limit(chat_id, url, from)
+        process_url_with_limit(chat_id, url, from, message_thread_id)
       end)
     else
       {:error, :chat_rate_limited}
     end
   end
 
-  @spec process_url_with_limit(integer(), String.t(), ExGram.Model.User.t() | nil) ::
+  @spec process_url_with_limit(
+          integer(),
+          String.t(),
+          ExGram.Model.User.t() | nil,
+          integer() | nil
+        ) ::
           {:ok, Lolek.File.file_state()} | {:error, term()}
-  defp process_url_with_limit(chat_id, url, from) do
+  defp process_url_with_limit(chat_id, url, from, message_thread_id) do
     Lolek.ProcessingLimiter.with_limit(chat_id, fn ->
-      process_url(chat_id, url, Lolek.Requester.display_name(from))
+      process_url(chat_id, url, Lolek.Requester.display_name(from), message_thread_id)
     end)
   end
 
@@ -160,24 +175,32 @@ defmodule Lolek.Handler do
     max(deadline - System.system_time(:millisecond), 0)
   end
 
-  @spec process_url(integer(), String.t(), String.t()) ::
+  @spec process_url(integer(), String.t(), String.t(), integer() | nil) ::
           {:ok, Lolek.File.file_state()} | {:error, term()}
-  defp process_url(chat_id, url, requester_name) do
+  defp process_url(chat_id, url, requester_name, message_thread_id) do
     log_url = Lolek.Url.normalize_for_log(url)
     started_at = System.monotonic_time()
 
     timed_step("total", log_url, fn ->
-      do_process_url(chat_id, url, log_url, requester_name, started_at)
+      do_process_url(chat_id, url, log_url, requester_name, message_thread_id, started_at)
     end)
   end
 
-  @spec do_process_url(integer(), String.t(), String.t(), String.t(), integer()) ::
+  @spec do_process_url(
+          integer(),
+          String.t(),
+          String.t(),
+          String.t(),
+          integer() | nil,
+          integer()
+        ) ::
           {:ok, Lolek.File.file_state()} | {:error, term()}
-  defp do_process_url(chat_id, url, log_url, requester_name, started_at) do
+  defp do_process_url(chat_id, url, log_url, requester_name, message_thread_id, started_at) do
     with {:ok, folder_path} <- Lolek.File.get_folder_path(url),
          source_metadata <- source_metadata(url, folder_path, log_url),
          send_context = [
            requester_name: requester_name,
+           message_thread_id: message_thread_id,
            started_at: started_at,
            source_caption: source_metadata.caption,
            source_title: source_metadata.title

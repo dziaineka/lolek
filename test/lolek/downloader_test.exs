@@ -243,6 +243,36 @@ defmodule Lolek.DownloaderTest do
   end
 
   @tag :tmp_dir
+  test "routes gallery-dl video collections to downloaded_gallery state", %{tmp_dir: tmp_dir} do
+    preserve_download_env(fn ->
+      bin_dir = Path.join(tmp_dir, "bin")
+      File.mkdir_p!(bin_dir)
+
+      write_script(bin_dir, "gallery-dl", """
+      #!/bin/sh
+      dest=
+      while [ "$#" -gt 0 ]; do
+        case "$1" in --dest) shift; dest="$1" ;; esac
+        shift
+      done
+      printf videodata > "$dest/video001.mp4"
+      printf videodata > "$dest/video002.mp4"
+      """)
+
+      write_script(bin_dir, "yt-dlp", "#!/bin/sh\nexit 1")
+
+      set_gallery_env(bin_dir, true)
+
+      assert {:ok, {:downloaded_gallery, gallery_dir, files}} =
+               Lolek.Downloader.download("https://example.com/post", {:new_file, tmp_dir})
+
+      assert gallery_dir == Path.join(tmp_dir, "gallery")
+      assert length(files) == 2
+      assert Enum.all?(files, &String.ends_with?(&1, ".mp4"))
+    end)
+  end
+
+  @tag :tmp_dir
   test "promotes single mp4 from gallery-dl to downloaded state", %{tmp_dir: tmp_dir} do
     preserve_download_env(fn ->
       bin_dir = Path.join(tmp_dir, "bin")

@@ -38,15 +38,14 @@ defmodule Lolek.Handler do
           text,
           %ExGram.Model.Message{
             chat: %ExGram.Model.Chat{id: chat_id},
-            from: from,
-            message_thread_id: message_thread_id
+            from: from
           } = message
         },
         _context
       ) do
     with_fresh_message(message, fn ->
       with_processing_deadline(message, fn ->
-        handle_text_message(text, chat_id, from, message_thread_id)
+        handle_text_message(text, chat_id, from, topic_message_thread_id(message))
       end)
     end)
   end
@@ -54,6 +53,17 @@ defmodule Lolek.Handler do
   def handle(_, _context) do
     :ok
   end
+
+  @doc false
+  @spec topic_message_thread_id(ExGram.Model.Message.t()) :: integer() | nil
+  def topic_message_thread_id(%ExGram.Model.Message{
+        is_topic_message: true,
+        message_thread_id: message_thread_id
+      })
+      when is_integer(message_thread_id),
+      do: message_thread_id
+
+  def topic_message_thread_id(%ExGram.Model.Message{}), do: nil
 
   @spec handle_text_message(String.t(), integer(), ExGram.Model.User.t() | nil, integer() | nil) ::
           :ok

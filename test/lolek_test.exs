@@ -33,6 +33,21 @@ defmodule LolekTest do
     assert :ok = Lolek.Handler.handle({:command, :start, message}, %ExGram.Cnt{})
   end
 
+  test "routes responses only to actual Telegram topics" do
+    message = text_message("https://tiktok.com/video", System.system_time(:second))
+
+    ordinary_reply = %{message | message_thread_id: 456}
+
+    topic_message = %{
+      message
+      | is_topic_message: true,
+        message_thread_id: 456
+    }
+
+    assert Lolek.Handler.topic_message_thread_id(ordinary_reply) == nil
+    assert Lolek.Handler.topic_message_thread_id(topic_message) == 456
+  end
+
   defp text_message(text, date) do
     %ExGram.Model.Message{
       message_id: 1,

@@ -89,7 +89,7 @@ defmodule Lolek.Downloader do
       case do_gallery_download(url, gallery_dir) do
         {:ok, [_ | _] = files} ->
           Logger.info("Gallery download found #{length(files)} file(s) for url: #{log_url}")
-          route_gallery_files(files, gallery_dir, output_path)
+          {:ok, {:downloaded_gallery, gallery_dir, files}}
 
         {:ok, []} ->
           Logger.info("Gallery download found no files for url: #{log_url}")
@@ -112,29 +112,6 @@ defmodule Lolek.Downloader do
     case downloader_module(url) do
       Lolek.ThreadsDownloader -> Lolek.ThreadsDownloader.download_gallery(url, gallery_dir)
       :yt_dlp -> Lolek.GalleryDownloader.download(url, gallery_dir)
-    end
-  end
-
-  @spec route_gallery_files([String.t()], String.t(), String.t()) ::
-          {:ok, Lolek.File.file_state()} | {:error, term()}
-  defp route_gallery_files(files, gallery_dir, output_path) do
-    {videos, images} = Enum.split_with(files, &Lolek.GalleryDownloader.video_file?/1)
-    mp4_videos = Enum.filter(videos, fn p -> Path.extname(p) |> String.downcase() == ".mp4" end)
-
-    cond do
-      images != [] or match?([_, _ | _], videos) ->
-        {:ok, {:downloaded_gallery, gallery_dir, files}}
-
-      match?([_], mp4_videos) ->
-        dest = Path.join(output_path, @downloaded_name)
-
-        case File.rename(hd(mp4_videos), dest) do
-          :ok -> {:ok, {:downloaded, dest}}
-          {:error, reason} -> {:error, {:rename_gallery_video, reason}}
-        end
-
-      true ->
-        {:error, :no_usable_gallery_files}
     end
   end
 

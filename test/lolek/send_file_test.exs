@@ -65,7 +65,7 @@ defmodule Lolek.SendFileTest do
       Application.put_env(:lolek, :telegram_test_result, {:error, error})
 
       assert {:error, {:telegram_api, %ExGram.Error{code: 400, message: "Bad Request"}}} =
-               Lolek.send_file(123, {:ready_to_telegram, "/tmp/file-id.mp4"})
+               Lolek.send_file(123, {:ready_media, [{"file-id", ".mp4"}]})
     end)
   end
 
@@ -91,7 +91,7 @@ defmodule Lolek.SendFileTest do
                      end
                    end)
 
-                   result = Lolek.send_file(123, {:ready_to_telegram, "/tmp/file-id.mp4"})
+                   result = Lolek.send_file(123, {:ready_media, [{"file-id", ".mp4"}]})
                    send(test_pid, {:send_after_deadline, result})
                  end,
                  25
@@ -111,7 +111,7 @@ defmodule Lolek.SendFileTest do
       Application.put_env(:lolek, :telegram_test_error, error)
 
       assert {:error, {:telegram_api, %ExGram.Error{code: 500, message: "Internal Error"}}} =
-               Lolek.send_file(123, {:ready_to_telegram, "/tmp/file-id.mp4"})
+               Lolek.send_file(123, {:ready_media, [{"file-id", ".mp4"}]})
     end)
   end
 

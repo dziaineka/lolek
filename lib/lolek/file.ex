@@ -15,15 +15,10 @@ defmodule Lolek.File do
   @type sent_media_entry :: {ext :: String.t(), tg_file_id :: String.t()}
 
   @type file_state ::
-          {:ready_to_telegram, String.t()}
-          | {:ready_media, [ready_media_entry()]}
-          | {:compressed, String.t()}
-          | {:downloaded, String.t()}
-          | {:downloaded_gallery, gallery_dir :: String.t(), files :: [String.t()]}
+          {:ready_media, [ready_media_entry()]}
           | {:downloaded_media, cache_root :: String.t(), files :: [String.t()]}
           | {:prepared_media, cache_root :: String.t(), files :: [String.t()]}
           | {:new_file, String.t()}
-          | {:sent_to_telegram_at_first, file_path :: String.t(), tg_file_id :: String.t()}
           | {:sent_media, cache_root :: String.t(), [sent_media_entry()]}
 
   @spec get_video_width_and_height(String.t()) :: :error | {:ok, {integer(), integer()}}
@@ -177,23 +172,6 @@ defmodule Lolek.File do
   end
 
   @spec move_to_ready_to_telegram(Lolek.File.file_state()) :: :ok | {:error, term()}
-  def move_to_ready_to_telegram({:sent_to_telegram_at_first, file_path, file_id}) do
-    file_extension = Path.extname(file_path)
-
-    folder_path =
-      file_path
-      |> Path.dirname()
-      |> Path.join(@ready_to_telegram)
-
-    new_file_path =
-      folder_path
-      |> Path.join(file_id <> file_extension)
-
-    with :ok <- File.mkdir_p(folder_path) do
-      File.rename(file_path, new_file_path)
-    end
-  end
-
   def move_to_ready_to_telegram({:sent_media, cache_root, entries}) do
     ready_path = Path.join(cache_root, @ready_to_telegram)
     manifest_path = Path.join(ready_path, @media_manifest)
@@ -315,7 +293,9 @@ defmodule Lolek.File do
   @spec check_single_cache_media(String.t()) :: {:exists, file_state()} | false
   defp check_single_cache_media(file_path) do
     if usable_cached_file?(file_path) do
-      {:exists, {:ready_to_telegram, file_path}}
+      ext = file_path |> Path.extname() |> String.downcase()
+      file_id = Path.basename(file_path, ext)
+      {:exists, {:ready_media, [{file_id, ext}]}}
     else
       remove_invalid_cache_file(file_path)
       false

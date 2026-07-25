@@ -12,6 +12,7 @@ let
   stateDir = "/var/lib/${serviceUser}";
   downloadDir = "${stateDir}/downloads";
   readyDirName = "ready_to_telegram";
+  mediaManifestName = "media_manifest.json";
 
   fakeServicesName = "lolek-tiktok-audio-services";
   fakeServicesUnit = "${fakeServicesName}.service";
@@ -194,6 +195,7 @@ pkgs.testers.nixosTest {
 
   testScript = ''
     import base64
+    import json
     import shlex
 
     def shell_quote(value):
@@ -216,11 +218,13 @@ pkgs.testers.nixosTest {
     audio_url = "${audioUrl}"
     download_dir = "${downloadDir}"
     ready_dir_name = "${readyDirName}"
+    media_manifest_name = "${mediaManifestName}"
     video_file_id = "${videoFileId}"
     upload_file = "${uploadFile}"
     folder_name = base64.b64encode(media_url.encode()).decode().rstrip("=")
     cache_dir = "%s/%s" % (download_dir, folder_name)
-    ready_file = "%s/%s/%s.mp4" % (cache_dir, ready_dir_name, video_file_id)
+    manifest_file = "%s/%s/%s" % (cache_dir, ready_dir_name, media_manifest_name)
+    prepared_file = "%s/gallery/tiktok/fakeuser/video-only.mp4" % cache_dir
 
     machine.wait_until_succeeds("curl -fsS %s >/dev/null" % media_url)
     machine.wait_until_succeeds("curl -fsS %s >/dev/null" % audio_url)
@@ -238,13 +242,15 @@ pkgs.testers.nixosTest {
     machine.succeed("test -s %s" % upload_file)
     machine.succeed("grep -aq 'name=\"video\"' %s" % upload_file)
     machine.succeed("grep -aq 'ftyp' %s" % upload_file)
-    machine.wait_until_succeeds("test -f %s" % shell_quote(ready_file))
-    machine.succeed("test $(%s) -eq 1" % stream_count_command("v", ready_file))
-    machine.succeed("test $(%s) -eq 1" % stream_count_command("a", ready_file))
+    machine.wait_until_succeeds("test -f %s" % shell_quote(manifest_file))
+    manifest = json.loads(machine.succeed("cat %s" % shell_quote(manifest_file)))
+    assert manifest == [{"ext": ".mp4", "file_id": video_file_id}], manifest
+    machine.succeed("test $(%s) -eq 1" % stream_count_command("v", prepared_file))
+    machine.succeed("test $(%s) -eq 1" % stream_count_command("a", prepared_file))
     machine.succeed(
         "test $(ffprobe -v error -select_streams a:0 "
         "-show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 %s) = aac"
-        % shell_quote(ready_file)
+        % shell_quote(prepared_file)
     )
     machine.succeed(
         "journalctl -u ${serviceUnit} --no-pager | grep 'TikTok audio mux attempt failed'"

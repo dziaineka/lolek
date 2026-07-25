@@ -12,6 +12,7 @@ let
   stateDir = "/var/lib/${serviceUser}";
   downloadDir = "${stateDir}/downloads";
   readyDirName = "ready_to_telegram";
+  mediaManifestName = "media_manifest.json";
 
   fakeServicesName = "lolek-fake-services";
   fakeServicesUnit = "${fakeServicesName}.service";
@@ -182,6 +183,7 @@ pkgs.testers.nixosTest {
     machine.wait_for_unit("${fakeServicesUnit}")
 
     ready_dir_name = "${readyDirName}"
+    media_manifest_name = "${mediaManifestName}"
     service_user = "${serviceUser}"
     service_group = "${serviceGroup}"
     download_dir = "${downloadDir}"
@@ -296,13 +298,18 @@ pkgs.testers.nixosTest {
         "test $(journalctl -u ${serviceUnit} --no-pager | grep -c 'Compressed video with libx264') -eq 1"
     )
 
-    # Both uploads should be cached under the Telegram file IDs returned by the fake API.
-    passthrough_ready_file = "%s/%s/%s.mp4" % (
+    # Both uploads should have the Telegram file IDs returned by the fake API cached in manifests.
+    passthrough_manifest_file = "%s/%s/%s" % (
         passthrough_cache_dir,
         ready_dir_name,
-        passthrough_video_file_id,
+        media_manifest_name,
     )
-    machine.succeed("test -f %s" % passthrough_ready_file)
+    passthrough_manifest = json.loads(
+        machine.succeed("cat %s" % shell_quote(passthrough_manifest_file))
+    )
+    assert passthrough_manifest == [
+        {"ext": ".mp4", "file_id": passthrough_video_file_id}
+    ], passthrough_manifest
     machine.succeed(
         "grep -aq %s %s"
         % (
@@ -322,19 +329,25 @@ pkgs.testers.nixosTest {
         % (passthrough_media_file, max_file_size_to_send_to_telegram)
     )
 
-    compressed_ready_file = "%s/%s/%s.mp4" % (
+    compressed_manifest_file = "%s/%s/%s" % (
         compressed_cache_dir,
         ready_dir_name,
-        compressed_video_file_id,
+        media_manifest_name,
     )
-    machine.succeed("test -f %s" % compressed_ready_file)
+    compressed_manifest = json.loads(
+        machine.succeed("cat %s" % shell_quote(compressed_manifest_file))
+    )
+    assert compressed_manifest == [
+        {"ext": ".mp4", "file_id": compressed_video_file_id}
+    ], compressed_manifest
     machine.succeed(
         "test $(stat -c %%s %s) -gt %d"
         % (compressed_media_file, max_file_size_to_send_to_telegram)
     )
+    compressed_prepared_file = "%s/compressed.mp4" % compressed_cache_dir
     machine.succeed(
         "test $(stat -c %%s %s) -le %d"
-        % (compressed_ready_file, max_file_size_to_send_to_telegram)
+        % (compressed_prepared_file, max_file_size_to_send_to_telegram)
     )
 
     # The optional Prometheus endpoint should expose metrics from the exercised service path.

@@ -11,8 +11,10 @@ defmodule Lolek.Converter do
   @spec adapt_to_telegram(Lolek.File.file_state()) ::
           {:ok, Lolek.File.file_state()} | {:error, term()}
   def adapt_to_telegram({:downloaded, file_path}) do
-    with :ok <- compress_video_to_telegram_size(file_path) do
-      replace_original_file_with_compressed(file_path)
+    prepared_path = get_compressed_file_path(file_path)
+
+    with :ok <- prepare_video(file_path, prepared_path) do
+      {:ok, {:compressed, prepared_path}}
     end
   end
 
@@ -20,23 +22,30 @@ defmodule Lolek.Converter do
     {:ok, another_file_state}
   end
 
-  @spec compress_video_to_telegram_size(String.t()) :: :ok | {:error, term()}
-  defp compress_video_to_telegram_size(file_path) do
-    if Path.extname(file_path) != ".mp4" do
-      :ok
-    else
-      compress_mp4_to_telegram_size(file_path)
+  @spec prepare_video(String.t(), String.t()) :: :ok | {:error, term()}
+  defp prepare_video(file_path, prepared_path) do
+    with :ok <- compress_video_to_telegram_size(file_path, prepared_path) do
+      replace_original_file_with_prepared(file_path, prepared_path)
     end
   end
 
-  @spec compress_mp4_to_telegram_size(String.t()) :: :ok | {:error, term()}
-  defp compress_mp4_to_telegram_size(file_path) do
+  @spec compress_video_to_telegram_size(String.t(), String.t()) :: :ok | {:error, term()}
+  defp compress_video_to_telegram_size(file_path, prepared_path) do
+    if Path.extname(file_path) != ".mp4" do
+      :ok
+    else
+      compress_mp4_to_telegram_size(file_path, prepared_path)
+    end
+  end
+
+  @spec compress_mp4_to_telegram_size(String.t(), String.t()) :: :ok | {:error, term()}
+  defp compress_mp4_to_telegram_size(file_path, prepared_path) do
     with {:ok, file_size} <- Lolek.File.file_size(file_path),
          {:ok, duration} <- video_duration(file_path) do
       case encoding_strategy(file_path, file_size, duration) do
         :passthrough -> :ok
         :too_big_media -> {:error, :too_big_media}
-        strategy -> encode_video(file_path, strategy)
+        strategy -> encode_video(file_path, prepared_path, strategy)
       end
     end
   end
@@ -99,18 +108,16 @@ defmodule Lolek.Converter do
     duration <= Application.fetch_env!(:lolek, :max_duration_to_compress)
   end
 
-  @spec encode_video(String.t(), encoding_strategy()) :: :ok | {:error, term()}
-  defp encode_video(file_path, strategy) do
-    new_file_path = get_compressed_file_path(file_path)
-
-    case encode_with_h264(file_path, new_file_path, strategy) do
+  @spec encode_video(String.t(), String.t(), encoding_strategy()) :: :ok | {:error, term()}
+  defp encode_video(file_path, prepared_path, strategy) do
+    case encode_with_h264(file_path, prepared_path, strategy) do
       :ok ->
-        ensure_telegram_file_size(new_file_path)
+        ensure_telegram_file_size(prepared_path)
 
       {:error, error} ->
         action = if strategy == :compress, do: "compressing", else: "converting"
         Logger.error("Error when #{action} video: #{inspect(error)}")
-        File.rm(new_file_path)
+        File.rm(prepared_path)
         {:error, error}
     end
   end
@@ -464,19 +471,16 @@ defmodule Lolek.Converter do
     file_path |> Path.dirname() |> Path.join(@compressed_name)
   end
 
-  @spec replace_original_file_with_compressed(String.t()) ::
-          {:ok, Lolek.File.file_state()} | {:error, term()}
-  defp replace_original_file_with_compressed(file_path) do
-    new_file_path = get_compressed_file_path(file_path)
-
-    if File.exists?(new_file_path) do
+  @spec replace_original_file_with_prepared(String.t(), String.t()) :: :ok | {:error, term()}
+  defp replace_original_file_with_prepared(file_path, prepared_path) do
+    if File.exists?(prepared_path) do
       case File.rm(file_path) do
-        :ok -> {:ok, {:compressed, new_file_path}}
+        :ok -> :ok
         {:error, reason} -> {:error, {:remove_original_failed, reason}}
       end
     else
-      case File.rename(file_path, new_file_path) do
-        :ok -> {:ok, {:compressed, new_file_path}}
+      case File.rename(file_path, prepared_path) do
+        :ok -> :ok
         {:error, reason} -> {:error, {:rename_compressed_failed, reason}}
       end
     end

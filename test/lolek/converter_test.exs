@@ -225,6 +225,101 @@ defmodule Lolek.ConverterTest do
   end
 
   @tag :tmp_dir
+  test "prepares gallery videos while preserving media order", %{tmp_dir: tmp_dir} do
+    preserve_converter_env(fn ->
+      bin_dir = Path.join(tmp_dir, "bin")
+      gallery_dir = Path.join(tmp_dir, "gallery")
+      File.mkdir_p!(gallery_dir)
+
+      first_image = Path.join(gallery_dir, "01.jpg")
+      oversized_video = Path.join(gallery_dir, "02.mp4")
+      second_image = Path.join(gallery_dir, "03.png")
+      small_video = Path.join(gallery_dir, "04.mp4")
+      prepared_video = oversized_video <> ".telegram.mp4"
+
+      File.write!(first_image, "i")
+      File.write!(oversized_video, String.duplicate("v", 10))
+      File.write!(second_image, "i")
+      File.write!(small_video, "vid")
+      put_video_probe(bin_dir, "10.0", "h264")
+
+      put_fake_executable(bin_dir, "ffmpeg", """
+      output=
+      for arg do output="$arg"; done
+      printf ok > "$output"
+      """)
+
+      put_compression_env()
+      Application.put_env(:lolek, :max_file_size_to_send_to_telegram, 5)
+
+      System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
+      {:ok, _apps} = Application.ensure_all_started(:erlexec)
+
+      files = [first_image, oversized_video, second_image, small_video]
+
+      assert {:ok, {:downloaded_gallery, ^gallery_dir, prepared_files}} =
+               Lolek.Converter.adapt_to_telegram({:downloaded_gallery, gallery_dir, files})
+
+      assert prepared_files == [first_image, prepared_video, second_image, small_video]
+      assert File.read!(prepared_video) == "ok"
+      refute File.exists?(oversized_video)
+      assert File.exists?(small_video)
+    end)
+  end
+
+  @tag :tmp_dir
+  test "omits gallery media that cannot be prepared", %{tmp_dir: tmp_dir} do
+    preserve_converter_env(fn ->
+      bin_dir = Path.join(tmp_dir, "bin")
+      gallery_dir = Path.join(tmp_dir, "gallery")
+      File.mkdir_p!(gallery_dir)
+
+      image = Path.join(gallery_dir, "01.jpg")
+      video = Path.join(gallery_dir, "02.mp4")
+
+      File.write!(image, "image")
+      File.write!(video, String.duplicate("v", 10))
+      put_video_probe(bin_dir, "1000.0", "h264")
+      put_fake_executable(bin_dir, "ffmpeg", "exit 1")
+      put_compression_env()
+      Application.put_env(:lolek, :max_file_size_to_send_to_telegram, 5)
+
+      System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
+      {:ok, _apps} = Application.ensure_all_started(:erlexec)
+
+      assert {:ok, {:downloaded_gallery, ^gallery_dir, [^image]}} =
+               Lolek.Converter.adapt_to_telegram(
+                 {:downloaded_gallery, gallery_dir, [image, video]}
+               )
+
+      assert File.exists?(video)
+      refute File.exists?(video <> ".telegram.mp4")
+    end)
+  end
+
+  @tag :tmp_dir
+  test "returns an error when no gallery media can be prepared", %{tmp_dir: tmp_dir} do
+    preserve_converter_env(fn ->
+      bin_dir = Path.join(tmp_dir, "bin")
+      gallery_dir = Path.join(tmp_dir, "gallery")
+      File.mkdir_p!(gallery_dir)
+      video = Path.join(gallery_dir, "video.mp4")
+
+      File.write!(video, String.duplicate("v", 10))
+      put_video_probe(bin_dir, "1000.0", "h264")
+      put_fake_executable(bin_dir, "ffmpeg", "exit 1")
+      put_compression_env()
+      Application.put_env(:lolek, :max_file_size_to_send_to_telegram, 5)
+
+      System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
+      {:ok, _apps} = Application.ensure_all_started(:erlexec)
+
+      assert {:error, :no_usable_gallery_files} =
+               Lolek.Converter.adapt_to_telegram({:downloaded_gallery, gallery_dir, [video]})
+    end)
+  end
+
+  @tag :tmp_dir
   test "uses vaapi encoder when configured", %{tmp_dir: tmp_dir} do
     preserve_converter_env(fn ->
       bin_dir = Path.join(tmp_dir, "bin")

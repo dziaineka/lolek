@@ -122,7 +122,7 @@ defmodule Lolek.Downloader do
     mp4_videos = Enum.filter(videos, fn p -> Path.extname(p) |> String.downcase() == ".mp4" end)
 
     cond do
-      images != [] ->
+      images != [] or match?([_, _ | _], videos) ->
         {:ok, {:downloaded_gallery, gallery_dir, files}}
 
       match?([_], mp4_videos) ->

@@ -105,11 +105,10 @@ defmodule Lolek.ConverterTest do
   end
 
   @tag :tmp_dir
-  test "returns an error when original file cannot be renamed", %{tmp_dir: tmp_dir} do
+  test "returns an error when downloaded file is missing", %{tmp_dir: tmp_dir} do
     file_path = Path.join(tmp_dir, "downloaded.txt")
 
-    assert {:error, {:rename_compressed_failed, :enoent}} =
-             Lolek.Converter.adapt_to_telegram({:downloaded, file_path})
+    assert {:error, :enoent} = Lolek.Converter.adapt_to_telegram({:downloaded, file_path})
   end
 
   @tag :tmp_dir
@@ -133,6 +132,95 @@ defmodule Lolek.ConverterTest do
 
       assert File.read!(compressed_path) == String.duplicate("x", 10)
       refute File.exists?(file_path)
+    end)
+  end
+
+  @tag :tmp_dir
+  test "converts a non-mp4 video even when its codec is h264", %{tmp_dir: tmp_dir} do
+    preserve_converter_env(fn ->
+      bin_dir = Path.join(tmp_dir, "bin")
+      file_path = Path.join(tmp_dir, "downloaded.mkv")
+      compressed_path = Path.join(tmp_dir, "compressed.mp4")
+      ffmpeg_args_file = Path.join(tmp_dir, "ffmpeg.args")
+
+      File.write!(file_path, String.duplicate("x", 10))
+      put_video_probe(bin_dir, "10.0", "h264")
+
+      put_fake_executable(bin_dir, "ffmpeg", """
+      output=
+      for arg do
+        printf '%s\\n' "$arg" >> "#{ffmpeg_args_file}"
+        output="$arg"
+      done
+      printf ok > "$output"
+      """)
+
+      put_compression_env()
+      Application.put_env(:lolek, :max_file_size_to_send_to_telegram, 100)
+
+      System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
+      {:ok, _apps} = Application.ensure_all_started(:erlexec)
+
+      assert {:ok, {:compressed, ^compressed_path}} =
+               Lolek.Converter.adapt_to_telegram({:downloaded, file_path})
+
+      assert File.read!(compressed_path) == "ok"
+      assert File.read!(ffmpeg_args_file) =~ "-c:v\nlibx264\n"
+      refute File.exists?(file_path)
+    end)
+  end
+
+  @tag :tmp_dir
+  test "rejects videos above the conversion input limit", %{tmp_dir: tmp_dir} do
+    preserve_converter_env(fn ->
+      bin_dir = Path.join(tmp_dir, "bin")
+      file_path = Path.join(tmp_dir, "downloaded.mp4")
+      compressed_path = Path.join(tmp_dir, "compressed.mp4")
+
+      File.write!(file_path, String.duplicate("x", 10))
+      put_video_probe(bin_dir, "10.0", "h264")
+      put_fake_executable(bin_dir, "ffmpeg", "exit 1")
+      put_compression_env()
+      Application.put_env(:lolek, :max_file_size_to_compress, 5)
+
+      System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
+      {:ok, _apps} = Application.ensure_all_started(:erlexec)
+
+      assert {:error, :too_big_media} =
+               Lolek.Converter.adapt_to_telegram({:downloaded, file_path})
+
+      assert File.exists?(file_path)
+      refute File.exists?(compressed_path)
+    end)
+  end
+
+  @tag :tmp_dir
+  test "removes encoded output that remains above the upload limit", %{tmp_dir: tmp_dir} do
+    preserve_converter_env(fn ->
+      bin_dir = Path.join(tmp_dir, "bin")
+      file_path = Path.join(tmp_dir, "downloaded.mp4")
+      compressed_path = Path.join(tmp_dir, "compressed.mp4")
+
+      File.write!(file_path, String.duplicate("x", 10))
+      put_video_probe(bin_dir, "10.0", "h264")
+
+      put_fake_executable(bin_dir, "ffmpeg", """
+      output=
+      for arg do output="$arg"; done
+      printf toolarge > "$output"
+      """)
+
+      put_compression_env()
+      Application.put_env(:lolek, :max_file_size_to_send_to_telegram, 5)
+
+      System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
+      {:ok, _apps} = Application.ensure_all_started(:erlexec)
+
+      assert {:error, :too_big_media} =
+               Lolek.Converter.adapt_to_telegram({:downloaded, file_path})
+
+      assert File.exists?(file_path)
+      refute File.exists?(compressed_path)
     end)
   end
 

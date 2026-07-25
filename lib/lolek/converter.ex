@@ -24,22 +24,13 @@ defmodule Lolek.Converter do
 
   @spec prepare_video(String.t(), String.t()) :: :ok | {:error, term()}
   defp prepare_video(file_path, prepared_path) do
-    with :ok <- compress_video_to_telegram_size(file_path, prepared_path) do
+    with :ok <- prepare_video_for_telegram(file_path, prepared_path) do
       replace_original_file_with_prepared(file_path, prepared_path)
     end
   end
 
-  @spec compress_video_to_telegram_size(String.t(), String.t()) :: :ok | {:error, term()}
-  defp compress_video_to_telegram_size(file_path, prepared_path) do
-    if Path.extname(file_path) != ".mp4" do
-      :ok
-    else
-      compress_mp4_to_telegram_size(file_path, prepared_path)
-    end
-  end
-
-  @spec compress_mp4_to_telegram_size(String.t(), String.t()) :: :ok | {:error, term()}
-  defp compress_mp4_to_telegram_size(file_path, prepared_path) do
+  @spec prepare_video_for_telegram(String.t(), String.t()) :: :ok | {:error, term()}
+  defp prepare_video_for_telegram(file_path, prepared_path) do
     with {:ok, file_size} <- Lolek.File.file_size(file_path),
          {:ok, duration} <- video_duration(file_path) do
       case encoding_strategy(file_path, file_size, duration) do
@@ -53,44 +44,24 @@ defmodule Lolek.Converter do
   @spec encoding_strategy(String.t(), non_neg_integer(), non_neg_integer()) ::
           :compress | :convert | :passthrough | :too_big_media
   defp encoding_strategy(file_path, file_size, duration) do
-    if h264_codec?(file_path) do
-      h264_encoding_strategy(file_size, duration)
-    else
-      non_h264_encoding_strategy(file_size, duration)
-    end
-  end
-
-  @spec h264_encoding_strategy(non_neg_integer(), non_neg_integer()) ::
-          :compress | :passthrough | :too_big_media
-  defp h264_encoding_strategy(file_size, duration) do
     cond do
-      small_enough_to_upload?(file_size) ->
+      small_enough_to_upload?(file_size) and telegram_video?(file_path) ->
         :passthrough
 
-      compressible_file?(file_size) and compressible_duration?(duration) ->
-        :compress
+      not compressible_file?(file_size) or not compressible_duration?(duration) ->
+        :too_big_media
+
+      small_enough_to_upload?(file_size) ->
+        :convert
 
       true ->
-        :too_big_media
+        :compress
     end
   end
 
-  @spec non_h264_encoding_strategy(non_neg_integer(), non_neg_integer()) ::
-          :compress | :convert | :too_big_media
-  defp non_h264_encoding_strategy(file_size, duration) do
-    cond do
-      small_enough_to_upload?(file_size) and compressible_duration?(duration) ->
-        :compress
-
-      compressible_duration?(duration) ->
-        :convert
-
-      compressible_file?(file_size) and compressible_duration?(duration) ->
-        :compress
-
-      true ->
-        :too_big_media
-    end
+  @spec telegram_video?(String.t()) :: boolean()
+  defp telegram_video?(file_path) do
+    Path.extname(file_path) |> String.downcase() == ".mp4" and h264_codec?(file_path)
   end
 
   @spec small_enough_to_upload?(non_neg_integer()) :: boolean()
@@ -112,7 +83,14 @@ defmodule Lolek.Converter do
   defp encode_video(file_path, prepared_path, strategy) do
     case encode_with_h264(file_path, prepared_path, strategy) do
       :ok ->
-        ensure_telegram_file_size(prepared_path)
+        case ensure_telegram_file_size(prepared_path) do
+          :ok ->
+            :ok
+
+          {:error, _reason} = error ->
+            File.rm(prepared_path)
+            error
+        end
 
       {:error, error} ->
         action = if strategy == :compress, do: "compressing", else: "converting"

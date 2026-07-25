@@ -8,6 +8,7 @@ defmodule Lolek do
   @max_upload_file_name_bytes 180
   @max_media_group_size 10
   @gif_extensions ~w(.gif)
+  @photo_extensions ~w(.jpg .jpeg .png .webp .avif)
 
   @typep media_source :: {:file_path, String.t()} | {:file_id, String.t()}
   @typep media_item :: {media_source(), String.t()}
@@ -37,13 +38,16 @@ defmodule Lolek do
     end
   end
 
+  def send_file(chat_id, {:prepared_media, cache_root, files}, context) do
+    items = path_media_items(files)
+
+    with {:ok, entries} <- send_media_collection(chat_id, items, context) do
+      {:ok, {:sent_media, cache_root, entries}}
+    end
+  end
+
   def send_file(chat_id, {:downloaded_gallery, gallery_dir, files}, context) do
-    items =
-      files
-      |> Enum.take(max_gallery_media())
-      |> Enum.map(fn file_path ->
-        {{:file_path, file_path}, file_path |> Path.extname() |> String.downcase()}
-      end)
+    items = path_media_items(files)
 
     with {:ok, entries} <- send_media_collection(chat_id, items, context) do
       {:ok, {:sent_media, Path.dirname(gallery_dir), entries}}
@@ -57,6 +61,15 @@ defmodule Lolek do
     with {:ok, _sent_entries} <- send_media_collection(chat_id, items, context) do
       {:ok, {:ready_media, limited_entries}}
     end
+  end
+
+  @spec path_media_items([String.t()]) :: [media_item()]
+  defp path_media_items(files) do
+    files
+    |> Enum.take(max_gallery_media())
+    |> Enum.map(fn file_path ->
+      {{:file_path, file_path}, file_path |> Path.extname() |> String.downcase()}
+    end)
   end
 
   @spec send_media_collection(integer(), [media_item()], keyword()) ::
@@ -74,20 +87,42 @@ defmodule Lolek do
   @spec send_single_media_item(integer(), media_item(), keyword()) ::
           {:ok, [{String.t(), String.t()}]} | {:error, term()}
   defp send_single_media_item(chat_id, {source, ext}, context) do
-    options = add_send_context([], context)
+    options = single_media_options(source, ext, context)
 
     case with_media_sources([source], context, fn [prepared_source] ->
            send_single_media(chat_id, ext, prepared_source, options)
          end) do
       {:ok, response} ->
         case extract_single_file_id(response) do
-          {:ok, file_id} -> {:ok, [{ext, file_id}]}
-          :error -> {:error, {:unexpected_telegram_response, response}}
+          {:ok, file_id} ->
+            update_caption_after_send(chat_id, response, context)
+            {:ok, [{ext, file_id}]}
+
+          :error ->
+            {:error, {:unexpected_telegram_response, response}}
         end
 
       {:error, _} = error ->
         error
     end
+  end
+
+  @spec single_media_options(media_source(), String.t(), keyword()) :: keyword()
+  defp single_media_options({:file_path, file_path}, ext, context) do
+    if Lolek.GalleryDownloader.video_file?("x#{ext}") do
+      file_path |> get_options() |> add_send_context(context)
+    else
+      add_send_context([], context)
+    end
+  end
+
+  defp single_media_options({:file_id, _file_id}, ext, context) do
+    options =
+      if Lolek.GalleryDownloader.video_file?("x#{ext}"),
+        do: [disable_notification: true],
+        else: []
+
+    add_send_context(options, context)
   end
 
   @spec send_single_media(integer(), String.t(), term(), keyword()) ::
@@ -97,10 +132,15 @@ defmodule Lolek do
   end
 
   defp send_single_media(chat_id, ext, source, options) do
-    if Lolek.GalleryDownloader.video_file?("x#{ext}") do
-      call_telegram(fn -> Lolek.Telegram.send_video(chat_id, source, options) end)
-    else
-      call_telegram(fn -> Lolek.Telegram.send_photo(chat_id, source, options) end)
+    cond do
+      Lolek.GalleryDownloader.video_file?("x#{ext}") ->
+        call_telegram(fn -> Lolek.Telegram.send_video(chat_id, source, options) end)
+
+      ext in @photo_extensions ->
+        call_telegram(fn -> Lolek.Telegram.send_photo(chat_id, source, options) end)
+
+      true ->
+        call_telegram(fn -> Lolek.Telegram.send_document(chat_id, source, options) end)
     end
   end
 
@@ -166,8 +206,11 @@ defmodule Lolek do
       Lolek.GalleryDownloader.video_file?("x#{ext}") ->
         %ExGram.Model.InputMediaVideo{type: "video", media: source, caption: caption}
 
-      true ->
+      ext in @photo_extensions ->
         %ExGram.Model.InputMediaPhoto{type: "photo", media: source, caption: caption}
+
+      true ->
+        %ExGram.Model.InputMediaDocument{type: "document", media: source, caption: caption}
     end
   end
 

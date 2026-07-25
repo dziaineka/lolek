@@ -121,7 +121,9 @@ defmodule Lolek.FileTest do
       put_fake_executable(bin_dir, "ffprobe", "exit 0")
       put_cache_env(bin_dir)
 
-      assert {:ok, {:downloaded, ^downloaded_path}} = Lolek.File.get_file_state(tmp_dir)
+      assert {:ok, {:downloaded_media, ^tmp_dir, [^downloaded_path]}} =
+               Lolek.File.get_file_state(tmp_dir)
+
       refute File.exists?(compressed_path)
     end)
   end
@@ -140,7 +142,9 @@ defmodule Lolek.FileTest do
       put_fake_executable(bin_dir, "ffprobe", "exit 0")
       put_cache_env(bin_dir)
 
-      assert {:ok, {:downloaded, ^downloaded_path}} = Lolek.File.get_file_state(tmp_dir)
+      assert {:ok, {:downloaded_media, ^tmp_dir, [^downloaded_path]}} =
+               Lolek.File.get_file_state(tmp_dir)
+
       refute File.exists?(ready_path)
     end)
   end

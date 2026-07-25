@@ -337,7 +337,9 @@ defmodule Lolek.Metrics do
   @spec file_state_label(term()) :: String.t()
   defp file_state_label({:new_file, _path}), do: "new_file"
   defp file_state_label({:downloaded, _path}), do: "downloaded"
+  defp file_state_label({:downloaded_media, _cache_root, _files}), do: "downloaded"
   defp file_state_label({:compressed, _path}), do: "compressed"
+  defp file_state_label({:prepared_media, _cache_root, _files}), do: "compressed"
   defp file_state_label({:ready_to_telegram, _path}), do: "ready_to_telegram"
   defp file_state_label({:ready_media, _entries}), do: "ready_to_telegram"
   defp file_state_label({:sent_to_telegram_at_first, _path, _file_id}), do: "sent_to_telegram"

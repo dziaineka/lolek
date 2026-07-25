@@ -10,19 +10,10 @@ defmodule Lolek.Converter do
 
   @spec adapt_to_telegram(Lolek.File.file_state()) ::
           {:ok, Lolek.File.file_state()} | {:error, term()}
-  def adapt_to_telegram({:downloaded, file_path}) do
-    compressed_path = get_compressed_file_path(file_path)
-
-    with {:ok, prepared_path} <- prepare_video(file_path, compressed_path),
-         :ok <- move_prepared_video(prepared_path, compressed_path) do
-      {:ok, {:compressed, compressed_path}}
-    end
-  end
-
-  def adapt_to_telegram({:downloaded_gallery, gallery_dir, files}) do
-    case prepare_gallery_files(gallery_dir, files) do
-      [] -> {:error, :no_usable_gallery_files}
-      prepared_files -> {:ok, {:downloaded_gallery, gallery_dir, prepared_files}}
+  def adapt_to_telegram({:downloaded_media, cache_root, files}) do
+    case prepare_media_files(cache_root, files) do
+      [] -> {:error, :no_usable_media_files}
+      prepared_files -> {:ok, {:prepared_media, cache_root, prepared_files}}
     end
   end
 
@@ -30,27 +21,27 @@ defmodule Lolek.Converter do
     {:ok, another_file_state}
   end
 
-  @spec prepare_gallery_files(String.t(), [String.t()]) :: [String.t()]
-  defp prepare_gallery_files(gallery_dir, files) do
+  @spec prepare_media_files(String.t(), [String.t()]) :: [String.t()]
+  defp prepare_media_files(cache_root, files) do
     files
     |> Enum.reduce([], fn file_path, prepared_files ->
-      case prepare_gallery_file(file_path) do
+      case prepare_media_file(cache_root, file_path) do
         {:ok, prepared_path} ->
           [prepared_path | prepared_files]
 
         {:error, reason} ->
-          relative_path = Path.relative_to(file_path, gallery_dir)
-          Logger.warning("Omitting gallery media #{relative_path}: #{inspect(reason)}")
+          relative_path = Path.relative_to(file_path, cache_root)
+          Logger.warning("Omitting media #{relative_path}: #{inspect(reason)}")
           prepared_files
       end
     end)
     |> Enum.reverse()
   end
 
-  @spec prepare_gallery_file(String.t()) :: {:ok, String.t()} | {:error, term()}
-  defp prepare_gallery_file(file_path) do
+  @spec prepare_media_file(String.t(), String.t()) :: {:ok, String.t()} | {:error, term()}
+  defp prepare_media_file(cache_root, file_path) do
     if Lolek.GalleryDownloader.video_file?(file_path) do
-      prepare_video(file_path, gallery_prepared_path(file_path))
+      prepare_video(file_path, prepared_video_path(cache_root, file_path))
     else
       with :ok <- ensure_telegram_file_size(file_path) do
         {:ok, file_path}
@@ -58,8 +49,14 @@ defmodule Lolek.Converter do
     end
   end
 
-  @spec gallery_prepared_path(String.t()) :: String.t()
-  defp gallery_prepared_path(file_path), do: file_path <> ".telegram.mp4"
+  @spec prepared_video_path(String.t(), String.t()) :: String.t()
+  defp prepared_video_path(cache_root, file_path) do
+    if Path.dirname(file_path) == cache_root do
+      Path.join(cache_root, @compressed_name)
+    else
+      file_path <> ".telegram.mp4"
+    end
+  end
 
   @spec prepare_video(String.t(), String.t()) :: {:ok, String.t()} | {:error, term()}
   defp prepare_video(file_path, prepared_path) do
@@ -499,11 +496,6 @@ defmodule Lolek.Converter do
     end
   end
 
-  @spec get_compressed_file_path(String.t()) :: String.t()
-  defp get_compressed_file_path(file_path) do
-    file_path |> Path.dirname() |> Path.join(@compressed_name)
-  end
-
   @spec remove_encoded_source(String.t(), String.t()) :: :ok | {:error, term()}
   defp remove_encoded_source(file_path, prepared_path) do
     case File.rm(file_path) do
@@ -513,16 +505,6 @@ defmodule Lolek.Converter do
       {:error, reason} ->
         File.rm(prepared_path)
         {:error, {:remove_original_failed, reason}}
-    end
-  end
-
-  @spec move_prepared_video(String.t(), String.t()) :: :ok | {:error, term()}
-  defp move_prepared_video(file_path, file_path), do: :ok
-
-  defp move_prepared_video(file_path, destination_path) do
-    case File.rename(file_path, destination_path) do
-      :ok -> :ok
-      {:error, reason} -> {:error, {:rename_compressed_failed, reason}}
     end
   end
 

@@ -49,7 +49,7 @@ defmodule Lolek.Downloader do
     case download_once(url, output_path) do
       {:ok, _} ->
         case Lolek.File.get_file_path_by_pattern(output_path, @downloaded_name) do
-          {:ok, file_path} -> {:ok, {:downloaded, file_path}}
+          {:ok, file_path} -> {:ok, {:downloaded_media, output_path, [file_path]}}
           {:error, reason} -> {:error, reason}
         end
 
@@ -89,7 +89,7 @@ defmodule Lolek.Downloader do
       case do_gallery_download(url, gallery_dir) do
         {:ok, [_ | _] = files} ->
           Logger.info("Gallery download found #{length(files)} file(s) for url: #{log_url}")
-          {:ok, {:downloaded_gallery, gallery_dir, files}}
+          {:ok, {:downloaded_media, output_path, files}}
 
         {:ok, []} ->
           Logger.info("Gallery download found no files for url: #{log_url}")

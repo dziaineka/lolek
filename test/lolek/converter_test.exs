@@ -17,7 +17,8 @@ defmodule Lolek.ConverterTest do
   test "returns an error when downloaded mp4 is missing", %{tmp_dir: tmp_dir} do
     file_path = Path.join(tmp_dir, "downloaded.mp4")
 
-    assert {:error, :enoent} = Lolek.Converter.adapt_to_telegram({:downloaded, file_path})
+    assert {:error, :no_usable_media_files} =
+             Lolek.Converter.adapt_to_telegram({:downloaded_media, tmp_dir, [file_path]})
   end
 
   @tag :tmp_dir
@@ -33,8 +34,8 @@ defmodule Lolek.ConverterTest do
       System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
       {:ok, _apps} = Application.ensure_all_started(:erlexec)
 
-      assert {:error, :video_duration} =
-               Lolek.Converter.adapt_to_telegram({:downloaded, file_path})
+      assert {:error, :no_usable_media_files} =
+               Lolek.Converter.adapt_to_telegram({:downloaded_media, tmp_dir, [file_path]})
     end)
   end
 
@@ -52,7 +53,8 @@ defmodule Lolek.ConverterTest do
       System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
       {:ok, _apps} = Application.ensure_all_started(:erlexec)
 
-      assert {:error, _reason} = Lolek.Converter.adapt_to_telegram({:downloaded, file_path})
+      assert {:error, _reason} =
+               Lolek.Converter.adapt_to_telegram({:downloaded_media, tmp_dir, [file_path]})
     end)
   end
 
@@ -80,7 +82,9 @@ defmodule Lolek.ConverterTest do
       System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
       {:ok, _apps} = Application.ensure_all_started(:erlexec)
 
-      assert {:error, _reason} = Lolek.Converter.adapt_to_telegram({:downloaded, file_path})
+      assert {:error, _reason} =
+               Lolek.Converter.adapt_to_telegram({:downloaded_media, tmp_dir, [file_path]})
+
       assert File.exists?(file_path)
       refute File.exists?(compressed_path)
     end)
@@ -100,7 +104,8 @@ defmodule Lolek.ConverterTest do
       System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
       {:ok, _apps} = Application.ensure_all_started(:erlexec)
 
-      assert {:error, :enoent} = Lolek.Converter.adapt_to_telegram({:downloaded, file_path})
+      assert {:error, :no_usable_media_files} =
+               Lolek.Converter.adapt_to_telegram({:downloaded_media, tmp_dir, [file_path]})
     end)
   end
 
@@ -108,16 +113,15 @@ defmodule Lolek.ConverterTest do
   test "returns an error when downloaded file is missing", %{tmp_dir: tmp_dir} do
     file_path = Path.join(tmp_dir, "downloaded.txt")
 
-    assert {:error, :enoent} = Lolek.Converter.adapt_to_telegram({:downloaded, file_path})
+    assert {:error, :no_usable_media_files} =
+             Lolek.Converter.adapt_to_telegram({:downloaded_media, tmp_dir, [file_path]})
   end
 
   @tag :tmp_dir
-  test "moves a compatible video without invoking ffmpeg", %{tmp_dir: tmp_dir} do
+  test "keeps a compatible video without invoking ffmpeg", %{tmp_dir: tmp_dir} do
     preserve_converter_env(fn ->
       bin_dir = Path.join(tmp_dir, "bin")
       file_path = Path.join(tmp_dir, "downloaded.mp4")
-      compressed_path = Path.join(tmp_dir, "compressed.mp4")
-
       File.write!(file_path, String.duplicate("x", 10))
       put_video_probe(bin_dir, "10.0", "h264")
       put_fake_executable(bin_dir, "ffmpeg", "exit 1")
@@ -127,11 +131,10 @@ defmodule Lolek.ConverterTest do
       System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
       {:ok, _apps} = Application.ensure_all_started(:erlexec)
 
-      assert {:ok, {:compressed, ^compressed_path}} =
-               Lolek.Converter.adapt_to_telegram({:downloaded, file_path})
+      assert {:ok, {:prepared_media, ^tmp_dir, [^file_path]}} =
+               Lolek.Converter.adapt_to_telegram({:downloaded_media, tmp_dir, [file_path]})
 
-      assert File.read!(compressed_path) == String.duplicate("x", 10)
-      refute File.exists?(file_path)
+      assert File.read!(file_path) == String.duplicate("x", 10)
     end)
   end
 
@@ -161,8 +164,8 @@ defmodule Lolek.ConverterTest do
       System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
       {:ok, _apps} = Application.ensure_all_started(:erlexec)
 
-      assert {:ok, {:compressed, ^compressed_path}} =
-               Lolek.Converter.adapt_to_telegram({:downloaded, file_path})
+      assert {:ok, {:prepared_media, ^tmp_dir, [^compressed_path]}} =
+               Lolek.Converter.adapt_to_telegram({:downloaded_media, tmp_dir, [file_path]})
 
       assert File.read!(compressed_path) == "ok"
       assert File.read!(ffmpeg_args_file) =~ "-c:v\nlibx264\n"
@@ -186,8 +189,8 @@ defmodule Lolek.ConverterTest do
       System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
       {:ok, _apps} = Application.ensure_all_started(:erlexec)
 
-      assert {:error, :too_big_media} =
-               Lolek.Converter.adapt_to_telegram({:downloaded, file_path})
+      assert {:error, :no_usable_media_files} =
+               Lolek.Converter.adapt_to_telegram({:downloaded_media, tmp_dir, [file_path]})
 
       assert File.exists?(file_path)
       refute File.exists?(compressed_path)
@@ -216,8 +219,8 @@ defmodule Lolek.ConverterTest do
       System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
       {:ok, _apps} = Application.ensure_all_started(:erlexec)
 
-      assert {:error, :too_big_media} =
-               Lolek.Converter.adapt_to_telegram({:downloaded, file_path})
+      assert {:error, :no_usable_media_files} =
+               Lolek.Converter.adapt_to_telegram({:downloaded_media, tmp_dir, [file_path]})
 
       assert File.exists?(file_path)
       refute File.exists?(compressed_path)
@@ -257,8 +260,8 @@ defmodule Lolek.ConverterTest do
 
       files = [first_image, oversized_video, second_image, small_video]
 
-      assert {:ok, {:downloaded_gallery, ^gallery_dir, prepared_files}} =
-               Lolek.Converter.adapt_to_telegram({:downloaded_gallery, gallery_dir, files})
+      assert {:ok, {:prepared_media, ^tmp_dir, prepared_files}} =
+               Lolek.Converter.adapt_to_telegram({:downloaded_media, tmp_dir, files})
 
       assert prepared_files == [first_image, prepared_video, second_image, small_video]
       assert File.read!(prepared_video) == "ok"
@@ -287,10 +290,8 @@ defmodule Lolek.ConverterTest do
       System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
       {:ok, _apps} = Application.ensure_all_started(:erlexec)
 
-      assert {:ok, {:downloaded_gallery, ^gallery_dir, [^image]}} =
-               Lolek.Converter.adapt_to_telegram(
-                 {:downloaded_gallery, gallery_dir, [image, video]}
-               )
+      assert {:ok, {:prepared_media, ^tmp_dir, [^image]}} =
+               Lolek.Converter.adapt_to_telegram({:downloaded_media, tmp_dir, [image, video]})
 
       assert File.exists?(video)
       refute File.exists?(video <> ".telegram.mp4")
@@ -311,9 +312,9 @@ defmodule Lolek.ConverterTest do
       put_compression_env()
       Application.put_env(:lolek, :max_file_size_to_send_to_telegram, 5)
 
-      assert {:ok, {:downloaded_gallery, ^gallery_dir, [^usable_image]}} =
+      assert {:ok, {:prepared_media, ^tmp_dir, [^usable_image]}} =
                Lolek.Converter.adapt_to_telegram(
-                 {:downloaded_gallery, gallery_dir, [oversized_image, usable_image]}
+                 {:downloaded_media, tmp_dir, [oversized_image, usable_image]}
                )
     end)
   end
@@ -335,8 +336,8 @@ defmodule Lolek.ConverterTest do
       System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
       {:ok, _apps} = Application.ensure_all_started(:erlexec)
 
-      assert {:error, :no_usable_gallery_files} =
-               Lolek.Converter.adapt_to_telegram({:downloaded_gallery, gallery_dir, [video]})
+      assert {:error, :no_usable_media_files} =
+               Lolek.Converter.adapt_to_telegram({:downloaded_media, tmp_dir, [video]})
     end)
   end
 
@@ -367,8 +368,8 @@ defmodule Lolek.ConverterTest do
       System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
       {:ok, _apps} = Application.ensure_all_started(:erlexec)
 
-      assert {:ok, {:compressed, compressed_path}} =
-               Lolek.Converter.adapt_to_telegram({:downloaded, file_path})
+      assert {:ok, {:prepared_media, ^tmp_dir, [compressed_path]}} =
+               Lolek.Converter.adapt_to_telegram({:downloaded_media, tmp_dir, [file_path]})
 
       assert File.read!(compressed_path) == "ok"
 
@@ -421,8 +422,8 @@ defmodule Lolek.ConverterTest do
       System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
       {:ok, _apps} = Application.ensure_all_started(:erlexec)
 
-      assert {:ok, {:compressed, compressed_path}} =
-               Lolek.Converter.adapt_to_telegram({:downloaded, file_path})
+      assert {:ok, {:prepared_media, ^tmp_dir, [compressed_path]}} =
+               Lolek.Converter.adapt_to_telegram({:downloaded_media, tmp_dir, [file_path]})
 
       assert File.read!(compressed_path) == "ok"
 
@@ -462,8 +463,8 @@ defmodule Lolek.ConverterTest do
       System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
       {:ok, _apps} = Application.ensure_all_started(:erlexec)
 
-      assert {:ok, {:compressed, compressed_path}} =
-               Lolek.Converter.adapt_to_telegram({:downloaded, file_path})
+      assert {:ok, {:prepared_media, ^tmp_dir, [compressed_path]}} =
+               Lolek.Converter.adapt_to_telegram({:downloaded_media, tmp_dir, [file_path]})
 
       assert File.read!(compressed_path) == "ok"
 
@@ -519,8 +520,8 @@ defmodule Lolek.ConverterTest do
       System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
       {:ok, _apps} = Application.ensure_all_started(:erlexec)
 
-      assert {:ok, {:compressed, compressed_path}} =
-               Lolek.Converter.adapt_to_telegram({:downloaded, file_path})
+      assert {:ok, {:prepared_media, ^tmp_dir, [compressed_path]}} =
+               Lolek.Converter.adapt_to_telegram({:downloaded_media, tmp_dir, [file_path]})
 
       assert File.read!(compressed_path) == "ok"
 

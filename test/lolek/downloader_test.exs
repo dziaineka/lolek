@@ -82,7 +82,7 @@ defmodule Lolek.DownloaderTest do
       System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
       {:ok, _apps} = Application.ensure_all_started(:erlexec)
 
-      assert {:ok, {:downloaded, file_path}} =
+      assert {:ok, {:downloaded_media, ^tmp_dir, [file_path]}} =
                Lolek.Downloader.download("https://example.com/video", {:new_file, tmp_dir})
 
       assert Path.basename(file_path) == "downloaded.mp4"
@@ -213,7 +213,7 @@ defmodule Lolek.DownloaderTest do
   end
 
   @tag :tmp_dir
-  test "routes gallery-dl image results to downloaded_gallery state", %{tmp_dir: tmp_dir} do
+  test "routes gallery-dl image results to downloaded media state", %{tmp_dir: tmp_dir} do
     preserve_download_env(fn ->
       bin_dir = Path.join(tmp_dir, "bin")
       File.mkdir_p!(bin_dir)
@@ -233,9 +233,10 @@ defmodule Lolek.DownloaderTest do
 
       set_gallery_env(bin_dir, true)
 
-      assert {:ok, {:downloaded_gallery, gallery_dir, files}} =
+      assert {:ok, {:downloaded_media, ^tmp_dir, files}} =
                Lolek.Downloader.download("https://example.com/post", {:new_file, tmp_dir})
 
+      gallery_dir = Path.join(tmp_dir, "gallery")
       assert gallery_dir == Path.join(tmp_dir, "gallery")
       assert length(files) == 2
       assert Enum.all?(files, &String.ends_with?(&1, ".jpg"))
@@ -262,16 +263,17 @@ defmodule Lolek.DownloaderTest do
 
       set_gallery_env(bin_dir, true)
 
-      assert {:ok, {:downloaded_gallery, gallery_dir, [file_path]}} =
+      assert {:ok, {:downloaded_media, ^tmp_dir, [file_path]}} =
                Lolek.Downloader.download("https://example.com/post", {:new_file, tmp_dir})
 
+      gallery_dir = Path.join(tmp_dir, "gallery")
       assert gallery_dir == Path.join(tmp_dir, "gallery")
       assert Path.basename(file_path) == "photo001.jpg"
     end)
   end
 
   @tag :tmp_dir
-  test "routes gallery-dl video collections to downloaded_gallery state", %{tmp_dir: tmp_dir} do
+  test "routes gallery-dl video collections to downloaded media state", %{tmp_dir: tmp_dir} do
     preserve_download_env(fn ->
       bin_dir = Path.join(tmp_dir, "bin")
       File.mkdir_p!(bin_dir)
@@ -291,9 +293,10 @@ defmodule Lolek.DownloaderTest do
 
       set_gallery_env(bin_dir, true)
 
-      assert {:ok, {:downloaded_gallery, gallery_dir, files}} =
+      assert {:ok, {:downloaded_media, ^tmp_dir, files}} =
                Lolek.Downloader.download("https://example.com/post", {:new_file, tmp_dir})
 
+      gallery_dir = Path.join(tmp_dir, "gallery")
       assert gallery_dir == Path.join(tmp_dir, "gallery")
       assert length(files) == 2
       assert Enum.all?(files, &String.ends_with?(&1, ".mp4"))
@@ -320,9 +323,10 @@ defmodule Lolek.DownloaderTest do
 
       set_gallery_env(bin_dir, true)
 
-      assert {:ok, {:downloaded_gallery, gallery_dir, [file_path]}} =
+      assert {:ok, {:downloaded_media, ^tmp_dir, [file_path]}} =
                Lolek.Downloader.download("https://example.com/post", {:new_file, tmp_dir})
 
+      gallery_dir = Path.join(tmp_dir, "gallery")
       assert gallery_dir == Path.join(tmp_dir, "gallery")
       assert Path.basename(file_path) == "video001.mp4"
       assert Path.dirname(file_path) == gallery_dir
@@ -404,9 +408,10 @@ defmodule Lolek.DownloaderTest do
 
       set_gallery_env(bin_dir, true)
 
-      assert {:ok, {:downloaded_gallery, gallery_dir, [file_path]}} =
+      assert {:ok, {:downloaded_media, ^tmp_dir, [file_path]}} =
                Lolek.Downloader.download("https://example.com/post", {:new_file, tmp_dir})
 
+      gallery_dir = Path.join(tmp_dir, "gallery")
       assert gallery_dir == Path.join(tmp_dir, "gallery")
       assert Path.basename(file_path) == "video001.mp4"
       assert File.read!(file_path) == "muxed"
@@ -443,7 +448,7 @@ defmodule Lolek.DownloaderTest do
 
       set_gallery_env(bin_dir, true)
 
-      assert {:ok, {:downloaded, file_path}} =
+      assert {:ok, {:downloaded_media, ^tmp_dir, [file_path]}} =
                Lolek.Downloader.download("https://example.com/post", {:new_file, tmp_dir})
 
       assert Path.basename(file_path) == "downloaded.mp4"
@@ -468,7 +473,7 @@ defmodule Lolek.DownloaderTest do
 
       set_gallery_env(bin_dir, true)
 
-      assert {:ok, {:downloaded, file_path}} =
+      assert {:ok, {:downloaded_media, ^tmp_dir, [file_path]}} =
                Lolek.Downloader.download("https://example.com/post", {:new_file, tmp_dir})
 
       assert Path.basename(file_path) == "downloaded.mp4"
@@ -497,7 +502,7 @@ defmodule Lolek.DownloaderTest do
 
       set_gallery_env(bin_dir, false)
 
-      assert {:ok, {:downloaded, _file_path}} =
+      assert {:ok, {:downloaded_media, ^tmp_dir, [_file_path]}} =
                Lolek.Downloader.download("https://example.com/post", {:new_file, tmp_dir})
     end)
   end

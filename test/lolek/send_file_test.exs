@@ -366,9 +366,10 @@ defmodule Lolek.SendFileTest do
   test "applies the gallery limit to cached media" do
     preserve_telegram_env(fn ->
       entries = for index <- 1..3, do: {"gallery-file-#{index}", ".jpg"}
+      response = %ExGram.Model.Message{photo: [%ExGram.Model.PhotoSize{file_id: "new-file-id"}]}
 
       Application.put_env(:lolek, :telegram_client, TelegramClient)
-      Application.put_env(:lolek, :telegram_test_result, {:ok, []})
+      Application.put_env(:lolek, :telegram_test_result, {:ok, response})
       Application.put_env(:lolek, :telegram_test_parent, self())
       Application.put_env(:lolek, :max_gallery_media, 1)
 
@@ -378,6 +379,49 @@ defmodule Lolek.SendFileTest do
       assert length(limited_entries) == 1
       assert_receive {:send_photo, 123, "gallery-file-1", []}
       refute_receive {:send_media_group, 123, _, []}
+    end)
+  end
+
+  test "propagates Telegram errors when sending cached galleries" do
+    preserve_telegram_env(fn ->
+      error = %ExGram.Error{code: 400, message: "Bad Request"}
+      entries = [{"gallery-file-1", ".jpg"}, {"gallery-file-2", ".jpg"}]
+
+      Application.put_env(:lolek, :telegram_client, TelegramClient)
+      Application.put_env(:lolek, :telegram_test_result, {:error, error})
+      Application.put_env(:lolek, :telegram_test_parent, self())
+
+      assert {:error, {:telegram_api, %ExGram.Error{code: 400, message: "Bad Request"}}} =
+               Lolek.send_file(123, {:ready_to_telegram_gallery, entries})
+
+      assert_receive {:send_media_group, 123, _media, []}
+    end)
+  end
+
+  test "splits large collections without a one-item media group" do
+    preserve_telegram_env(fn ->
+      files = for index <- 1..11, do: tmp_file("gallery-#{index}.jpg", "media")
+
+      messages =
+        for index <- 1..9 do
+          %ExGram.Model.Message{
+            photo: [%ExGram.Model.PhotoSize{file_id: "gallery-file-#{index}"}]
+          }
+        end
+
+      Application.put_env(:lolek, :telegram_client, TelegramClient)
+      Application.put_env(:lolek, :telegram_test_result, {:ok, messages})
+      Application.put_env(:lolek, :telegram_test_parent, self())
+      Application.put_env(:lolek, :max_gallery_media, 11)
+
+      assert {:ok, {:sent_gallery_to_telegram_at_first, "/tmp/gallery", entries}} =
+               Lolek.send_file(123, {:downloaded_gallery, "/tmp/gallery", files})
+
+      assert length(entries) == 11
+      assert_receive {:send_media_group, 123, first_batch, []}
+      assert_receive {:send_media_group, 123, second_batch, []}
+      assert length(first_batch) == 9
+      assert length(second_batch) == 2
     end)
   end
 

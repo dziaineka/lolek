@@ -312,13 +312,8 @@ defmodule Lolek.Handler do
   defp present?(value), do: is_binary(value) and value != ""
 
   @spec format_file_state(term()) :: String.t()
-  defp format_file_state({:ready_to_telegram, _file_path}), do: "ready_to_telegram"
-
   defp format_file_state({:ready_media, entries}),
     do: "ready_media:count=#{length(entries)}"
-
-  defp format_file_state({:compressed, _file_path}), do: "compressed"
-  defp format_file_state({:downloaded, _file_path}), do: "downloaded"
 
   defp format_file_state({:downloaded_media, _cache_root, files}),
     do: "downloaded_media:count=#{length(files)}"
@@ -326,13 +321,7 @@ defmodule Lolek.Handler do
   defp format_file_state({:prepared_media, _cache_root, files}),
     do: "prepared_media:count=#{length(files)}"
 
-  defp format_file_state({:downloaded_gallery, _gallery_dir, files}),
-    do: "downloaded_gallery:count=#{length(files)}"
-
   defp format_file_state({:new_file, _folder_path}), do: "new_file"
-
-  defp format_file_state({:sent_to_telegram_at_first, _file_path, _file_id}),
-    do: "sent_to_telegram_at_first"
 
   defp format_file_state({:sent_media, _cache_root, entries}),
     do: "sent_media:count=#{length(entries)}"

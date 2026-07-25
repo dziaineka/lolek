@@ -7,29 +7,14 @@ defmodule Lolek.FileTest do
   ]
 
   @tag :tmp_dir
-  test "moves first uploaded file into ready to telegram cache", %{tmp_dir: tmp_dir} do
-    file_path = Path.join(tmp_dir, "compressed.mp4")
-    ready_path = Path.join([tmp_dir, "ready_to_telegram", "telegram-file-id.mp4"])
+  test "reads existing single-file caches as one-item ready media", %{tmp_dir: tmp_dir} do
+    ready_path = Path.join([tmp_dir, "ready_to_telegram", "telegram-file-id.txt"])
 
-    File.write!(file_path, "video")
+    File.mkdir_p!(Path.dirname(ready_path))
+    File.write!(ready_path, "document")
 
-    assert :ok =
-             Lolek.File.move_to_ready_to_telegram(
-               {:sent_to_telegram_at_first, file_path, "telegram-file-id"}
-             )
-
-    assert File.read!(ready_path) == "video"
-    refute File.exists?(file_path)
-  end
-
-  @tag :tmp_dir
-  test "returns an error when uploaded file is missing", %{tmp_dir: tmp_dir} do
-    file_path = Path.join(tmp_dir, "compressed.mp4")
-
-    assert {:error, :enoent} =
-             Lolek.File.move_to_ready_to_telegram(
-               {:sent_to_telegram_at_first, file_path, "telegram-file-id"}
-             )
+    assert {:ok, {:ready_media, [{"telegram-file-id", ".txt"}]}} =
+             Lolek.File.get_file_state(tmp_dir)
   end
 
   @tag :tmp_dir
@@ -70,7 +55,7 @@ defmodule Lolek.FileTest do
   end
 
   test "ignores file states that do not need caching" do
-    assert :ok = Lolek.File.move_to_ready_to_telegram({:ready_to_telegram, "/tmp/file.mp4"})
+    assert :ok = Lolek.File.move_to_ready_to_telegram({:ready_media, [{"file-id", ".mp4"}]})
   end
 
   @tag :tmp_dir

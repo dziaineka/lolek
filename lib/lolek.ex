@@ -21,36 +21,11 @@ defmodule Lolek do
 
   @spec send_file(integer(), Lolek.File.file_state(), keyword()) ::
           {:ok, Lolek.File.file_state()} | {:error, term()}
-  def send_file(chat_id, {:ready_to_telegram, file_path}, context) do
-    extname = Path.extname(file_path) |> String.downcase()
-    file_id = Path.basename(file_path, extname)
-
-    with {:ok, response} <- send_ready_file(chat_id, file_id, extname, context) do
-      update_caption_after_send(chat_id, response, context)
-      {:ok, {:ready_to_telegram, file_path}}
-    end
-  end
-
-  def send_file(chat_id, {:compressed, file_path}, context) do
-    case Path.extname(file_path) |> String.downcase() do
-      ".mp4" -> send_video_file(chat_id, file_path, context)
-      _ -> send_document_file(chat_id, file_path, context)
-    end
-  end
-
   def send_file(chat_id, {:prepared_media, cache_root, files}, context) do
     items = path_media_items(files)
 
     with {:ok, entries} <- send_media_collection(chat_id, items, context) do
       {:ok, {:sent_media, cache_root, entries}}
-    end
-  end
-
-  def send_file(chat_id, {:downloaded_gallery, gallery_dir, files}, context) do
-    items = path_media_items(files)
-
-    with {:ok, entries} <- send_media_collection(chat_id, items, context) do
-      {:ok, {:sent_media, Path.dirname(gallery_dir), entries}}
     end
   end
 
@@ -74,7 +49,7 @@ defmodule Lolek do
 
   @spec send_media_collection(integer(), [media_item()], keyword()) ::
           {:ok, [{String.t(), String.t()}]} | {:error, term()}
-  defp send_media_collection(_chat_id, [], _context), do: {:error, :no_usable_gallery_files}
+  defp send_media_collection(_chat_id, [], _context), do: {:error, :no_usable_media_files}
 
   defp send_media_collection(chat_id, [item], context) do
     send_single_media_item(chat_id, item, context)
@@ -258,69 +233,6 @@ defmodule Lolek do
         :error -> []
       end
     end)
-  end
-
-  @spec send_video_file(integer(), String.t(), keyword()) ::
-          {:ok, Lolek.File.file_state()} | {:error, term()}
-  defp send_video_file(chat_id, file_path, context) do
-    options = get_options(file_path) |> add_send_context(context)
-
-    case with_upload_file(file_path, context, fn upload ->
-           do_send_video(chat_id, upload, options)
-         end) do
-      {:ok, %ExGram.Model.Message{video: %ExGram.Model.Video{file_id: file_id}} = response} ->
-        update_caption_after_send(chat_id, response, context)
-        ext = file_path |> Path.extname() |> String.downcase()
-        {:ok, {:sent_media, Path.dirname(file_path), [{ext, file_id}]}}
-
-      {:ok, response} ->
-        {:error, {:unexpected_telegram_response, response}}
-
-      {:error, _reason} = error ->
-        error
-    end
-  end
-
-  @spec do_send_video(integer(), term(), keyword()) :: {:ok, term()} | {:error, term()}
-  defp do_send_video(chat_id, upload, options) do
-    call_telegram(fn -> Lolek.Telegram.send_video(chat_id, upload, options) end)
-  end
-
-  @spec send_document_file(integer(), String.t(), keyword()) ::
-          {:ok, Lolek.File.file_state()} | {:error, term()}
-  defp send_document_file(chat_id, file_path, context) do
-    options = add_send_context([], context)
-
-    case with_upload_file(file_path, context, fn upload ->
-           do_send_document(chat_id, upload, options)
-         end) do
-      {:ok, %ExGram.Model.Message{document: %ExGram.Model.Document{file_id: file_id}} = response} ->
-        update_caption_after_send(chat_id, response, context)
-        ext = file_path |> Path.extname() |> String.downcase()
-        {:ok, {:sent_media, Path.dirname(file_path), [{ext, file_id}]}}
-
-      {:ok, response} ->
-        {:error, {:unexpected_telegram_response, response}}
-
-      {:error, _reason} = error ->
-        error
-    end
-  end
-
-  @spec do_send_document(integer(), term(), keyword()) :: {:ok, term()} | {:error, term()}
-  defp do_send_document(chat_id, upload, options) do
-    call_telegram(fn -> Lolek.Telegram.send_document(chat_id, upload, options) end)
-  end
-
-  @spec with_upload_file(String.t(), keyword(), (term() -> term())) :: term()
-  defp with_upload_file(file_path, context, fun) do
-    with {:ok, upload, cleanup} <- upload_file(file_path, context) do
-      try do
-        fun.(upload)
-      after
-        cleanup.()
-      end
-    end
   end
 
   @spec with_media_sources([media_source()], keyword(), ([term()] -> term())) :: term()
@@ -526,22 +438,6 @@ defmodule Lolek do
   @spec file_uri_char?(non_neg_integer()) :: boolean()
   defp file_uri_char?(?/), do: true
   defp file_uri_char?(char), do: URI.char_unreserved?(char)
-
-  @spec send_ready_file(integer(), String.t(), String.t(), keyword()) ::
-          {:ok, term()} | {:error, term()}
-  defp send_ready_file(chat_id, file_id, ".mp4", context) do
-    options = [disable_notification: true] |> add_send_context(context)
-
-    call_telegram(fn ->
-      Lolek.Telegram.send_video(chat_id, file_id, options)
-    end)
-  end
-
-  defp send_ready_file(chat_id, file_id, _extname, context) do
-    options = add_send_context([], context)
-
-    call_telegram(fn -> Lolek.Telegram.send_document(chat_id, file_id, options) end)
-  end
 
   @spec get_options(String.t()) :: Keyword.t()
   defp get_options(file_path) do

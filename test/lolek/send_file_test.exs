@@ -317,6 +317,52 @@ defmodule Lolek.SendFileTest do
     end)
   end
 
+  test "builds uploaded and cached gallery media through the same type mapping" do
+    preserve_telegram_env(fn ->
+      files = [
+        tmp_file("gallery.jpg", "photo"),
+        tmp_file("gallery.mp4", "video"),
+        tmp_file("gallery.gif", "animation")
+      ]
+
+      messages = [
+        %ExGram.Model.Message{photo: [%ExGram.Model.PhotoSize{file_id: "photo-id"}]},
+        %ExGram.Model.Message{video: %ExGram.Model.Video{file_id: "video-id"}},
+        %ExGram.Model.Message{document: %ExGram.Model.Document{file_id: "gif-id"}}
+      ]
+
+      Application.put_env(:lolek, :telegram_client, TelegramClient)
+      Application.put_env(:lolek, :telegram_test_result, {:ok, messages})
+      Application.put_env(:lolek, :telegram_test_parent, self())
+
+      assert {:ok,
+              {:sent_gallery_to_telegram_at_first, "/tmp/gallery",
+               [{".jpg", "photo-id"}, {".mp4", "video-id"}, {".gif", "gif-id"}]}} =
+               Lolek.send_file(123, {:downloaded_gallery, "/tmp/gallery", files})
+
+      assert_receive {:send_media_group, 123, uploaded_media, []}
+
+      assert [
+               %ExGram.Model.InputMediaPhoto{media: {:file_content, _, "gallery.jpg"}},
+               %ExGram.Model.InputMediaVideo{media: {:file_content, _, "gallery.mp4"}},
+               %ExGram.Model.InputMediaDocument{media: {:file_content, _, "gallery.gif"}}
+             ] = uploaded_media
+
+      cached_entries = [{"photo-id", ".jpg"}, {"video-id", ".mp4"}, {"gif-id", ".gif"}]
+
+      assert {:ok, {:ready_to_telegram_gallery, ^cached_entries}} =
+               Lolek.send_file(123, {:ready_to_telegram_gallery, cached_entries})
+
+      assert_receive {:send_media_group, 123, cached_media, []}
+
+      assert [
+               %ExGram.Model.InputMediaPhoto{media: "photo-id"},
+               %ExGram.Model.InputMediaVideo{media: "video-id"},
+               %ExGram.Model.InputMediaDocument{media: "gif-id"}
+             ] = cached_media
+    end)
+  end
+
   test "applies the gallery limit to cached media" do
     preserve_telegram_env(fn ->
       entries = for index <- 1..3, do: {"gallery-file-#{index}", ".jpg"}

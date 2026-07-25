@@ -200,33 +200,17 @@ defmodule Lolek do
     Application.fetch_env!(:lolek, :max_gallery_media)
   end
 
-  @spec file_to_input_media(String.t(), term(), String.t() | nil) :: term()
-  defp file_to_input_media(file_path, upload, caption) do
-    ext = file_path |> Path.extname() |> String.downcase()
-
+  @spec media_to_input_media(term(), String.t(), String.t() | nil) :: term()
+  defp media_to_input_media(source, ext, caption) do
     cond do
       ext in @gif_extensions ->
-        %ExGram.Model.InputMediaDocument{type: "document", media: upload, caption: caption}
-
-      Lolek.GalleryDownloader.video_file?(file_path) ->
-        %ExGram.Model.InputMediaVideo{type: "video", media: upload, caption: caption}
-
-      true ->
-        %ExGram.Model.InputMediaPhoto{type: "photo", media: upload, caption: caption}
-    end
-  end
-
-  @spec cached_file_to_input_media(String.t(), String.t(), String.t() | nil) :: term()
-  defp cached_file_to_input_media(file_id, ext, caption) do
-    cond do
-      ext in @gif_extensions ->
-        %ExGram.Model.InputMediaDocument{type: "document", media: file_id, caption: caption}
+        %ExGram.Model.InputMediaDocument{type: "document", media: source, caption: caption}
 
       Lolek.GalleryDownloader.video_file?("x#{ext}") ->
-        %ExGram.Model.InputMediaVideo{type: "video", media: file_id, caption: caption}
+        %ExGram.Model.InputMediaVideo{type: "video", media: source, caption: caption}
 
       true ->
-        %ExGram.Model.InputMediaPhoto{type: "photo", media: file_id, caption: caption}
+        %ExGram.Model.InputMediaPhoto{type: "photo", media: source, caption: caption}
     end
   end
 
@@ -237,7 +221,8 @@ defmodule Lolek do
     |> Enum.with_index()
     |> Enum.map(fn {{file, upload}, file_idx} ->
       cap = if batch_idx == 0 and file_idx == 0, do: caption(context), else: nil
-      file_to_input_media(file, upload, cap)
+      ext = file |> Path.extname() |> String.downcase()
+      media_to_input_media(upload, ext, cap)
     end)
   end
 
@@ -248,7 +233,7 @@ defmodule Lolek do
     |> Enum.with_index()
     |> Enum.map(fn {{file_id, ext}, file_idx} ->
       cap = if batch_idx == 0 and file_idx == 0, do: caption(context), else: nil
-      cached_file_to_input_media(file_id, ext, cap)
+      media_to_input_media(file_id, ext, cap)
     end)
   end
 
@@ -264,6 +249,12 @@ defmodule Lolek do
   end
 
   defp extract_single_file_id(%ExGram.Model.Message{video: %ExGram.Model.Video{file_id: fid}}) do
+    {:ok, fid}
+  end
+
+  defp extract_single_file_id(%ExGram.Model.Message{
+         document: %ExGram.Model.Document{file_id: fid}
+       }) do
     {:ok, fid}
   end
 

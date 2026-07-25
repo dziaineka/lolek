@@ -312,8 +312,8 @@ defmodule Lolek.Handler do
   @spec format_file_state(term()) :: String.t()
   defp format_file_state({:ready_to_telegram, _file_path}), do: "ready_to_telegram"
 
-  defp format_file_state({:ready_to_telegram_gallery, entries}),
-    do: "ready_to_telegram_gallery:count=#{length(entries)}"
+  defp format_file_state({:ready_media, entries}),
+    do: "ready_media:count=#{length(entries)}"
 
   defp format_file_state({:compressed, _file_path}), do: "compressed"
   defp format_file_state({:downloaded, _file_path}), do: "downloaded"
@@ -326,8 +326,8 @@ defmodule Lolek.Handler do
   defp format_file_state({:sent_to_telegram_at_first, _file_path, _file_id}),
     do: "sent_to_telegram_at_first"
 
-  defp format_file_state({:sent_gallery_to_telegram_at_first, _gallery_dir, entries}),
-    do: "sent_gallery_to_telegram_at_first:count=#{length(entries)}"
+  defp format_file_state({:sent_media, _cache_root, entries}),
+    do: "sent_media:count=#{length(entries)}"
 
   defp format_file_state(other), do: inspect(other)
 end

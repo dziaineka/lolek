@@ -32,6 +32,43 @@ defmodule Lolek.FileTest do
              )
   end
 
+  @tag :tmp_dir
+  test "caches one or more sent media entries in a shared manifest", %{tmp_dir: tmp_dir} do
+    entries = [{".jpg", "photo-id"}, {".mp4", "video-id"}]
+    manifest_path = Path.join([tmp_dir, "ready_to_telegram", "media_manifest.json"])
+
+    assert :ok =
+             Lolek.File.move_to_ready_to_telegram(
+               {:sent_media, tmp_dir, [{".jpg", "single-photo-id"}]}
+             )
+
+    assert Jason.decode!(File.read!(manifest_path)) == [
+             %{"ext" => ".jpg", "file_id" => "single-photo-id"}
+           ]
+
+    assert :ok = Lolek.File.move_to_ready_to_telegram({:sent_media, tmp_dir, entries})
+
+    assert Jason.decode!(File.read!(manifest_path)) == [
+             %{"ext" => ".jpg", "file_id" => "photo-id"},
+             %{"ext" => ".mp4", "file_id" => "video-id"}
+           ]
+
+    assert {:ok, {:ready_media, [{"photo-id", ".jpg"}, {"video-id", ".mp4"}]}} =
+             Lolek.File.get_file_state(tmp_dir)
+  end
+
+  @tag :tmp_dir
+  test "reads existing gallery manifests as ready media", %{tmp_dir: tmp_dir} do
+    ready_path = Path.join(tmp_dir, "ready_to_telegram")
+    manifest_path = Path.join(ready_path, "gallery_manifest.json")
+
+    File.mkdir_p!(ready_path)
+    File.write!(manifest_path, Jason.encode!([%{"file_id" => "photo-id", "ext" => ".jpg"}]))
+
+    assert {:ok, {:ready_media, [{"photo-id", ".jpg"}]}} =
+             Lolek.File.get_file_state(tmp_dir)
+  end
+
   test "ignores file states that do not need caching" do
     assert :ok = Lolek.File.move_to_ready_to_telegram({:ready_to_telegram, "/tmp/file.mp4"})
   end

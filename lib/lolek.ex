@@ -46,16 +46,16 @@ defmodule Lolek do
       end)
 
     with {:ok, entries} <- send_media_collection(chat_id, items, context) do
-      {:ok, {:sent_gallery_to_telegram_at_first, gallery_dir, entries}}
+      {:ok, {:sent_media, Path.dirname(gallery_dir), entries}}
     end
   end
 
-  def send_file(chat_id, {:ready_to_telegram_gallery, entries}, context) do
+  def send_file(chat_id, {:ready_media, entries}, context) do
     limited_entries = Enum.take(entries, max_gallery_media())
     items = Enum.map(limited_entries, fn {file_id, ext} -> {{:file_id, file_id}, ext} end)
 
     with {:ok, _sent_entries} <- send_media_collection(chat_id, items, context) do
-      {:ok, {:ready_to_telegram_gallery, limited_entries}}
+      {:ok, {:ready_media, limited_entries}}
     end
   end
 
@@ -227,7 +227,8 @@ defmodule Lolek do
          end) do
       {:ok, %ExGram.Model.Message{video: %ExGram.Model.Video{file_id: file_id}} = response} ->
         update_caption_after_send(chat_id, response, context)
-        {:ok, {:sent_to_telegram_at_first, file_path, file_id}}
+        ext = file_path |> Path.extname() |> String.downcase()
+        {:ok, {:sent_media, Path.dirname(file_path), [{ext, file_id}]}}
 
       {:ok, response} ->
         {:error, {:unexpected_telegram_response, response}}
@@ -252,7 +253,8 @@ defmodule Lolek do
          end) do
       {:ok, %ExGram.Model.Message{document: %ExGram.Model.Document{file_id: file_id}} = response} ->
         update_caption_after_send(chat_id, response, context)
-        {:ok, {:sent_to_telegram_at_first, file_path, file_id}}
+        ext = file_path |> Path.extname() |> String.downcase()
+        {:ok, {:sent_media, Path.dirname(file_path), [{ext, file_id}]}}
 
       {:ok, response} ->
         {:error, {:unexpected_telegram_response, response}}

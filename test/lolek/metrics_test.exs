@@ -31,7 +31,7 @@ defmodule Lolek.MetricsTest do
       name: metrics_name
     )
 
-    Lolek.Metrics.record_cache_lookup({:ok, {:ready_to_telegram, "/tmp/file.mp4"}},
+    Lolek.Metrics.record_cache_lookup({:ok, {:ready_media, [{"file-id", ".mp4"}]}},
       name: metrics_name
     )
 

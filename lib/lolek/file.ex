@@ -8,18 +8,21 @@ defmodule Lolek.File do
   @compressed_name "compressed.mp4"
   @downloaded_name "downloaded"
   @gallery_subdir "gallery"
-  @gallery_manifest "gallery_manifest.json"
+  @media_manifest "media_manifest.json"
+  @legacy_gallery_manifest "gallery_manifest.json"
+
+  @type ready_media_entry :: {tg_file_id :: String.t(), ext :: String.t()}
+  @type sent_media_entry :: {ext :: String.t(), tg_file_id :: String.t()}
 
   @type file_state ::
           {:ready_to_telegram, String.t()}
-          | {:ready_to_telegram_gallery, [{tg_file_id :: String.t(), ext :: String.t()}]}
+          | {:ready_media, [ready_media_entry()]}
           | {:compressed, String.t()}
           | {:downloaded, String.t()}
           | {:downloaded_gallery, gallery_dir :: String.t(), files :: [String.t()]}
           | {:new_file, String.t()}
           | {:sent_to_telegram_at_first, file_path :: String.t(), tg_file_id :: String.t()}
-          | {:sent_gallery_to_telegram_at_first, gallery_dir :: String.t(),
-             [{ext :: String.t(), tg_file_id :: String.t()}]}
+          | {:sent_media, cache_root :: String.t(), [sent_media_entry()]}
 
   @spec get_video_width_and_height(String.t()) :: :error | {:ok, {integer(), integer()}}
   def get_video_width_and_height(file_path) do
@@ -189,9 +192,9 @@ defmodule Lolek.File do
     end
   end
 
-  def move_to_ready_to_telegram({:sent_gallery_to_telegram_at_first, gallery_dir, entries}) do
-    ready_path = gallery_dir |> Path.dirname() |> Path.join(@ready_to_telegram)
-    manifest_path = Path.join(ready_path, @gallery_manifest)
+  def move_to_ready_to_telegram({:sent_media, cache_root, entries}) do
+    ready_path = Path.join(cache_root, @ready_to_telegram)
+    manifest_path = Path.join(ready_path, @media_manifest)
 
     manifest =
       Enum.map(entries, fn {ext, file_id} ->
@@ -201,7 +204,7 @@ defmodule Lolek.File do
     with :ok <- File.mkdir_p(ready_path) do
       case File.write(manifest_path, Jason.encode!(manifest)) do
         :ok -> :ok
-        {:error, reason} -> {:error, {:gallery_manifest_write, reason}}
+        {:error, reason} -> {:error, {:media_manifest_write, reason}}
       end
     end
   end
@@ -233,11 +236,26 @@ defmodule Lolek.File do
   @spec check_if_ready_to_tg(String.t()) :: :not_ready | {:exists, Lolek.File.file_state()}
   defp check_if_ready_to_tg(folder_path) do
     ready_to_telegram_path = Path.join(folder_path, @ready_to_telegram)
-    manifest_path = Path.join(ready_to_telegram_path, @gallery_manifest)
 
-    case read_gallery_manifest(manifest_path) do
-      {:ok, [_ | _] = entries} -> {:exists, {:ready_to_telegram_gallery, entries}}
+    manifest_paths = [
+      Path.join(ready_to_telegram_path, @media_manifest),
+      Path.join(ready_to_telegram_path, @legacy_gallery_manifest)
+    ]
+
+    case read_media_manifests(manifest_paths) do
+      {:ok, [_ | _] = entries} -> {:exists, {:ready_media, entries}}
       _ -> check_single_file_cache(ready_to_telegram_path)
+    end
+  end
+
+  @spec read_media_manifests([String.t()]) ::
+          {:ok, [ready_media_entry()]} | {:error, term()}
+  defp read_media_manifests([]), do: {:error, :enoent}
+
+  defp read_media_manifests([manifest_path | remaining]) do
+    case read_media_manifest(manifest_path) do
+      {:ok, [_ | _] = entries} -> {:ok, entries}
+      _ -> read_media_manifests(remaining)
     end
   end
 
@@ -255,9 +273,9 @@ defmodule Lolek.File do
     end
   end
 
-  @spec read_gallery_manifest(String.t()) ::
-          {:ok, [{String.t(), String.t()}]} | {:error, term()}
-  defp read_gallery_manifest(manifest_path) do
+  @spec read_media_manifest(String.t()) ::
+          {:ok, [ready_media_entry()]} | {:error, term()}
+  defp read_media_manifest(manifest_path) do
     with {:ok, content} <- File.read(manifest_path),
          {:ok, entries} when is_list(entries) <- Jason.decode(content) do
       parsed =
@@ -285,6 +303,15 @@ defmodule Lolek.File do
 
   @spec check_cache_file(String.t()) :: {:exists, file_state()} | false
   defp check_cache_file(file_path) do
+    if Path.basename(file_path) in [@media_manifest, @legacy_gallery_manifest] do
+      false
+    else
+      check_single_cache_media(file_path)
+    end
+  end
+
+  @spec check_single_cache_media(String.t()) :: {:exists, file_state()} | false
+  defp check_single_cache_media(file_path) do
     if usable_cached_file?(file_path) do
       {:exists, {:ready_to_telegram, file_path}}
     else

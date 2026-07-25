@@ -138,7 +138,7 @@ defmodule Lolek.SendFileTest do
       Application.put_env(:lolek, :telegram_client, TelegramClient)
       Application.put_env(:lolek, :telegram_test_result, {:ok, response})
 
-      assert {:ok, {:sent_to_telegram_at_first, ^file_path, "telegram-file-id"}} =
+      assert {:ok, {:sent_media, _, [{".txt", "telegram-file-id"}]}} =
                Lolek.send_file(123, {:compressed, file_path})
     end)
   end
@@ -157,7 +157,7 @@ defmodule Lolek.SendFileTest do
 
       context = [message_thread_id: 456]
 
-      assert {:ok, {:sent_to_telegram_at_first, ^file_path, "telegram-file-id"}} =
+      assert {:ok, {:sent_media, _, [{".mp4", "telegram-file-id"}]}} =
                Lolek.send_file(123, {:compressed, file_path}, context)
 
       assert_receive {:send_video, 123, _upload, options}
@@ -182,7 +182,7 @@ defmodule Lolek.SendFileTest do
 
       context = [message_thread_id: 456]
 
-      assert {:ok, {:sent_gallery_to_telegram_at_first, "/tmp/gallery", _entries}} =
+      assert {:ok, {:sent_media, "/tmp", _entries}} =
                Lolek.send_file(123, {:downloaded_gallery, "/tmp/gallery", files}, context)
 
       assert_receive {:send_media_group, 123, _media, options}
@@ -206,7 +206,7 @@ defmodule Lolek.SendFileTest do
       Application.put_env(:lolek, :telegram_test_parent, self())
       Application.put_env(:lolek, :max_gallery_media, 2)
 
-      assert {:ok, {:sent_gallery_to_telegram_at_first, "/tmp/gallery", entries}} =
+      assert {:ok, {:sent_media, "/tmp", entries}} =
                Lolek.send_file(123, {:downloaded_gallery, "/tmp/gallery", files})
 
       assert length(entries) == 2
@@ -229,9 +229,7 @@ defmodule Lolek.SendFileTest do
       Application.put_env(:lolek, :telegram_test_parent, self())
       Application.put_env(:lolek, :max_gallery_media, 1)
 
-      assert {:ok,
-              {:sent_gallery_to_telegram_at_first, "/tmp/gallery",
-               [{".mp4", "gallery-video-file"}]}} =
+      assert {:ok, {:sent_media, "/tmp", [{".mp4", "gallery-video-file"}]}} =
                Lolek.send_file(123, {:downloaded_gallery, "/tmp/gallery", files})
 
       assert_receive {:send_video, 123, {:file_content, %File.Stream{}, "gallery-1.mp4"}, []}
@@ -252,9 +250,7 @@ defmodule Lolek.SendFileTest do
       Application.put_env(:lolek, :telegram_test_parent, self())
       Application.put_env(:lolek, :telegram_local_file_uploads, true)
 
-      assert {:ok,
-              {:sent_gallery_to_telegram_at_first, "/tmp/gallery",
-               [{".mp4", "gallery-video-file"}]}} =
+      assert {:ok, {:sent_media, "/tmp", [{".mp4", "gallery-video-file"}]}} =
                Lolek.send_file(123, {:downloaded_gallery, "/tmp/gallery", [file_path]})
 
       assert_receive {:send_video, 123, "file://" <> encoded_path, []}
@@ -280,7 +276,7 @@ defmodule Lolek.SendFileTest do
 
       context = [source_title: "Gallery title"]
 
-      assert {:ok, {:sent_gallery_to_telegram_at_first, "/tmp/gallery", _entries}} =
+      assert {:ok, {:sent_media, "/tmp", _entries}} =
                Lolek.send_file(123, {:downloaded_gallery, "/tmp/gallery", files}, context)
 
       assert_receive {:send_media_group, 123, media, []}
@@ -336,7 +332,7 @@ defmodule Lolek.SendFileTest do
       Application.put_env(:lolek, :telegram_test_parent, self())
 
       assert {:ok,
-              {:sent_gallery_to_telegram_at_first, "/tmp/gallery",
+              {:sent_media, "/tmp",
                [{".jpg", "photo-id"}, {".mp4", "video-id"}, {".gif", "gif-id"}]}} =
                Lolek.send_file(123, {:downloaded_gallery, "/tmp/gallery", files})
 
@@ -350,8 +346,8 @@ defmodule Lolek.SendFileTest do
 
       cached_entries = [{"photo-id", ".jpg"}, {"video-id", ".mp4"}, {"gif-id", ".gif"}]
 
-      assert {:ok, {:ready_to_telegram_gallery, ^cached_entries}} =
-               Lolek.send_file(123, {:ready_to_telegram_gallery, cached_entries})
+      assert {:ok, {:ready_media, ^cached_entries}} =
+               Lolek.send_file(123, {:ready_media, cached_entries})
 
       assert_receive {:send_media_group, 123, cached_media, []}
 
@@ -373,8 +369,8 @@ defmodule Lolek.SendFileTest do
       Application.put_env(:lolek, :telegram_test_parent, self())
       Application.put_env(:lolek, :max_gallery_media, 1)
 
-      assert {:ok, {:ready_to_telegram_gallery, limited_entries}} =
-               Lolek.send_file(123, {:ready_to_telegram_gallery, entries})
+      assert {:ok, {:ready_media, limited_entries}} =
+               Lolek.send_file(123, {:ready_media, entries})
 
       assert length(limited_entries) == 1
       assert_receive {:send_photo, 123, "gallery-file-1", []}
@@ -392,7 +388,7 @@ defmodule Lolek.SendFileTest do
       Application.put_env(:lolek, :telegram_test_parent, self())
 
       assert {:error, {:telegram_api, %ExGram.Error{code: 400, message: "Bad Request"}}} =
-               Lolek.send_file(123, {:ready_to_telegram_gallery, entries})
+               Lolek.send_file(123, {:ready_media, entries})
 
       assert_receive {:send_media_group, 123, _media, []}
     end)
@@ -414,7 +410,7 @@ defmodule Lolek.SendFileTest do
       Application.put_env(:lolek, :telegram_test_parent, self())
       Application.put_env(:lolek, :max_gallery_media, 11)
 
-      assert {:ok, {:sent_gallery_to_telegram_at_first, "/tmp/gallery", entries}} =
+      assert {:ok, {:sent_media, "/tmp", entries}} =
                Lolek.send_file(123, {:downloaded_gallery, "/tmp/gallery", files})
 
       assert length(entries) == 11
@@ -438,7 +434,7 @@ defmodule Lolek.SendFileTest do
       Application.put_env(:lolek, :telegram_test_parent, self())
       Application.put_env(:lolek, :telegram_local_file_uploads, true)
 
-      assert {:ok, {:sent_to_telegram_at_first, ^file_path, "telegram-file-id"}} =
+      assert {:ok, {:sent_media, _, [{".mp4", "telegram-file-id"}]}} =
                Lolek.send_file(123, {:compressed, file_path})
 
       assert_receive {:send_video, 123, "file://" <> encoded_path, _options}
@@ -461,7 +457,7 @@ defmodule Lolek.SendFileTest do
 
       context = [source_title: "A / Video: https://example.com/watch Title?"]
 
-      assert {:ok, {:sent_to_telegram_at_first, ^file_path, "telegram-file-id"}} =
+      assert {:ok, {:sent_media, _, [{".mp4", "telegram-file-id"}]}} =
                Lolek.send_file(123, {:compressed, file_path}, context)
 
       assert_receive {:send_video, 123, "file://" <> encoded_path, _options}
@@ -494,7 +490,7 @@ defmodule Lolek.SendFileTest do
 
       assert byte_size(source_title <> extname) > max_upload_file_name_bytes
 
-      assert {:ok, {:sent_to_telegram_at_first, ^file_path, "telegram-file-id"}} =
+      assert {:ok, {:sent_media, _, [{".mp4", "telegram-file-id"}]}} =
                Lolek.send_file(123, {:compressed, file_path}, context)
 
       assert_receive {:send_video, 123, "file://" <> encoded_path, _options}
@@ -530,7 +526,7 @@ defmodule Lolek.SendFileTest do
 
       assert byte_size(source_title <> extname) > max_upload_file_name_bytes
 
-      assert {:ok, {:sent_to_telegram_at_first, ^file_path, "telegram-file-id"}} =
+      assert {:ok, {:sent_media, _, [{".mp4", "telegram-file-id"}]}} =
                Lolek.send_file(123, {:compressed, file_path}, context)
 
       assert_receive {:send_video, 123, "file://" <> encoded_path, _options}
@@ -556,7 +552,7 @@ defmodule Lolek.SendFileTest do
       Application.put_env(:lolek, :telegram_test_result, {:ok, response})
       Application.put_env(:lolek, :telegram_test_parent, self())
 
-      assert {:ok, {:sent_to_telegram_at_first, ^file_path, "telegram-file-id"}} =
+      assert {:ok, {:sent_media, _, [{".mp4", "telegram-file-id"}]}} =
                Lolek.send_file(123, {:compressed, file_path})
 
       assert_receive {:send_video, 123,
@@ -581,7 +577,7 @@ defmodule Lolek.SendFileTest do
 
       context = [source_title: "A Video Title"]
 
-      assert {:ok, {:sent_to_telegram_at_first, ^file_path, "telegram-file-id"}} =
+      assert {:ok, {:sent_media, _, [{".mp4", "telegram-file-id"}]}} =
                Lolek.send_file(123, {:compressed, file_path}, context)
 
       assert_receive {:send_video, 123, {:file_content, %File.Stream{}, "A Video Title.mp4"},
@@ -603,7 +599,7 @@ defmodule Lolek.SendFileTest do
 
       context = [source_title: "A / Video: https://example.com/watch Title?"]
 
-      assert {:ok, {:sent_to_telegram_at_first, ^file_path, "telegram-file-id"}} =
+      assert {:ok, {:sent_media, _, [{".mp4", "telegram-file-id"}]}} =
                Lolek.send_file(123, {:compressed, file_path}, context)
 
       assert_receive {:send_video, 123, {:file_content, %File.Stream{}, "A Video Title.mp4"},
@@ -627,7 +623,7 @@ defmodule Lolek.SendFileTest do
 
       context = [requester_name: "alice", started_at: System.monotonic_time()]
 
-      assert {:ok, {:sent_to_telegram_at_first, ^file_path, "telegram-file-id"}} =
+      assert {:ok, {:sent_media, _, [{".mp4", "telegram-file-id"}]}} =
                Lolek.send_file(123, {:compressed, file_path}, context)
 
       assert_receive {:send_video, 123, {:file_content, %File.Stream{}, "downloaded.mp4"},
@@ -660,7 +656,7 @@ defmodule Lolek.SendFileTest do
         started_at: System.monotonic_time()
       ]
 
-      assert {:ok, {:sent_to_telegram_at_first, ^file_path, "telegram-file-id"}} =
+      assert {:ok, {:sent_media, _, [{".mp4", "telegram-file-id"}]}} =
                Lolek.send_file(123, {:compressed, file_path}, context)
 
       assert_receive {:send_video, 123, {:file_content, %File.Stream{}, "downloaded.mp4"},
@@ -691,7 +687,7 @@ defmodule Lolek.SendFileTest do
         started_at: System.monotonic_time()
       ]
 
-      assert {:ok, {:sent_to_telegram_at_first, ^file_path, "telegram-file-id"}} =
+      assert {:ok, {:sent_media, _, [{".mp4", "telegram-file-id"}]}} =
                Lolek.send_file(123, {:compressed, file_path}, context)
 
       assert_receive {:send_video, 123, {:file_content, %File.Stream{}, "downloaded.mp4"},
@@ -722,7 +718,7 @@ defmodule Lolek.SendFileTest do
         started_at: System.monotonic_time()
       ]
 
-      assert {:ok, {:sent_to_telegram_at_first, ^file_path, "telegram-file-id"}} =
+      assert {:ok, {:sent_media, _, [{".mp4", "telegram-file-id"}]}} =
                Lolek.send_file(123, {:compressed, file_path}, context)
 
       assert_receive {:send_video, 123, {:file_content, %File.Stream{}, "downloaded.mp4"},

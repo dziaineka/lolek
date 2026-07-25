@@ -33,6 +33,14 @@ defmodule Lolek.SendFileTest do
     @impl true
     def send_media_group(chat_id, media, options) do
       record_call({:send_media_group, chat_id, media, options})
+
+      local_files_exist =
+        Enum.map(media, fn
+          %{media: "file://" <> encoded_path} -> encoded_path |> URI.decode() |> File.exists?()
+          _ -> :not_local
+        end)
+
+      record_call({:send_media_group_local_files_exist, local_files_exist})
       Application.fetch_env!(:lolek, :telegram_test_result)
     end
 
@@ -228,6 +236,84 @@ defmodule Lolek.SendFileTest do
 
       assert_receive {:send_video, 123, {:file_content, %File.Stream{}, "gallery-1.mp4"}, []}
       refute_receive {:send_media_group, 123, _, []}
+    end)
+  end
+
+  test "sends one-item galleries as local file uris" do
+    preserve_telegram_env(fn ->
+      file_path = tmp_file("gallery video.mp4", "media")
+
+      response = %ExGram.Model.Message{
+        video: %ExGram.Model.Video{file_id: "gallery-video-file"}
+      }
+
+      Application.put_env(:lolek, :telegram_client, TelegramClient)
+      Application.put_env(:lolek, :telegram_test_result, {:ok, response})
+      Application.put_env(:lolek, :telegram_test_parent, self())
+      Application.put_env(:lolek, :telegram_local_file_uploads, true)
+
+      assert {:ok,
+              {:sent_gallery_to_telegram_at_first, "/tmp/gallery",
+               [{".mp4", "gallery-video-file"}]}} =
+               Lolek.send_file(123, {:downloaded_gallery, "/tmp/gallery", [file_path]})
+
+      assert_receive {:send_video, 123, "file://" <> encoded_path, []}
+      assert URI.decode(encoded_path) == file_path
+    end)
+  end
+
+  test "sends media groups as local file uris and cleans upload aliases" do
+    preserve_telegram_env(fn ->
+      files = for index <- 1..2, do: tmp_file("gallery-#{index}.jpg", "media")
+
+      messages =
+        for index <- 1..2 do
+          %ExGram.Model.Message{
+            photo: [%ExGram.Model.PhotoSize{file_id: "gallery-file-#{index}"}]
+          }
+        end
+
+      Application.put_env(:lolek, :telegram_client, TelegramClient)
+      Application.put_env(:lolek, :telegram_test_result, {:ok, messages})
+      Application.put_env(:lolek, :telegram_test_parent, self())
+      Application.put_env(:lolek, :telegram_local_file_uploads, true)
+
+      context = [source_title: "Gallery title"]
+
+      assert {:ok, {:sent_gallery_to_telegram_at_first, "/tmp/gallery", _entries}} =
+               Lolek.send_file(123, {:downloaded_gallery, "/tmp/gallery", files}, context)
+
+      assert_receive {:send_media_group, 123, media, []}
+      assert Enum.all?(media, &String.starts_with?(&1.media, "file://"))
+      assert_receive {:send_media_group_local_files_exist, [true, true]}
+
+      for file <- files do
+        assert [] = Path.wildcard(Path.join(Path.dirname(file), ".telegram-upload-*"))
+      end
+    end)
+  end
+
+  test "cleans prepared gallery uploads when a later item cannot be prepared" do
+    preserve_telegram_env(fn ->
+      file_path = tmp_file("gallery-1.jpg", "media")
+      missing_path = Path.join(Path.dirname(file_path), "missing.jpg")
+
+      Application.put_env(:lolek, :telegram_client, TelegramClient)
+      Application.put_env(:lolek, :telegram_test_result, {:ok, []})
+      Application.put_env(:lolek, :telegram_test_parent, self())
+      Application.put_env(:lolek, :telegram_local_file_uploads, true)
+
+      context = [source_title: "Gallery title"]
+
+      assert {:error, {:local_upload_alias, :enoent}} =
+               Lolek.send_file(
+                 123,
+                 {:downloaded_gallery, "/tmp/gallery", [file_path, missing_path]},
+                 context
+               )
+
+      assert [] = Path.wildcard(Path.join(Path.dirname(file_path), ".telegram-upload-*"))
+      refute_receive {:send_media_group, _, _, _}
     end)
   end
 

@@ -52,10 +52,9 @@ defmodule Lolek do
     options = add_send_context([], context)
     ext = file_path |> Path.extname() |> String.downcase()
 
-    upload =
-      {:file_content, File.stream!(file_path, @upload_chunk_size, []), Path.basename(file_path)}
-
-    case send_gallery_single_upload(chat_id, ext, upload, options) do
+    case with_upload_file(file_path, context, fn upload ->
+           send_gallery_single_upload(chat_id, ext, upload, options)
+         end) do
       {:ok, response} ->
         case extract_single_file_id(response) do
           {:ok, file_id} ->
@@ -100,9 +99,13 @@ defmodule Lolek do
     |> gallery_batches()
     |> Enum.with_index()
     |> Enum.reduce_while({:ok, []}, fn {batch, idx}, {:ok, acc_entries} ->
-      media = build_gallery_media(batch, idx, context)
+      result =
+        with_upload_files(batch, context, fn uploads ->
+          media = build_gallery_media(batch, uploads, idx, context)
+          send_media_group_batch(chat_id, media, context)
+        end)
 
-      case send_media_group_batch(chat_id, media, context) do
+      case result do
         {:ok, messages} when is_list(messages) ->
           entries = extract_media_group_entries(batch, messages)
           {:cont, {:ok, acc_entries ++ entries}}
@@ -197,12 +200,9 @@ defmodule Lolek do
     Application.fetch_env!(:lolek, :max_gallery_media)
   end
 
-  @spec file_to_input_media(String.t(), String.t() | nil) :: term()
-  defp file_to_input_media(file_path, caption) do
+  @spec file_to_input_media(String.t(), term(), String.t() | nil) :: term()
+  defp file_to_input_media(file_path, upload, caption) do
     ext = file_path |> Path.extname() |> String.downcase()
-
-    upload =
-      {:file_content, File.stream!(file_path, @upload_chunk_size, []), Path.basename(file_path)}
 
     cond do
       ext in @gif_extensions ->
@@ -230,13 +230,14 @@ defmodule Lolek do
     end
   end
 
-  @spec build_gallery_media([String.t()], non_neg_integer(), keyword()) :: [term()]
-  defp build_gallery_media(batch, batch_idx, context) do
+  @spec build_gallery_media([String.t()], [term()], non_neg_integer(), keyword()) :: [term()]
+  defp build_gallery_media(batch, uploads, batch_idx, context) do
     batch
+    |> Enum.zip(uploads)
     |> Enum.with_index()
-    |> Enum.map(fn {file, file_idx} ->
+    |> Enum.map(fn {{file, upload}, file_idx} ->
       cap = if batch_idx == 0 and file_idx == 0, do: caption(context), else: nil
-      file_to_input_media(file, cap)
+      file_to_input_media(file, upload, cap)
     end)
   end
 
@@ -341,6 +342,45 @@ defmodule Lolek do
         cleanup.()
       end
     end
+  end
+
+  @spec with_upload_files([String.t()], keyword(), ([term()] -> term())) :: term()
+  defp with_upload_files(file_paths, context, fun) do
+    case prepare_upload_files(file_paths, context) do
+      {:ok, uploads, cleanups} ->
+        try do
+          fun.(uploads)
+        after
+          cleanup_upload_files(cleanups)
+        end
+
+      {:error, reason, cleanups} ->
+        cleanup_upload_files(cleanups)
+        {:error, reason}
+    end
+  end
+
+  @spec prepare_upload_files([String.t()], keyword()) ::
+          {:ok, [term()], [(-> :ok)]} | {:error, term(), [(-> :ok)]}
+  defp prepare_upload_files(file_paths, context) do
+    Enum.reduce_while(file_paths, {:ok, [], []}, fn file_path, {:ok, uploads, cleanups} ->
+      case upload_file(file_path, context) do
+        {:ok, upload, cleanup} ->
+          {:cont, {:ok, [upload | uploads], [cleanup | cleanups]}}
+
+        {:error, reason} ->
+          {:halt, {:error, reason, cleanups}}
+      end
+    end)
+    |> case do
+      {:ok, uploads, cleanups} -> {:ok, Enum.reverse(uploads), cleanups}
+      error -> error
+    end
+  end
+
+  @spec cleanup_upload_files([(-> :ok)]) :: :ok
+  defp cleanup_upload_files(cleanups) do
+    Enum.each(cleanups, & &1.())
   end
 
   @spec upload_file(String.t(), keyword()) ::

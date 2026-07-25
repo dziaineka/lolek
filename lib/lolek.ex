@@ -9,6 +9,9 @@ defmodule Lolek do
   @max_media_group_size 10
   @gif_extensions ~w(.gif)
 
+  @typep media_source :: {:file_path, String.t()} | {:file_id, String.t()}
+  @typep media_item :: {media_source(), String.t()}
+
   require Logger
 
   @spec send_file(integer(), Lolek.File.file_state()) ::
@@ -34,34 +37,52 @@ defmodule Lolek do
     end
   end
 
-  def send_file(chat_id, {:downloaded_gallery, gallery_dir, [file_path]}, context) do
-    send_single_gallery_file(chat_id, gallery_dir, file_path, context)
-  end
-
   def send_file(chat_id, {:downloaded_gallery, gallery_dir, files}, context) do
-    send_gallery_files(chat_id, gallery_dir, files, context)
+    items =
+      files
+      |> Enum.take(max_gallery_media())
+      |> Enum.map(fn file_path ->
+        {{:file_path, file_path}, file_path |> Path.extname() |> String.downcase()}
+      end)
+
+    with {:ok, entries} <- send_media_collection(chat_id, items, context) do
+      {:ok, {:sent_gallery_to_telegram_at_first, gallery_dir, entries}}
+    end
   end
 
   def send_file(chat_id, {:ready_to_telegram_gallery, entries}, context) do
-    send_cached_gallery(chat_id, entries, context)
+    limited_entries = Enum.take(entries, max_gallery_media())
+    items = Enum.map(limited_entries, fn {file_id, ext} -> {{:file_id, file_id}, ext} end)
+
+    with {:ok, _sent_entries} <- send_media_collection(chat_id, items, context) do
+      {:ok, {:ready_to_telegram_gallery, limited_entries}}
+    end
   end
 
-  @spec send_single_gallery_file(integer(), String.t(), String.t(), keyword()) ::
-          {:ok, Lolek.File.file_state()} | {:error, term()}
-  defp send_single_gallery_file(chat_id, gallery_dir, file_path, context) do
-    options = add_send_context([], context)
-    ext = file_path |> Path.extname() |> String.downcase()
+  @spec send_media_collection(integer(), [media_item()], keyword()) ::
+          {:ok, [{String.t(), String.t()}]} | {:error, term()}
+  defp send_media_collection(_chat_id, [], _context), do: {:error, :no_usable_gallery_files}
 
-    case with_upload_file(file_path, context, fn upload ->
-           send_gallery_single_upload(chat_id, ext, upload, options)
+  defp send_media_collection(chat_id, [item], context) do
+    send_single_media_item(chat_id, item, context)
+  end
+
+  defp send_media_collection(chat_id, items, context) do
+    send_media_group_items(chat_id, items, context)
+  end
+
+  @spec send_single_media_item(integer(), media_item(), keyword()) ::
+          {:ok, [{String.t(), String.t()}]} | {:error, term()}
+  defp send_single_media_item(chat_id, {source, ext}, context) do
+    options = add_send_context([], context)
+
+    case with_media_sources([source], context, fn [prepared_source] ->
+           send_single_media(chat_id, ext, prepared_source, options)
          end) do
       {:ok, response} ->
         case extract_single_file_id(response) do
-          {:ok, file_id} ->
-            {:ok, {:sent_gallery_to_telegram_at_first, gallery_dir, [{ext, file_id}]}}
-
-          :error ->
-            {:error, {:unexpected_telegram_response, response}}
+          {:ok, file_id} -> {:ok, [{ext, file_id}]}
+          :error -> {:error, {:unexpected_telegram_response, response}}
         end
 
       {:error, _} = error ->
@@ -69,39 +90,30 @@ defmodule Lolek do
     end
   end
 
-  @spec send_gallery_single_upload(integer(), String.t(), term(), keyword()) ::
+  @spec send_single_media(integer(), String.t(), term(), keyword()) ::
           {:ok, term()} | {:error, term()}
-  defp send_gallery_single_upload(chat_id, ext, upload, options) when ext in @gif_extensions do
-    call_telegram(fn -> Lolek.Telegram.send_animation(chat_id, upload, options) end)
+  defp send_single_media(chat_id, ext, source, options) when ext in @gif_extensions do
+    call_telegram(fn -> Lolek.Telegram.send_animation(chat_id, source, options) end)
   end
 
-  defp send_gallery_single_upload(chat_id, ext, upload, options) do
+  defp send_single_media(chat_id, ext, source, options) do
     if Lolek.GalleryDownloader.video_file?("x#{ext}") do
-      call_telegram(fn -> Lolek.Telegram.send_video(chat_id, upload, options) end)
+      call_telegram(fn -> Lolek.Telegram.send_video(chat_id, source, options) end)
     else
-      call_telegram(fn -> Lolek.Telegram.send_photo(chat_id, upload, options) end)
+      call_telegram(fn -> Lolek.Telegram.send_photo(chat_id, source, options) end)
     end
   end
 
-  @spec send_gallery_files(integer(), String.t(), [String.t()], keyword()) ::
-          {:ok, Lolek.File.file_state()} | {:error, term()}
-  defp send_gallery_files(chat_id, gallery_dir, files, context) do
-    case Enum.take(files, max_gallery_media()) do
-      [file] -> send_single_gallery_file(chat_id, gallery_dir, file, context)
-      limited_files -> do_send_gallery_files(chat_id, gallery_dir, limited_files, context)
-    end
-  end
-
-  @spec do_send_gallery_files(integer(), String.t(), [String.t()], keyword()) ::
-          {:ok, Lolek.File.file_state()} | {:error, term()}
-  defp do_send_gallery_files(chat_id, gallery_dir, files, context) do
-    files
+  @spec send_media_group_items(integer(), [media_item()], keyword()) ::
+          {:ok, [{String.t(), String.t()}]} | {:error, term()}
+  defp send_media_group_items(chat_id, items, context) do
+    items
     |> gallery_batches()
     |> Enum.with_index()
     |> Enum.reduce_while({:ok, []}, fn {batch, idx}, {:ok, acc_entries} ->
       result =
-        with_upload_files(batch, context, fn uploads ->
-          media = build_gallery_media(batch, uploads, idx, context)
+        with_media_sources(Enum.map(batch, &elem(&1, 0)), context, fn sources ->
+          media = build_media_group(batch, sources, idx, context)
           send_media_group_batch(chat_id, media, context)
         end)
 
@@ -117,10 +129,6 @@ defmodule Lolek do
           {:halt, error}
       end
     end)
-    |> case do
-      {:ok, entries} -> {:ok, {:sent_gallery_to_telegram_at_first, gallery_dir, entries}}
-      error -> error
-    end
   end
 
   @spec send_media_group_batch(integer(), [term()], keyword()) ::
@@ -128,57 +136,6 @@ defmodule Lolek do
   defp send_media_group_batch(chat_id, media, context) do
     options = add_message_thread_id([], context)
     call_telegram(fn -> Lolek.Telegram.send_media_group(chat_id, media, options) end)
-  end
-
-  @spec send_cached_gallery(integer(), [{String.t(), String.t()}], keyword()) ::
-          {:ok, Lolek.File.file_state()} | {:error, term()}
-  defp send_cached_gallery(chat_id, entries, context) do
-    limited_entries = Enum.take(entries, max_gallery_media())
-
-    case limited_entries do
-      [entry] ->
-        send_cached_gallery_single(chat_id, entry, context)
-
-      _ ->
-        limited_entries
-        |> gallery_batches()
-        |> Enum.with_index()
-        |> Enum.each(fn {batch, idx} ->
-          send_cached_gallery_batch(chat_id, batch, idx, context)
-        end)
-    end
-
-    {:ok, {:ready_to_telegram_gallery, limited_entries}}
-  end
-
-  @spec send_cached_gallery_batch(
-          integer(),
-          [{String.t(), String.t()}],
-          non_neg_integer(),
-          keyword()
-        ) ::
-          {:ok, term()} | {:error, term()}
-  defp send_cached_gallery_batch(chat_id, batch, idx, context) do
-    media = build_cached_gallery_media(batch, idx, context)
-    options = add_message_thread_id([], context)
-    call_telegram(fn -> Lolek.Telegram.send_media_group(chat_id, media, options) end)
-  end
-
-  @spec send_cached_gallery_single(integer(), {String.t(), String.t()}, keyword()) ::
-          {:ok, term()} | {:error, term()}
-  defp send_cached_gallery_single(chat_id, {file_id, ext}, context) do
-    options = add_send_context([], context)
-
-    cond do
-      ext in @gif_extensions ->
-        call_telegram(fn -> Lolek.Telegram.send_animation(chat_id, file_id, options) end)
-
-      Lolek.GalleryDownloader.video_file?("x#{ext}") ->
-        call_telegram(fn -> Lolek.Telegram.send_video(chat_id, file_id, options) end)
-
-      true ->
-        call_telegram(fn -> Lolek.Telegram.send_photo(chat_id, file_id, options) end)
-    end
   end
 
   @spec gallery_batches([term()]) :: [[term()]]
@@ -214,26 +171,14 @@ defmodule Lolek do
     end
   end
 
-  @spec build_gallery_media([String.t()], [term()], non_neg_integer(), keyword()) :: [term()]
-  defp build_gallery_media(batch, uploads, batch_idx, context) do
+  @spec build_media_group([media_item()], [term()], non_neg_integer(), keyword()) :: [term()]
+  defp build_media_group(batch, sources, batch_idx, context) do
     batch
-    |> Enum.zip(uploads)
+    |> Enum.zip(sources)
     |> Enum.with_index()
-    |> Enum.map(fn {{file, upload}, file_idx} ->
+    |> Enum.map(fn {{{_source, ext}, prepared_source}, file_idx} ->
       cap = if batch_idx == 0 and file_idx == 0, do: caption(context), else: nil
-      ext = file |> Path.extname() |> String.downcase()
-      media_to_input_media(upload, ext, cap)
-    end)
-  end
-
-  @spec build_cached_gallery_media([{String.t(), String.t()}], non_neg_integer(), keyword()) ::
-          [term()]
-  defp build_cached_gallery_media(batch, batch_idx, context) do
-    batch
-    |> Enum.with_index()
-    |> Enum.map(fn {{file_id, ext}, file_idx} ->
-      cap = if batch_idx == 0 and file_idx == 0, do: caption(context), else: nil
-      media_to_input_media(file_id, ext, cap)
+      media_to_input_media(prepared_source, ext, cap)
     end)
   end
 
@@ -260,13 +205,11 @@ defmodule Lolek do
 
   defp extract_single_file_id(_), do: :error
 
-  @spec extract_media_group_entries([String.t()], [term()]) :: [{String.t(), String.t()}]
-  defp extract_media_group_entries(file_paths, messages) do
-    file_paths
+  @spec extract_media_group_entries([media_item()], [term()]) :: [{String.t(), String.t()}]
+  defp extract_media_group_entries(items, messages) do
+    items
     |> Enum.zip(messages)
-    |> Enum.flat_map(fn {file_path, message} ->
-      ext = file_path |> Path.extname() |> String.downcase()
-
+    |> Enum.flat_map(fn {{_source, ext}, message} ->
       case extract_single_file_id(message) do
         {:ok, fid} -> [{ext, fid}]
         :error -> []
@@ -335,12 +278,12 @@ defmodule Lolek do
     end
   end
 
-  @spec with_upload_files([String.t()], keyword(), ([term()] -> term())) :: term()
-  defp with_upload_files(file_paths, context, fun) do
-    case prepare_upload_files(file_paths, context) do
-      {:ok, uploads, cleanups} ->
+  @spec with_media_sources([media_source()], keyword(), ([term()] -> term())) :: term()
+  defp with_media_sources(sources, context, fun) do
+    case prepare_media_sources(sources, context) do
+      {:ok, prepared_sources, cleanups} ->
         try do
-          fun.(uploads)
+          fun.(prepared_sources)
         after
           cleanup_upload_files(cleanups)
         end
@@ -351,23 +294,28 @@ defmodule Lolek do
     end
   end
 
-  @spec prepare_upload_files([String.t()], keyword()) ::
+  @spec prepare_media_sources([media_source()], keyword()) ::
           {:ok, [term()], [(-> :ok)]} | {:error, term(), [(-> :ok)]}
-  defp prepare_upload_files(file_paths, context) do
-    Enum.reduce_while(file_paths, {:ok, [], []}, fn file_path, {:ok, uploads, cleanups} ->
-      case upload_file(file_path, context) do
-        {:ok, upload, cleanup} ->
-          {:cont, {:ok, [upload | uploads], [cleanup | cleanups]}}
+  defp prepare_media_sources(sources, context) do
+    Enum.reduce_while(sources, {:ok, [], []}, fn source, {:ok, prepared, cleanups} ->
+      case prepare_media_source(source, context) do
+        {:ok, prepared_source, cleanup} ->
+          {:cont, {:ok, [prepared_source | prepared], [cleanup | cleanups]}}
 
         {:error, reason} ->
           {:halt, {:error, reason, cleanups}}
       end
     end)
     |> case do
-      {:ok, uploads, cleanups} -> {:ok, Enum.reverse(uploads), cleanups}
+      {:ok, prepared, cleanups} -> {:ok, Enum.reverse(prepared), cleanups}
       error -> error
     end
   end
+
+  @spec prepare_media_source(media_source(), keyword()) ::
+          {:ok, term(), (-> :ok)} | {:error, term()}
+  defp prepare_media_source({:file_path, file_path}, context), do: upload_file(file_path, context)
+  defp prepare_media_source({:file_id, file_id}, _context), do: {:ok, file_id, fn -> :ok end}
 
   @spec cleanup_upload_files([(-> :ok)]) :: :ok
   defp cleanup_upload_files(cleanups) do

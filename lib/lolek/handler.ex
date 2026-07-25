@@ -237,7 +237,9 @@ defmodule Lolek.Handler do
   end
 
   @spec enrich_gallery_context(keyword(), Lolek.File.file_state()) :: keyword()
-  defp enrich_gallery_context(context, {:downloaded_gallery, gallery_dir, _files}) do
+  defp enrich_gallery_context(context, {:downloaded_media, cache_root, _files}) do
+    gallery_dir = Path.join(cache_root, "gallery")
+
     with nil <- Keyword.get(context, :source_caption),
          {:ok, caption} <- Lolek.GalleryDownloader.read_caption(gallery_dir) do
       folder_path = Path.dirname(gallery_dir)
@@ -317,6 +319,12 @@ defmodule Lolek.Handler do
 
   defp format_file_state({:compressed, _file_path}), do: "compressed"
   defp format_file_state({:downloaded, _file_path}), do: "downloaded"
+
+  defp format_file_state({:downloaded_media, _cache_root, files}),
+    do: "downloaded_media:count=#{length(files)}"
+
+  defp format_file_state({:prepared_media, _cache_root, files}),
+    do: "prepared_media:count=#{length(files)}"
 
   defp format_file_state({:downloaded_gallery, _gallery_dir, files}),
     do: "downloaded_gallery:count=#{length(files)}"

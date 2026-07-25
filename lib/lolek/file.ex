@@ -20,6 +20,8 @@ defmodule Lolek.File do
           | {:compressed, String.t()}
           | {:downloaded, String.t()}
           | {:downloaded_gallery, gallery_dir :: String.t(), files :: [String.t()]}
+          | {:downloaded_media, cache_root :: String.t(), files :: [String.t()]}
+          | {:prepared_media, cache_root :: String.t(), files :: [String.t()]}
           | {:new_file, String.t()}
           | {:sent_to_telegram_at_first, file_path :: String.t(), tg_file_id :: String.t()}
           | {:sent_media, cache_root :: String.t(), [sent_media_entry()]}
@@ -297,7 +299,7 @@ defmodule Lolek.File do
 
     case Lolek.GalleryDownloader.list_media_files(gallery_dir) do
       [] -> :not_gallery
-      files -> {:exists, {:downloaded_gallery, gallery_dir, files}}
+      files -> {:exists, {:downloaded_media, folder_path, files}}
     end
   end
 
@@ -342,7 +344,7 @@ defmodule Lolek.File do
       true ->
         {
           :exists,
-          {:compressed, file_path}
+          {:prepared_media, folder_path, [file_path]}
         }
     end
   end
@@ -387,7 +389,7 @@ defmodule Lolek.File do
       {:ok, file_path} ->
         {
           :exists,
-          {:downloaded, file_path}
+          {:downloaded_media, folder_path, [file_path]}
         }
 
       _ ->

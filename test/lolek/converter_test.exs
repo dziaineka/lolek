@@ -298,6 +298,27 @@ defmodule Lolek.ConverterTest do
   end
 
   @tag :tmp_dir
+  test "omits oversized gallery images while keeping usable media", %{tmp_dir: tmp_dir} do
+    preserve_converter_env(fn ->
+      gallery_dir = Path.join(tmp_dir, "gallery")
+      File.mkdir_p!(gallery_dir)
+
+      oversized_image = Path.join(gallery_dir, "01.jpg")
+      usable_image = Path.join(gallery_dir, "02.jpg")
+
+      File.write!(oversized_image, String.duplicate("i", 10))
+      File.write!(usable_image, "image")
+      put_compression_env()
+      Application.put_env(:lolek, :max_file_size_to_send_to_telegram, 5)
+
+      assert {:ok, {:downloaded_gallery, ^gallery_dir, [^usable_image]}} =
+               Lolek.Converter.adapt_to_telegram(
+                 {:downloaded_gallery, gallery_dir, [oversized_image, usable_image]}
+               )
+    end)
+  end
+
+  @tag :tmp_dir
   test "returns an error when no gallery media can be prepared", %{tmp_dir: tmp_dir} do
     preserve_converter_env(fn ->
       bin_dir = Path.join(tmp_dir, "bin")

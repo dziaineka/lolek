@@ -47,7 +47,7 @@ defmodule Lolek.GalleryDownloader do
 
   @spec repaired_media_files(String.t()) :: {:ok, [String.t()]} | {:error, term()}
   defp repaired_media_files(output_dir) do
-    files = list_all_media_files(output_dir)
+    files = list_media_files(output_dir)
 
     with :ok <- repair_single_gallery_video(output_dir, files) do
       {:ok, files}
@@ -56,13 +56,9 @@ defmodule Lolek.GalleryDownloader do
 
   @spec list_media_files(String.t()) :: [String.t()]
   def list_media_files(dir) do
-    max_size = Application.fetch_env!(:lolek, :max_file_size_to_send_to_telegram)
-
     dir
     |> collect_files()
-    |> Enum.filter(fn path ->
-      (image_file?(path) or video_file?(path)) and within_size_limit?(path, max_size)
-    end)
+    |> Enum.filter(&(image_file?(&1) or video_file?(&1)))
     |> Enum.sort()
     |> Enum.take(max_gallery_media())
   end
@@ -87,19 +83,6 @@ defmodule Lolek.GalleryDownloader do
       _ ->
         :ok
     end
-  end
-
-  @spec list_all_media_files(String.t()) :: [String.t()]
-  defp list_all_media_files(dir) do
-    max_size = Application.fetch_env!(:lolek, :max_file_size_to_send_to_telegram)
-
-    dir
-    |> collect_files()
-    |> Enum.filter(fn path ->
-      (image_file?(path) or video_file?(path)) and within_size_limit?(path, max_size)
-    end)
-    |> Enum.sort()
-    |> Enum.take(max_gallery_media())
   end
 
   @spec read_caption(String.t()) :: {:ok, String.t()} | :error
@@ -127,11 +110,6 @@ defmodule Lolek.GalleryDownloader do
   @spec image_file?(String.t()) :: boolean()
   defp image_file?(path) do
     path |> Path.extname() |> String.downcase() |> then(&(&1 in @image_extensions))
-  end
-
-  @spec within_size_limit?(String.t(), non_neg_integer()) :: boolean()
-  defp within_size_limit?(path, max_size) do
-    match?({:ok, %File.Stat{size: size}} when size <= max_size, File.stat(path))
   end
 
   @spec read_caption_from_json(String.t()) :: {:ok, String.t()} | nil

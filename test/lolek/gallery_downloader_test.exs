@@ -134,14 +134,14 @@ defmodule Lolek.GalleryDownloaderTest do
     end
 
     @tag :tmp_dir
-    test "filters files over the size limit", %{tmp_dir: tmp_dir} do
+    test "returns supported files regardless of the upload size limit", %{tmp_dir: tmp_dir} do
       preserve_env(fn ->
         Application.put_env(:lolek, :max_file_size_to_send_to_telegram, 4)
         File.write!(Path.join(tmp_dir, "small.jpg"), "ok")
         File.write!(Path.join(tmp_dir, "large.jpg"), "toolarge!")
 
-        assert [path] = Lolek.GalleryDownloader.list_media_files(tmp_dir)
-        assert Path.basename(path) == "small.jpg"
+        files = Lolek.GalleryDownloader.list_media_files(tmp_dir)
+        assert Enum.map(files, &Path.basename/1) == ["large.jpg", "small.jpg"]
       end)
     end
 

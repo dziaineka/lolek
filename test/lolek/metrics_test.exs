@@ -48,16 +48,20 @@ defmodule Lolek.MetricsTest do
     assert metrics =~ ~s(lolek_cache_lookup_total{state="ready_to_telegram"} 1)
   end
 
-  test "records active processing gauge", %{metrics_name: metrics_name} do
+  test "records processing gauges", %{metrics_name: metrics_name} do
     start_supervised!({Lolek.Metrics, name: metrics_name})
 
     Lolek.Metrics.processing_started(name: metrics_name)
     Lolek.Metrics.processing_started(name: metrics_name)
     Lolek.Metrics.processing_finished(name: metrics_name)
+    Lolek.Metrics.processing_queued(name: metrics_name)
+    Lolek.Metrics.processing_queued(name: metrics_name)
+    Lolek.Metrics.processing_dequeued(name: metrics_name)
 
     metrics = Lolek.Metrics.prometheus_text(name: metrics_name)
 
     assert metrics =~ "lolek_processing_active 1"
+    assert metrics =~ "lolek_processing_waiting 1"
   end
 
   test "recording is a no-op when metrics process is not running", %{metrics_name: metrics_name} do

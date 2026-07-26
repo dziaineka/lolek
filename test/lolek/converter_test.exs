@@ -569,8 +569,8 @@ defmodule Lolek.ConverterTest do
   defp put_video_probe(bin_dir, duration, codec) do
     put_fake_executable(bin_dir, "ffprobe", """
     case "$*" in
-      *stream=duration*)
-        printf '{"streams":[{"duration":"#{duration}"}],"format":{}}\\n'
+      *stream=codec_type,duration*)
+        printf '{"streams":[{"codec_type":"video","duration":"#{duration}"}],"format":{}}\\n'
         ;;
       *stream=codec_name*)
         printf '#{codec}\\n'

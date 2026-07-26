@@ -36,6 +36,10 @@ let
   passthroughVideoFileUniqueId = "fake-passthrough-video-unique-id";
   passthroughSourceCaption = "Cached source caption";
   passthroughSourceTitle = "Passthrough Cached Title";
+  legacyMediaPath = "/legacy-cached.mp4";
+  legacyMediaUrl = "${fakeBaseUrl}${legacyMediaPath}";
+  legacyVideoFileId = "fake-legacy-video-file-id";
+  legacyVideoFileUniqueId = "fake-legacy-video-unique-id";
   compressedMediaPath = "/compressed.mp4";
   compressedMediaUrl = "${fakeBaseUrl}${compressedMediaPath}";
   compressedMediaWidth = 640;
@@ -149,6 +153,13 @@ pkgs.testers.nixosTest {
           LOLEK_FAKE_SERVICES_PASSTHROUGH_VIDEO_WIDTH = toString passthroughMediaWidth;
           LOLEK_FAKE_SERVICES_PASSTHROUGH_VIDEO_HEIGHT = toString passthroughMediaHeight;
           LOLEK_FAKE_SERVICES_PASSTHROUGH_VIDEO_DURATION = toString passthroughMediaDuration;
+          LOLEK_FAKE_SERVICES_LEGACY_MEDIA_PATH = legacyMediaPath;
+          LOLEK_FAKE_SERVICES_LEGACY_MEDIA_FILE = toString passthroughMediaFile;
+          LOLEK_FAKE_SERVICES_LEGACY_VIDEO_FILE_ID = legacyVideoFileId;
+          LOLEK_FAKE_SERVICES_LEGACY_VIDEO_FILE_UNIQUE_ID = legacyVideoFileUniqueId;
+          LOLEK_FAKE_SERVICES_LEGACY_VIDEO_WIDTH = toString passthroughMediaWidth;
+          LOLEK_FAKE_SERVICES_LEGACY_VIDEO_HEIGHT = toString passthroughMediaHeight;
+          LOLEK_FAKE_SERVICES_LEGACY_VIDEO_DURATION = toString passthroughMediaDuration;
           LOLEK_FAKE_SERVICES_COMPRESSED_MEDIA_PATH = compressedMediaPath;
           LOLEK_FAKE_SERVICES_COMPRESSED_MEDIA_FILE = toString compressedMediaFile;
           LOLEK_FAKE_SERVICES_COMPRESSED_VIDEO_FILE_ID = compressedVideoFileId;
@@ -199,6 +210,8 @@ pkgs.testers.nixosTest {
     passthrough_source_caption = "${passthroughSourceCaption}"
     passthrough_source_title = "${passthroughSourceTitle}"
     passthrough_video_file_id = "${passthroughVideoFileId}"
+    legacy_media_url = "${legacyMediaUrl}"
+    legacy_video_file_id = "${legacyVideoFileId}"
     metrics_url = "http://127.0.0.1:${toString metricsPort}/metrics"
     metrics_file = "/tmp/lolek-metrics.prom"
     compressed_media_file = "${compressedMediaFile}"
@@ -207,6 +220,10 @@ pkgs.testers.nixosTest {
     passthrough_folder_name = base64.b64encode(passthrough_media_url.encode()).decode().rstrip("=")
     passthrough_cache_dir = "%s/%s" % (download_dir, passthrough_folder_name)
     passthrough_metadata_file = "%s/source_metadata.json" % passthrough_cache_dir
+    legacy_folder_name = base64.b64encode(legacy_media_url.encode()).decode().rstrip("=")
+    legacy_cache_dir = "%s/%s" % (download_dir, legacy_folder_name)
+    legacy_ready_dir = "%s/%s" % (legacy_cache_dir, ready_dir_name)
+    legacy_cache_file = "%s/%s.mp4" % (legacy_ready_dir, legacy_video_file_id)
     compressed_folder_name = base64.b64encode(compressed_media_url.encode()).decode().rstrip("=")
     compressed_cache_dir = "%s/%s" % (download_dir, compressed_folder_name)
 
@@ -248,6 +265,21 @@ pkgs.testers.nixosTest {
         % (service_user, service_group, shell_quote(passthrough_metadata_file))
     )
 
+    # Simulate a valid single-file cache left by a pre-manifest Lolek release.
+    machine.succeed(
+        "install -d -o %s -g %s -m 0750 %s"
+        % (service_user, service_group, shell_quote(legacy_ready_dir))
+    )
+    machine.succeed(
+        "install -o %s -g %s -m 0640 %s %s"
+        % (
+            service_user,
+            service_group,
+            shell_quote(passthrough_media_file),
+            shell_quote(legacy_cache_file),
+        )
+    )
+
     machine.succeed("systemctl start ${serviceUnit}")
     machine.wait_for_unit("${serviceUnit}")
 
@@ -268,7 +300,25 @@ pkgs.testers.nixosTest {
     machine.succeed("test $(grep -c '^sendVideo passthrough-upload ' %s) -eq 1" % fake_events_file)
     machine.succeed("test $(grep -c '^sendVideo passthrough-file-id-send ' %s) -eq 1" % fake_events_file)
 
-    # The third fake update is larger than the Telegram send limit. It should go through compression.
+    # The third update should use the pre-manifest cache without downloading its media.
+    machine.succeed(
+        "timeout 120 sh -c 'until grep \"^sendVideo legacy-file-id-send \" %s; do sleep 1; done' "
+        "|| (journalctl -u ${serviceUnit} --no-pager; cat %s; false)"
+        % (fake_events_file, fake_events_file)
+    )
+    machine.succeed("test $(grep -c '^sendVideo legacy-file-id-send ' %s) -eq 1" % fake_events_file)
+    machine.succeed(
+        "journalctl -u ${serviceUnit} --no-pager | "
+        "grep -F %s | grep -F 'result=ok:ready_media:count=1'"
+        % shell_quote("Finished download for url: %s;" % legacy_media_url)
+    )
+    machine.succeed("test -f %s" % shell_quote(legacy_cache_file))
+    machine.succeed(
+        "test ! -e %s"
+        % shell_quote("%s/%s" % (legacy_ready_dir, media_manifest_name))
+    )
+
+    # The fourth fake update is larger than the Telegram send limit. It should go through compression.
     machine.succeed(
         "timeout 120 sh -c 'until grep \"^sendVideo compressed-upload \" %s; do sleep 1; done' "
         "|| (journalctl -u ${serviceUnit} --no-pager; cat %s; false)"
@@ -353,30 +403,30 @@ pkgs.testers.nixosTest {
     # The optional Prometheus endpoint should expose metrics from the exercised service path.
     machine.succeed("curl -fsS %s > %s" % (metrics_url, metrics_file))
     machine.succeed(
-        "grep -F 'lolek_messages_total{result=\"ok\"} 3' %s" % metrics_file
+        "grep -F 'lolek_messages_total{result=\"ok\"} 4' %s" % metrics_file
     )
     machine.succeed(
-        "grep -F 'lolek_chat_rate_limiter_total{result=\"admitted\"} 3' %s"
+        "grep -F 'lolek_chat_rate_limiter_total{result=\"admitted\"} 4' %s"
         % metrics_file
     )
     machine.succeed(
         "grep -F 'lolek_cache_lookup_total{state=\"new_file\"} 2' %s" % metrics_file
     )
     machine.succeed(
-        "grep -F 'lolek_cache_lookup_total{state=\"ready_to_telegram\"} 1' %s"
+        "grep -F 'lolek_cache_lookup_total{state=\"ready_to_telegram\"} 2' %s"
         % metrics_file
     )
     machine.succeed(
-        "grep -F 'lolek_processing_stage_total{result=\"ok\",stage=\"telegram_send\"} 3' %s"
+        "grep -F 'lolek_processing_stage_total{result=\"ok\",stage=\"telegram_send\"} 4' %s"
         % metrics_file
     )
     machine.succeed(
-        "grep -F 'lolek_processing_stage_duration_seconds_count{result=\"ok\",stage=\"telegram_send\"} 3' %s"
+        "grep -F 'lolek_processing_stage_duration_seconds_count{result=\"ok\",stage=\"telegram_send\"} 4' %s"
         % metrics_file
     )
     machine.succeed("grep -F 'lolek_processing_active 0' %s" % metrics_file)
 
-    # On-demand cleanup should remove both cache entries while leaving the service alive.
+    # On-demand cleanup should remove new-format cache entries while leaving the service alive.
     machine.succeed("${package}/bin/lolek rpc 'Lolek.FileCleaner.cleanup_now()'")
     machine.succeed("test ! -e %s" % passthrough_cache_dir)
     machine.succeed("test ! -e %s" % compressed_cache_dir)

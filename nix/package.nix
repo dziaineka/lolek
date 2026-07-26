@@ -18,24 +18,6 @@ let
     makeWrapper = pkgs.makeBinaryWrapper;
     rebar3 = rebar3WithPlugins;
   };
-  sourceFiles =
-    extraFiles:
-    lib.fileset.unions (
-      [
-        (root + "/config")
-        (root + "/lib")
-        (root + "/mix.exs")
-        (root + "/mix.lock")
-      ]
-      ++ extraFiles
-    );
-  src = lib.fileset.toSource {
-    inherit root;
-    fileset = sourceFiles [
-      (root + "/rel")
-      (root + "/test")
-    ];
-  };
   version = "5.1.1";
   mkLolek =
     {
@@ -56,7 +38,8 @@ let
     mixRelease {
       pname = "lolek";
       inherit version;
-      inherit elixir src;
+      inherit elixir;
+      src = root;
 
       mixFodDeps = fetchMixDeps {
         pname = "lolek-mix-deps";

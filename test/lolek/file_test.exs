@@ -37,6 +37,24 @@ defmodule Lolek.FileTest do
   end
 
   @tag :tmp_dir
+  test "uses container duration when the video stream duration is unavailable", %{
+    tmp_dir: tmp_dir
+  } do
+    preserve_file_env(fn ->
+      bin_dir = Path.join(tmp_dir, "bin")
+      file_path = Path.join(tmp_dir, "video.mkv")
+
+      put_fake_executable(bin_dir, "ffprobe", """
+      printf '{"streams":[{}],"format":{"duration":"60.101000"}}\n'
+      """)
+
+      put_cache_env(bin_dir)
+
+      assert {:ok, 60} = Lolek.File.get_video_duration(file_path)
+    end)
+  end
+
+  @tag :tmp_dir
   test "ignores invalid compressed cache files", %{tmp_dir: tmp_dir} do
     preserve_file_env(fn ->
       bin_dir = Path.join(tmp_dir, "bin")

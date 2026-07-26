@@ -77,9 +77,9 @@ defmodule Lolek.File do
              "-select_streams",
              "v:0",
              "-show_entries",
-             "stream=duration",
+             "stream=duration:format=duration",
              "-of",
-             "default=noprint_wrappers=1:nokey=1",
+             "json",
              file_path
            ],
            timeout: command_timeout(:probe_command_timeout_seconds)
@@ -87,16 +87,14 @@ defmodule Lolek.File do
       {:ok, result} ->
         # Extract stdout regardless of stderr warnings
         stdout_data = Keyword.get(result, :stdout, [])
-        raw_duration = stdout_data |> IO.iodata_to_binary() |> String.trim()
+        raw_probe = stdout_data |> IO.iodata_to_binary() |> String.trim()
 
-        case Float.parse(raw_duration) do
-          {duration_float, _} ->
-            {:ok, round(duration_float)}
+        case parse_video_duration(raw_probe) do
+          {:ok, duration} ->
+            {:ok, duration}
 
           :error ->
-            Logger.warning(
-              "Could not parse duration from ffprobe output: #{inspect(raw_duration)}"
-            )
+            Logger.warning("Could not parse duration from ffprobe output: #{inspect(raw_probe)}")
 
             :error
         end
@@ -110,6 +108,42 @@ defmodule Lolek.File do
       Logger.warning("Exception when determining duration: #{inspect(error)}")
       :error
   end
+
+  @spec parse_video_duration(String.t()) :: :error | {:ok, integer()}
+  defp parse_video_duration(raw_probe) do
+    case Jason.decode(raw_probe) do
+      {:ok, probe} when is_map(probe) ->
+        stream_duration =
+          case probe do
+            %{"streams" => [%{"duration" => duration} | _]} -> duration
+            _ -> nil
+          end
+
+        format_duration =
+          probe
+          |> Map.get("format", %{})
+          |> Map.get("duration")
+
+        [
+          stream_duration,
+          format_duration
+        ]
+        |> Enum.find_value(:error, &parse_duration/1)
+
+      _ ->
+        :error
+    end
+  end
+
+  @spec parse_duration(term()) :: nil | {:ok, integer()}
+  defp parse_duration(raw_duration) when is_binary(raw_duration) do
+    case Float.parse(raw_duration) do
+      {duration_float, _} -> {:ok, round(duration_float)}
+      :error -> nil
+    end
+  end
+
+  defp parse_duration(_raw_duration), do: nil
 
   @spec get_file_path_by_pattern(String.t(), String.t()) ::
           {:ok, String.t()} | {:error, String.t()}

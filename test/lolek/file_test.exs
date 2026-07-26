@@ -45,7 +45,25 @@ defmodule Lolek.FileTest do
       file_path = Path.join(tmp_dir, "video.mkv")
 
       put_fake_executable(bin_dir, "ffprobe", """
-      printf '{"streams":[{}],"format":{"duration":"60.101000"}}\n'
+      printf '{"streams":[{"codec_type":"video"},{"codec_type":"audio","duration":"61.2"}],"format":{"duration":"60.101000"}}\n'
+      """)
+
+      put_cache_env(bin_dir)
+
+      assert {:ok, 60} = Lolek.File.get_video_duration(file_path)
+    end)
+  end
+
+  @tag :tmp_dir
+  test "uses audio duration when video and container durations are unavailable", %{
+    tmp_dir: tmp_dir
+  } do
+    preserve_file_env(fn ->
+      bin_dir = Path.join(tmp_dir, "bin")
+      file_path = Path.join(tmp_dir, "video.mkv")
+
+      put_fake_executable(bin_dir, "ffprobe", """
+      printf '{"streams":[{"codec_type":"video"},{"codec_type":"audio","duration":"60.101000"}],"format":{}}\n'
       """)
 
       put_cache_env(bin_dir)

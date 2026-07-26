@@ -74,10 +74,8 @@ defmodule Lolek.File do
            [
              "-v",
              "error",
-             "-select_streams",
-             "v:0",
              "-show_entries",
-             "stream=duration:format=duration",
+             "stream=codec_type,duration:format=duration",
              "-of",
              "json",
              file_path
@@ -113,25 +111,31 @@ defmodule Lolek.File do
   defp parse_video_duration(raw_probe) do
     case Jason.decode(raw_probe) do
       {:ok, probe} when is_map(probe) ->
-        stream_duration =
-          case probe do
-            %{"streams" => [%{"duration" => duration} | _]} -> duration
-            _ -> nil
-          end
-
         format_duration =
           probe
           |> Map.get("format", %{})
           |> Map.get("duration")
 
         [
-          stream_duration,
-          format_duration
+          first_stream_duration(probe, "video"),
+          format_duration,
+          first_stream_duration(probe, "audio")
         ]
         |> Enum.find_value(:error, &parse_duration/1)
 
       _ ->
         :error
+    end
+  end
+
+  @spec first_stream_duration(map(), String.t()) :: nil | String.t()
+  defp first_stream_duration(probe, codec_type) do
+    probe
+    |> Map.get("streams", [])
+    |> Enum.find(&(Map.get(&1, "codec_type") == codec_type))
+    |> case do
+      %{"duration" => duration} -> duration
+      _ -> nil
     end
   end
 

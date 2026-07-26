@@ -171,12 +171,12 @@ defmodule Lolek.ProcessingLimiterTest do
       end)
 
     assert_receive :worker_started
-    assert_active_gauge(metrics_name, 1)
+    assert_processing_gauge(metrics_name, "active", 1)
 
     monitor_ref = Process.monitor(worker)
     send(worker, :release)
     assert_receive {:DOWN, ^monitor_ref, :process, ^worker, :normal}
-    assert_active_gauge(metrics_name, 0)
+    assert_processing_gauge(metrics_name, "active", 0)
   end
 
   test "releases capacity and transfers the gauge when an active worker dies", %{
@@ -193,22 +193,54 @@ defmodule Lolek.ProcessingLimiterTest do
     test_pid = self()
     first_worker = spawn_limited_worker(limiter_name, 1, :first_started, test_pid)
     assert_receive :first_started
-    assert_active_gauge(metrics_name, 1)
+    assert_processing_gauge(metrics_name, "active", 1)
 
     second_worker = spawn_limited_worker(limiter_name, 2, :second_started, test_pid)
-    refute_receive :second_started, 100
+    assert_processing_gauge(metrics_name, "waiting", 1)
+    refute_receive :second_started, 0
 
     first_monitor = Process.monitor(first_worker)
     Process.exit(first_worker, :kill)
     assert_receive {:DOWN, ^first_monitor, :process, ^first_worker, :killed}
 
     assert_receive :second_started
-    assert_active_gauge(metrics_name, 1)
+    assert_processing_gauge(metrics_name, "active", 1)
+    assert_processing_gauge(metrics_name, "waiting", 0)
 
     second_monitor = Process.monitor(second_worker)
     send(second_worker, :release)
     assert_receive {:DOWN, ^second_monitor, :process, ^second_worker, :normal}
-    assert_active_gauge(metrics_name, 0)
+    assert_processing_gauge(metrics_name, "active", 0)
+  end
+
+  test "decrements the waiting gauge when a queued worker dies", %{
+    limiter_name: limiter_name,
+    metrics_name: metrics_name
+  } do
+    start_supervised!({Lolek.Metrics, name: metrics_name})
+
+    start_supervised!(
+      {Lolek.ProcessingLimiter,
+       name: limiter_name, global_limit: 1, per_chat_limit: 1, metrics_name: metrics_name}
+    )
+
+    test_pid = self()
+    first_worker = spawn_limited_worker(limiter_name, 1, :first_started, test_pid)
+    assert_receive :first_started
+
+    second_worker = spawn_limited_worker(limiter_name, 2, :second_started, test_pid)
+    assert_processing_gauge(metrics_name, "waiting", 1)
+
+    second_monitor = Process.monitor(second_worker)
+    Process.exit(second_worker, :kill)
+    assert_receive {:DOWN, ^second_monitor, :process, ^second_worker, :killed}
+    assert_processing_gauge(metrics_name, "waiting", 0)
+    refute_receive :second_started, 0
+
+    first_monitor = Process.monitor(first_worker)
+    send(first_worker, :release)
+    assert_receive {:DOWN, ^first_monitor, :process, ^first_worker, :normal}
+    assert_processing_gauge(metrics_name, "active", 0)
   end
 
   test "rejects invalid limits", %{limiter_name: limiter_name} do
@@ -260,22 +292,22 @@ defmodule Lolek.ProcessingLimiterTest do
     end)
   end
 
-  @spec assert_active_gauge(atom(), non_neg_integer(), non_neg_integer()) :: :ok
-  defp assert_active_gauge(metrics_name, expected, attempts \\ 20)
+  @spec assert_processing_gauge(atom(), String.t(), non_neg_integer(), non_neg_integer()) :: :ok
+  defp assert_processing_gauge(metrics_name, gauge, expected, attempts \\ 20)
 
-  defp assert_active_gauge(metrics_name, expected, attempts) when attempts > 0 do
+  defp assert_processing_gauge(metrics_name, gauge, expected, attempts) when attempts > 0 do
     metrics = Lolek.Metrics.prometheus_text(name: metrics_name)
 
-    if metrics =~ "lolek_processing_active #{expected}" do
+    if metrics =~ "lolek_processing_#{gauge} #{expected}" do
       :ok
     else
       Process.sleep(10)
-      assert_active_gauge(metrics_name, expected, attempts - 1)
+      assert_processing_gauge(metrics_name, gauge, expected, attempts - 1)
     end
   end
 
-  defp assert_active_gauge(metrics_name, expected, 0) do
+  defp assert_processing_gauge(metrics_name, gauge, expected, 0) do
     metrics = Lolek.Metrics.prometheus_text(name: metrics_name)
-    assert metrics =~ "lolek_processing_active #{expected}"
+    assert metrics =~ "lolek_processing_#{gauge} #{expected}"
   end
 end

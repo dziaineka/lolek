@@ -88,6 +88,7 @@ defmodule Lolek.ProcessingLimiter do
     else
       monitor_ref = Process.monitor(pid)
       waiter = %{from: from, pid: pid, chat_id: chat_id, monitor_ref: monitor_ref}
+      Lolek.Metrics.processing_queued(name: state.metrics_name)
       {:noreply, %{state | waiting: state.waiting ++ [waiter]}}
     end
   end
@@ -130,6 +131,7 @@ defmodule Lolek.ProcessingLimiter do
 
   @spec grant_waiter(waiter(), state()) :: state()
   defp grant_waiter(waiter, state) do
+    Lolek.Metrics.processing_dequeued(name: state.metrics_name)
     state = activate(waiter.monitor_ref, waiter.pid, waiter.chat_id, state)
     GenServer.reply(waiter.from, {:ok, waiter.monitor_ref})
     state
@@ -172,7 +174,15 @@ defmodule Lolek.ProcessingLimiter do
 
   @spec remove_waiter(state(), reference()) :: state()
   defp remove_waiter(state, monitor_ref) do
-    %{state | waiting: Enum.reject(state.waiting, &(&1.monitor_ref == monitor_ref))}
+    case Enum.find_index(state.waiting, &(&1.monitor_ref == monitor_ref)) do
+      nil ->
+        state
+
+      index ->
+        {_waiter, waiting} = List.pop_at(state.waiting, index)
+        Lolek.Metrics.processing_dequeued(name: state.metrics_name)
+        %{state | waiting: waiting}
+    end
   end
 
   @spec capacity_available?(state(), integer()) :: boolean()

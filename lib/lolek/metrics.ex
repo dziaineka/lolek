@@ -95,6 +95,20 @@ defmodule Lolek.Metrics do
   def processing_finished(opts),
     do: cast_if_started({:gauge_add, "lolek_processing_active", %{}, -1}, opts)
 
+  @spec processing_queued() :: :ok
+  def processing_queued, do: processing_queued([])
+
+  @spec processing_queued(keyword()) :: :ok
+  def processing_queued(opts),
+    do: cast_if_started({:gauge_add, "lolek_processing_waiting", %{}, 1}, opts)
+
+  @spec processing_dequeued() :: :ok
+  def processing_dequeued, do: processing_dequeued([])
+
+  @spec processing_dequeued(keyword()) :: :ok
+  def processing_dequeued(opts),
+    do: cast_if_started({:gauge_add, "lolek_processing_waiting", %{}, -1}, opts)
+
   @spec prometheus_text() :: String.t()
   def prometheus_text, do: prometheus_text([])
 
@@ -109,7 +123,10 @@ defmodule Lolek.Metrics do
   @impl true
   @spec init(map()) :: {:ok, state()}
   def init(_opts) do
-    gauges = %{{"lolek_processing_active", %{}} => 0}
+    gauges = %{
+      {"lolek_processing_active", %{}} => 0,
+      {"lolek_processing_waiting", %{}} => 0
+    }
 
     {:ok, %{counters: %{}, gauges: gauges, histograms: %{}}}
   end

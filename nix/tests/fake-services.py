@@ -20,12 +20,14 @@ DOCUMENT_FILE_UNIQUE_ID = os.environ["LOLEK_FAKE_SERVICES_DOCUMENT_FILE_UNIQUE_I
 
 class MediaKind(Enum):
     PASSTHROUGH = "passthrough"
+    LEGACY = "legacy"
     COMPRESSED = "compressed"
 
 
 PASSTHROUGH_UPLOAD_UPDATE_ID = 100
 PASSTHROUGH_REUSE_UPDATE_ID = 101
-COMPRESSED_UPLOAD_UPDATE_ID = 102
+LEGACY_REUSE_UPDATE_ID = 102
+COMPRESSED_UPLOAD_UPDATE_ID = 103
 
 
 MEDIA = {
@@ -39,6 +41,16 @@ MEDIA = {
         "width": int(os.environ["LOLEK_FAKE_SERVICES_PASSTHROUGH_VIDEO_WIDTH"]),
         "height": int(os.environ["LOLEK_FAKE_SERVICES_PASSTHROUGH_VIDEO_HEIGHT"]),
         "duration": int(os.environ["LOLEK_FAKE_SERVICES_PASSTHROUGH_VIDEO_DURATION"]),
+    },
+    MediaKind.LEGACY: {
+        "path": os.environ["LOLEK_FAKE_SERVICES_LEGACY_MEDIA_PATH"],
+        "file": os.environ["LOLEK_FAKE_SERVICES_LEGACY_MEDIA_FILE"],
+        "file_id": os.environ["LOLEK_FAKE_SERVICES_LEGACY_VIDEO_FILE_ID"],
+        "file_unique_id": os.environ["LOLEK_FAKE_SERVICES_LEGACY_VIDEO_FILE_UNIQUE_ID"],
+        "width": int(os.environ["LOLEK_FAKE_SERVICES_LEGACY_VIDEO_WIDTH"]),
+        "height": int(os.environ["LOLEK_FAKE_SERVICES_LEGACY_VIDEO_HEIGHT"]),
+        "duration": int(os.environ["LOLEK_FAKE_SERVICES_LEGACY_VIDEO_DURATION"]),
+        "downloadable": False,
     },
     MediaKind.COMPRESSED: {
         "path": os.environ["LOLEK_FAKE_SERVICES_COMPRESSED_MEDIA_PATH"],
@@ -55,6 +67,7 @@ MEDIA = {
 
 for kind, media in MEDIA.items():
     media["kind"] = kind
+    media.setdefault("downloadable", True)
     media["url"] = "http://%s:%d%s" % (HOST, PORT, media["path"])
     media["upload_file"] = os.path.join(UPLOAD_DIR, "%s.bin" % kind.value)
 
@@ -107,14 +120,24 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_HEAD(self):
         if self.path in MEDIA_BY_PATH:
-            self.serve_media(MEDIA_BY_PATH[self.path], False)
+            media = MEDIA_BY_PATH[self.path]
+            if media["downloadable"]:
+                self.serve_media(media, False)
+            else:
+                self.send_response(503)
+                self.end_headers()
         else:
             self.send_response(404)
             self.end_headers()
 
     def do_GET(self):
         if self.path in MEDIA_BY_PATH:
-            self.serve_media(MEDIA_BY_PATH[self.path], True)
+            media = MEDIA_BY_PATH[self.path]
+            if media["downloadable"]:
+                self.serve_media(media, True)
+            else:
+                self.send_response(503)
+                self.end_headers()
         else:
             self.send_response(404)
             self.end_headers()
@@ -163,13 +186,20 @@ class Handler(BaseHTTPRequestHandler):
             ]
 
         if (
-            offset <= COMPRESSED_UPLOAD_UPDATE_ID
+            offset <= LEGACY_REUSE_UPDATE_ID
             and MediaKind.PASSTHROUGH in sent_by_file_id
+            and MediaKind.LEGACY not in sent_by_file_id
+        ):
+            return [self.update_for_media(MediaKind.LEGACY, LEGACY_REUSE_UPDATE_ID, 12)]
+
+        if (
+            offset <= COMPRESSED_UPLOAD_UPDATE_ID
+            and MediaKind.LEGACY in sent_by_file_id
             and MediaKind.COMPRESSED not in uploaded
         ):
             return [
                 self.update_for_media(
-                    MediaKind.COMPRESSED, COMPRESSED_UPLOAD_UPDATE_ID, 12
+                    MediaKind.COMPRESSED, COMPRESSED_UPLOAD_UPDATE_ID, 13
                 )
             ]
 

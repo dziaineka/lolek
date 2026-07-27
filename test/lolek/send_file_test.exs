@@ -771,6 +771,37 @@ defmodule Lolek.SendFileTest do
     end)
   end
 
+  test "truncates Unicode captions by Telegram's UTF-16 limit" do
+    preserve_telegram_env(fn ->
+      file_path = tmp_file("downloaded.mp4", "media")
+
+      response = %ExGram.Model.Message{
+        video: %ExGram.Model.Video{file_id: "telegram-file-id"}
+      }
+
+      Application.put_env(:lolek, :telegram_client, TelegramClient)
+      Application.put_env(:lolek, :telegram_test_result, {:ok, response})
+      Application.put_env(:lolek, :telegram_test_parent, self())
+      Application.put_env(:lolek, :post_source_caption, true)
+      Application.put_env(:lolek, :post_requester_caption, true)
+
+      context = [
+        source_caption: String.duplicate("😀", 2_000),
+        requester_name: "alice",
+        started_at: System.monotonic_time()
+      ]
+
+      assert {:ok, {:sent_to_telegram_at_first, ^file_path, "telegram-file-id"}} =
+               Lolek.send_file(123, {:compressed, file_path}, context)
+
+      assert_receive {:send_video, 123, {:file_content, %File.Stream{}, "downloaded.mp4"},
+                      options}
+
+      assert utf16_code_units(options[:caption]) in 1023..1024
+      assert options[:caption] =~ ~r/\.\.\.\n\nalice requested, processed in \d+\.\ds$/
+    end)
+  end
+
   defp preserve_telegram_env(fun) do
     client = Application.fetch_env(:lolek, :telegram_client)
     result = Application.fetch_env(:lolek, :telegram_test_result)
@@ -816,6 +847,13 @@ defmodule Lolek.SendFileTest do
       {output, status} ->
         flunk("getconf NAME_MAX #{path} failed with #{status}: #{output}")
     end
+  end
+
+  defp utf16_code_units(text) do
+    text
+    |> :unicode.characters_to_binary(:utf8, {:utf16, :little})
+    |> byte_size()
+    |> div(2)
   end
 
   defp restore_app_env(key, {:ok, value}), do: Application.put_env(:lolek, key, value)

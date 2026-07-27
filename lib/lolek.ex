@@ -3,8 +3,9 @@ defmodule Lolek do
   This module is the main module of the Lolek bot containing bot operations
   """
   @upload_chunk_size 64 * 1024
-  @max_caption_length 1024
+  @max_caption_utf16_units 1024
   @caption_separator "\n\n"
+  @caption_ellipsis "..."
   @max_upload_file_name_bytes 180
   @max_media_group_size 10
   @gif_extensions ~w(.gif)
@@ -537,20 +538,21 @@ defmodule Lolek do
   defp build_caption(nil, nil), do: nil
 
   defp build_caption(source_caption, nil),
-    do: truncate_caption(source_caption, @max_caption_length)
+    do: truncate_caption(source_caption, @max_caption_utf16_units)
 
   defp build_caption(nil, requester_caption),
-    do: truncate_caption(requester_caption, @max_caption_length)
+    do: truncate_caption(requester_caption, @max_caption_utf16_units)
 
   defp build_caption(source_caption, requester_caption) do
-    requester_caption = truncate_caption(requester_caption, @max_caption_length)
+    requester_caption = truncate_caption(requester_caption, @max_caption_utf16_units)
 
-    available_source_length =
-      @max_caption_length - String.length(requester_caption) - String.length(@caption_separator)
+    available_source_utf16_units =
+      @max_caption_utf16_units -
+        utf16_code_units(requester_caption) - utf16_code_units(@caption_separator)
 
-    if available_source_length > 0 do
+    if available_source_utf16_units > 0 do
       [
-        truncate_caption(source_caption, available_source_length),
+        truncate_caption(source_caption, available_source_utf16_units),
         requester_caption
       ]
       |> Enum.reject(&(&1 == ""))
@@ -563,15 +565,43 @@ defmodule Lolek do
   @spec truncate_caption(String.t(), non_neg_integer()) :: String.t()
   defp truncate_caption(_caption, 0), do: ""
 
-  defp truncate_caption(caption, max_length) do
-    if String.length(caption) <= max_length do
+  defp truncate_caption(caption, max_utf16_units) do
+    if utf16_code_units(caption) <= max_utf16_units do
       caption
     else
-      caption
-      |> String.slice(0, max(max_length - 3, 0))
-      |> Kernel.<>("...")
-      |> String.slice(0, max_length)
+      ellipsis = take_utf16_prefix(@caption_ellipsis, max_utf16_units)
+      caption_utf16_units = max_utf16_units - utf16_code_units(ellipsis)
+
+      take_utf16_prefix(caption, caption_utf16_units) <> ellipsis
     end
+  end
+
+  @spec take_utf16_prefix(String.t(), non_neg_integer()) :: String.t()
+  defp take_utf16_prefix(text, max_utf16_units) do
+    {graphemes, _utf16_units} =
+      text
+      |> String.graphemes()
+      |> Enum.reduce_while({[], 0}, fn grapheme, {graphemes, utf16_units} ->
+        candidate_utf16_units = utf16_units + utf16_code_units(grapheme)
+
+        if candidate_utf16_units > max_utf16_units do
+          {:halt, {graphemes, utf16_units}}
+        else
+          {:cont, {[grapheme | graphemes], candidate_utf16_units}}
+        end
+      end)
+
+    graphemes
+    |> Enum.reverse()
+    |> IO.iodata_to_binary()
+  end
+
+  @spec utf16_code_units(String.t()) :: non_neg_integer()
+  defp utf16_code_units(text) do
+    text
+    |> :unicode.characters_to_binary(:utf8, {:utf16, :little})
+    |> byte_size()
+    |> div(2)
   end
 
   @spec elapsed_seconds(integer()) :: String.t()

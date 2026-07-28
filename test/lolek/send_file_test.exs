@@ -791,8 +791,12 @@ defmodule Lolek.SendFileTest do
         started_at: System.monotonic_time()
       ]
 
-      assert {:ok, {:sent_to_telegram_at_first, ^file_path, "telegram-file-id"}} =
-               Lolek.send_file(123, {:compressed, file_path}, context)
+      assert {:ok, {:sent_media, _, [{".mp4", "telegram-file-id"}]}} =
+               Lolek.send_file(
+                 123,
+                 {:prepared_media, Path.dirname(file_path), [file_path]},
+                 context
+               )
 
       assert_receive {:send_video, 123, {:file_content, %File.Stream{}, "downloaded.mp4"},
                       options}

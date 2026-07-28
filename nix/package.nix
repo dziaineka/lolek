@@ -18,7 +18,7 @@ let
     makeWrapper = pkgs.makeBinaryWrapper;
     rebar3 = rebar3WithPlugins;
   };
-  version = "5.1.1";
+  version = "5.2.0";
   mkLolek =
     {
       curl ? pkgs.curl,

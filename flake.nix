@@ -61,6 +61,14 @@
         }
       );
 
+      apps = forAllSystems (system: {
+        get-test-cases = {
+          type = "app";
+          program = "${self.packages.${system}.get-test-cases}/bin/get-test-cases";
+          meta.description = "List media-producing upstream extractor test cases";
+        };
+      });
+
       formatter = forAllSystems (
         system:
         import ./nix/formatter.nix {

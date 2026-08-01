@@ -73,6 +73,19 @@ jobs:
       - name: Run check
         run: nix build .#checks.x86_64-linux.mix-check -L
 
+  get-test-cases:
+    name: Upstream extractor test cases
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Nix
+        uses: ./.github/actions/setup-nix
+
+      - name: Run check
+        run: nix build .#get-test-cases -L
+
   nixos-module-url-allowlist:
     name: NixOS module URL allowlist test
     runs-on: ubuntu-latest

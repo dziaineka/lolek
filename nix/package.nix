@@ -18,6 +18,10 @@ let
     makeWrapper = pkgs.makeBinaryWrapper;
     rebar3 = rebar3WithPlugins;
   };
+  testCasePython = pkgs.python3.withPackages (pythonPackages: [ pythonPackages.requests ]);
+  ytDlpTestSource = pkgs.yt-dlp.src;
+  galleryDlTestSource = pkgs.gallery-dl.src;
+  getTestCasesScript = root + "/scripts/get-test-cases.py";
   version = "5.2.1";
   mkLolek =
     {
@@ -89,6 +93,28 @@ let
     };
 in
 rec {
+  get-test-cases = pkgs.writeShellApplication {
+    name = "get-test-cases";
+    text = ''
+      export PYTHONPATH="${galleryDlTestSource}:${ytDlpTestSource}"
+      exec ${testCasePython}/bin/python3 ${getTestCasesScript} "$@"
+    '';
+    # TODO: Include Threads once it has an upstream-style test corpus.
+    checkPhase = ''
+      export PYTHONPATH="${galleryDlTestSource}:${ytDlpTestSource}"
+      ${testCasePython}/bin/python3 ${getTestCasesScript} \
+        | ${pkgs.jq}/bin/jq --exit-status --slurp \
+          'map(.service) | unique | . == [
+            "coub",
+            "facebook",
+            "instagram",
+            "tiktok",
+            "twitter",
+            "youtube"
+          ]' >/dev/null
+    '';
+  };
+
   lolek = lib.makeOverridable mkLolek { };
 
   default = lolek;

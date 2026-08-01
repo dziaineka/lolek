@@ -3,10 +3,18 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/release-26.05";
+    telegym = {
+      url = "github:booxter/telegym/lolek-missing-features";
+      flake = false;
+    };
   };
 
   outputs =
-    { self, nixpkgs }:
+    {
+      self,
+      nixpkgs,
+      telegym,
+    }:
     let
       systems = [
         "x86_64-linux"
@@ -47,6 +55,7 @@
         import ./nix/package.nix {
           pkgs = pkgsFor system;
           root = ./.;
+          telegymSrc = telegym;
           inherit systems;
         }
       );

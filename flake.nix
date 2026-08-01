@@ -67,6 +67,7 @@
           root = ./.;
           module = self.nixosModules.default;
           package = self.packages.${system}.lolek;
+          telegym = self.packages.${system}.telegym;
         }
       );
 

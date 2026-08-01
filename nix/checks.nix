@@ -3,6 +3,7 @@
   root,
   module ? null,
   package ? null,
+  telegym ? null,
 }:
 
 let
@@ -73,7 +74,12 @@ in
   };
 
   nixos-tiktok-audio-mux = import ./tests/tiktok-audio-mux.nix {
-    inherit pkgs module package;
+    inherit
+      pkgs
+      module
+      package
+      telegym
+      ;
   };
 
   nixos-concurrency = import ./tests/concurrency.nix {

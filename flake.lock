@@ -18,7 +18,25 @@
     },
     "root": {
       "inputs": {
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": "nixpkgs",
+        "telegym": "telegym"
+      }
+    },
+    "telegym": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1785591747,
+        "narHash": "sha256-jqBalzhQu4ULjuin3K/wCUBEBTEJKVPQ6cNvw42bWTo=",
+        "owner": "booxter",
+        "repo": "telegym",
+        "rev": "6cc55d261e4dc5b9dd7e7f56f0d81eaaef52744c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "booxter",
+        "ref": "lolek-missing-features",
+        "repo": "telegym",
+        "type": "github"
       }
     }
   },

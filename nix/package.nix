@@ -2,6 +2,7 @@
   pkgs,
   root,
   systems,
+  telegymSrc,
 }:
 
 let
@@ -116,6 +117,11 @@ rec {
   };
 
   lolek = lib.makeOverridable mkLolek { };
+
+  telegym = import ./telegym.nix {
+    inherit pkgs systems;
+    src = telegymSrc;
+  };
 
   default = lolek;
 }

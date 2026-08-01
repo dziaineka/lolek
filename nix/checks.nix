@@ -97,6 +97,11 @@ in
   };
 
   nixos-deadline = import ./tests/deadline.nix {
-    inherit pkgs module package;
+    inherit
+      pkgs
+      module
+      package
+      telegym
+      ;
   };
 }

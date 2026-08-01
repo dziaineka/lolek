@@ -50,7 +50,8 @@ in
       runHook preBuild
 
       export LOLEK_BOT_TOKEN="test_token"
-      mix check
+      # mix_audit fetches its advisory database at runtime.
+      mix check --except mix_audit
 
       runHook postBuild
     '';

@@ -88,7 +88,12 @@ in
   };
 
   nixos-concurrency = import ./tests/concurrency.nix {
-    inherit pkgs module package;
+    inherit
+      pkgs
+      module
+      package
+      telegym
+      ;
   };
 
   nixos-deadline = import ./tests/deadline.nix {

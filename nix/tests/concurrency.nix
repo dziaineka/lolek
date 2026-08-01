@@ -2,6 +2,7 @@
   pkgs,
   module,
   package,
+  telegym,
 }:
 
 let
@@ -13,17 +14,20 @@ let
   downloadDir = "${stateDir}/downloads";
   envFileName = "${serviceName}.env";
 
-  fakeServicesName = "lolek-concurrency-services";
-  fakeServicesUnit = "${fakeServicesName}.service";
-  fakeHost = "127.0.0.1";
-  fakePort = 8082;
+  mediaOriginName = "lolek-concurrency-media-origin";
+  mediaOriginUnit = "${mediaOriginName}.service";
+  testHost = "127.0.0.1";
+  mediaOriginPort = 8082;
+  mediaOriginBaseUrl = "http://${testHost}:${toString mediaOriginPort}";
+  telegymPort = 5678;
+  telegymBaseUrl = "http://${testHost}:${toString telegymPort}";
+  telegymUnit = "telegym-mock.service";
   fakeToken = "dummy-concurrency-token";
-  fakeBaseUrl = "http://${fakeHost}:${toString fakePort}";
   metricsPort = 9570;
   metricsUrl = "http://127.0.0.1:${toString metricsPort}/metrics";
-  fakeLogDir = "/tmp/${fakeServicesName}";
-  fakeEventsFile = "${fakeLogDir}/events.log";
-  fakeControlDir = "${fakeLogDir}/control";
+  mediaOriginLogDir = "/tmp/${mediaOriginName}";
+  mediaOriginEventsFile = "${mediaOriginLogDir}/events.log";
+  mediaOriginControlDir = "${mediaOriginLogDir}/control";
 
   mediaWidth = 160;
   mediaHeight = 90;
@@ -50,11 +54,18 @@ pkgs.testers.nixosTest {
   containers.machine =
     { ... }:
     {
-      imports = [ module ];
+      imports = [
+        module
+        (import ./telegym-service.nix {
+          package = telegym;
+          port = telegymPort;
+        })
+      ];
 
       environment.systemPackages = [
         pkgs.curl
         pkgs.gnugrep
+        pkgs.jq
       ];
 
       services.lolek = {
@@ -66,7 +77,7 @@ pkgs.testers.nixosTest {
         environmentFile = pkgs.writeText envFileName ''
           LOLEK_BOT_TOKEN=${fakeToken}
         '';
-        allowedUrlPatterns = [ fakeHost ];
+        allowedUrlPatterns = [ testHost ];
         maxConcurrentDownloads = 2;
         maxConcurrentDownloadsPerChat = 1;
         maxVideoRequestsPerChatPerMinute = 2;
@@ -79,25 +90,23 @@ pkgs.testers.nixosTest {
           port = metricsPort;
         };
         environment = {
-          LOLEK_TELEGRAM_BASE_URL = fakeBaseUrl;
+          LOLEK_TELEGRAM_BASE_URL = telegymBaseUrl;
         };
       };
 
-      systemd.services.${fakeServicesName} = {
-        description = "Fake external services for Lolek concurrency test";
+      systemd.services.${mediaOriginName} = {
+        description = "Media origin for Lolek concurrency test";
         wantedBy = [ "multi-user.target" ];
         after = [ "network.target" ];
         environment = {
-          LOLEK_CONCURRENCY_SERVICES_HOST = fakeHost;
-          LOLEK_CONCURRENCY_SERVICES_PORT = toString fakePort;
-          LOLEK_CONCURRENCY_SERVICES_TOKEN = fakeToken;
-          LOLEK_CONCURRENCY_SERVICES_EVENTS_FILE = fakeEventsFile;
-          LOLEK_CONCURRENCY_SERVICES_CONTROL_DIR = fakeControlDir;
-          LOLEK_CONCURRENCY_SERVICES_MEDIA_FILE = toString mediaFile;
-          PYTHONPATH = "${./.}";
+          LOLEK_CONCURRENCY_ORIGIN_HOST = testHost;
+          LOLEK_CONCURRENCY_ORIGIN_PORT = toString mediaOriginPort;
+          LOLEK_CONCURRENCY_ORIGIN_EVENTS_FILE = mediaOriginEventsFile;
+          LOLEK_CONCURRENCY_ORIGIN_CONTROL_DIR = mediaOriginControlDir;
+          LOLEK_CONCURRENCY_ORIGIN_MEDIA_FILE = toString mediaFile;
         };
         serviceConfig = {
-          ExecStart = "${pkgs.python3}/bin/python3 ${./concurrency-services.py}";
+          ExecStart = "${pkgs.python3}/bin/python3 ${./concurrency-media-origin.py}";
           Restart = "on-failure";
         };
       };
@@ -106,23 +115,49 @@ pkgs.testers.nixosTest {
     };
 
   testScript = ''
-    machine.wait_for_unit("multi-user.target")
-    machine.wait_for_unit("${fakeServicesUnit}")
+    import json
+    import shlex
 
-    fake_base_url = "${fakeBaseUrl}"
-    fake_events_file = "${fakeEventsFile}"
+    def shell_quote(value):
+        return shlex.quote(value)
+
+    machine.wait_for_unit("multi-user.target")
+    machine.wait_for_unit("${mediaOriginUnit}")
+    machine.wait_for_unit("${telegymUnit}")
+
+    media_origin_base_url = "${mediaOriginBaseUrl}"
+    media_origin_events_file = "${mediaOriginEventsFile}"
     fake_token = "${fakeToken}"
-    fake_control_dir = "${fakeControlDir}"
+    media_origin_control_dir = "${mediaOriginControlDir}"
     metrics_url = "${metricsUrl}"
+    telegym_base_url = "${telegymBaseUrl}"
+    messages_url = "%s/debug/messages/%s" % (telegym_base_url, fake_token)
+
+    def media_url(name):
+        return "%s/media/%s.mp4" % (media_origin_base_url, name)
+
+    def inject(name, chat_id):
+        payload = json.dumps(
+            {"token": fake_token, "chat_id": chat_id, "text": media_url(name)},
+            separators=(",", ":"),
+        )
+        machine.succeed(
+            "curl -fsS -H 'Content-Type: application/json' --data %s "
+            "%s/debug/inject/update | "
+            "jq -e '.ok and .delivery_method == \"polling\"' >/dev/null"
+            % (shell_quote(payload), telegym_base_url)
+        )
 
     def event_count(pattern):
         return (
             "grep -c '%s' %s || true"
-            % (pattern.replace("'", "'\"'\"'"), fake_events_file)
+            % (pattern.replace("'", "'\"'\"'"), media_origin_events_file)
         )
 
     def wait_for_event(pattern):
-        machine.wait_until_succeeds("grep '%s' %s" % (pattern, fake_events_file))
+        machine.wait_until_succeeds(
+            "grep '%s' %s" % (pattern, media_origin_events_file)
+        )
 
     def wait_for_event_count(pattern, expected):
         machine.wait_until_succeeds(
@@ -138,15 +173,37 @@ pkgs.testers.nixosTest {
         )
 
     def release_media(name):
-        machine.succeed("touch %s/release-%s" % (fake_control_dir, name))
+        machine.succeed("touch %s/release-%s" % (media_origin_control_dir, name))
 
-    machine.wait_until_succeeds("curl -fsS -X POST %s/bot%s/getMe | grep '\"ok\": true'" % (fake_base_url, fake_token))
+    def wait_for_video_count(expected):
+        machine.wait_until_succeeds(
+            "curl -fsS %s | "
+            "jq -e '[.messages[] | select(.video != null)] | length == %d' "
+            ">/dev/null" % (shell_quote(messages_url), expected)
+        )
+
+    machine.wait_until_succeeds(
+        "curl -fsSI %s >/dev/null" % media_url("global-a")
+    )
+    machine.wait_until_succeeds(
+        "curl -fsS %s/health | jq -e '.status == \"ok\"' >/dev/null"
+        % telegym_base_url
+    )
 
     machine.succeed("systemctl start ${serviceUnit}")
     machine.wait_for_unit("${serviceUnit}")
+    machine.wait_until_succeeds(
+        "curl -fsS %s/debug/bots | "
+        "jq -e --arg token %s '.bots | any(.token_full == $token)' >/dev/null"
+        % (telegym_base_url, shell_quote(fake_token))
+    )
 
     # Three updates from different chats should be constrained by the global limit of two.
-    wait_for_event("^getUpdates global 3$")
+    inject("global-a", 1001)
+    wait_for_event("^media-start global-a$")
+    inject("global-b", 1002)
+    wait_for_event("^media-start global-b$")
+    inject("global-c", 1003)
     wait_for_metric("lolek_processing_active 2")
     wait_for_metric("lolek_processing_waiting 1")
     global_starts = "^media-start global-[abc]$"
@@ -157,12 +214,15 @@ pkgs.testers.nixosTest {
     release_media("global-c")
     wait_for_event_count(global_starts, 3)
     wait_for_metric("lolek_processing_waiting 0")
-    wait_for_event_count("^sendVideo ", 3)
+    wait_for_video_count(3)
+    wait_for_metric("lolek_processing_active 0")
 
     # Two updates from the same chat should be constrained by the per-chat limit of one,
     # while another chat can still use the remaining global slot.
-    machine.succeed("echo per-chat > %s/phase" % fake_control_dir)
-    wait_for_event("^getUpdates per-chat 3$")
+    inject("chat-a", 2001)
+    wait_for_event("^media-start chat-a$")
+    inject("chat-b", 2001)
+    inject("chat-c", 2002)
     wait_for_metric("lolek_processing_active 2")
     wait_for_metric("lolek_processing_waiting 1")
     per_chat_starts = "^media-start chat-[abc]$"
@@ -176,11 +236,16 @@ pkgs.testers.nixosTest {
     release_media("chat-c")
     wait_for_event_count(per_chat_starts, 3)
     wait_for_metric("lolek_processing_waiting 0")
-    wait_for_event_count("^sendVideo ", 6)
+    wait_for_video_count(6)
+    wait_for_metric("lolek_processing_active 0")
 
     # A burst over the per-chat admission limit should be dropped instead of queued.
-    machine.succeed("echo rate-limit > %s/phase" % fake_control_dir)
-    wait_for_event("^getUpdates rate-limit 5$")
+    inject("rate-a", 3001)
+    wait_for_event("^media-start rate-a$")
+    inject("rate-b", 3001)
+    inject("rate-c", 3001)
+    inject("rate-d", 3001)
+    inject("rate-e", 3001)
     wait_for_metric('lolek_chat_rate_limiter_total{result="rejected"} 3')
     wait_for_metric("lolek_processing_active 1")
     wait_for_metric("lolek_processing_waiting 1")
@@ -193,7 +258,8 @@ pkgs.testers.nixosTest {
     release_media("rate-e")
     wait_for_event_count(rate_starts, 2)
     wait_for_metric("lolek_processing_waiting 0")
-    wait_for_event_count("^sendVideo ", 8)
+    wait_for_video_count(8)
+    wait_for_metric("lolek_processing_active 0")
 
     machine.succeed("systemctl is-active --quiet ${serviceUnit}")
   '';

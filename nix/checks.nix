@@ -70,7 +70,12 @@ in
   };
 
   nixos-service = import ./tests/service.nix {
-    inherit pkgs module package;
+    inherit
+      pkgs
+      module
+      package
+      telegym
+      ;
   };
 
   nixos-tiktok-audio-mux = import ./tests/tiktok-audio-mux.nix {

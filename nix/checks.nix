@@ -30,7 +30,7 @@ let
     inherit version elixir;
     src = root;
     mixEnv = "dev";
-    hash = "sha256-0S2HHMQz3JBJx2xdHf1+yqqXXZOkATzJWjg2Q9LupDc=";
+    hash = "sha256-NckDnRTaNZufkNOdrF9KRFuZE1mEr5s2UpCMyvltXU0=";
   };
 in
 {

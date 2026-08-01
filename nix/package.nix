@@ -51,7 +51,7 @@ let
         inherit version;
         src = root;
         inherit elixir;
-        hash = "sha256-gY+bwmqn/6FiKIluWCsDnl8PkaIYS94inTIa0d16fB4=";
+        hash = "sha256-bANjAi2rYIcmFCYk8VXpio9gqFhe+ZkG5ZKR7G9v8Xk=";
       };
       doCheck = true;
       nativeCheckInputs = [ pkgs.getconf ];

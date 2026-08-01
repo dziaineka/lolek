@@ -2,6 +2,7 @@
   pkgs,
   module,
   package,
+  telegym,
 }:
 
 let
@@ -20,8 +21,10 @@ let
   fakePort = 8083;
   fakeToken = "dummy-tiktok-audio-token";
   fakeBaseUrl = "http://${fakeHost}:${toString fakePort}";
+  telegymPort = 5678;
+  telegymBaseUrl = "http://${fakeHost}:${toString telegymPort}";
+  telegymUnit = "telegym-mock.service";
   fakeLogDir = "/tmp/${fakeServicesName}";
-  fakeEventsFile = "${fakeLogDir}/events.log";
   uploadFile = "${fakeLogDir}/upload.bin";
 
   mediaPath = "/tiktok-post";
@@ -32,8 +35,6 @@ let
   mediaWidth = 160;
   mediaHeight = 90;
   mediaDuration = 2;
-  videoFileId = "fake-tiktok-video-file-id";
-  videoFileUniqueId = "fake-tiktok-video-file-unique-id";
 
   videoOnlyFile =
     pkgs.runCommand "lolek-test-tiktok-video-only.mp4" { nativeBuildInputs = [ pkgs.ffmpeg ]; }
@@ -135,12 +136,19 @@ pkgs.testers.nixosTest {
   containers.machine =
     { ... }:
     {
-      imports = [ module ];
+      imports = [
+        module
+        (import ./telegym-service.nix {
+          package = telegym;
+          port = telegymPort;
+        })
+      ];
 
       environment.systemPackages = [
         pkgs.curl
         pkgs.ffmpeg
         pkgs.gnugrep
+        pkgs.jq
       ];
 
       services.lolek = {
@@ -159,33 +167,24 @@ pkgs.testers.nixosTest {
         maxDownloadPause = 10;
         galleryDownloadEnabled = true;
         environment = {
-          LOLEK_TELEGRAM_BASE_URL = fakeBaseUrl;
+          LOLEK_TELEGRAM_BASE_URL = telegymBaseUrl;
         };
       };
 
       systemd.services.${fakeServicesName} = {
-        description = "Fake external services for Lolek TikTok audio mux test";
+        description = "Media origin for Lolek TikTok audio mux test";
         wantedBy = [ "multi-user.target" ];
         after = [ "network.target" ];
         environment = {
           LOLEK_TIKTOK_AUDIO_SERVICES_HOST = fakeHost;
           LOLEK_TIKTOK_AUDIO_SERVICES_PORT = toString fakePort;
-          LOLEK_TIKTOK_AUDIO_SERVICES_TOKEN = fakeToken;
-          LOLEK_TIKTOK_AUDIO_SERVICES_EVENTS_FILE = fakeEventsFile;
-          LOLEK_TIKTOK_AUDIO_SERVICES_UPLOAD_FILE = uploadFile;
           LOLEK_TIKTOK_AUDIO_SERVICES_MEDIA_PATH = mediaPath;
           LOLEK_TIKTOK_AUDIO_SERVICES_MEDIA_FILE = toString videoOnlyFile;
           LOLEK_TIKTOK_AUDIO_SERVICES_AUDIO_PATH = audioPath;
           LOLEK_TIKTOK_AUDIO_SERVICES_AUDIO_FILE = toString audioFile;
-          LOLEK_TIKTOK_AUDIO_SERVICES_VIDEO_FILE_ID = videoFileId;
-          LOLEK_TIKTOK_AUDIO_SERVICES_VIDEO_FILE_UNIQUE_ID = videoFileUniqueId;
-          LOLEK_TIKTOK_AUDIO_SERVICES_VIDEO_WIDTH = toString mediaWidth;
-          LOLEK_TIKTOK_AUDIO_SERVICES_VIDEO_HEIGHT = toString mediaHeight;
-          LOLEK_TIKTOK_AUDIO_SERVICES_VIDEO_DURATION = toString mediaDuration;
-          PYTHONPATH = "${./.}";
         };
         serviceConfig = {
-          ExecStart = "${pkgs.python3}/bin/python3 ${./tiktok-audio-services.py}";
+          ExecStart = "${pkgs.python3}/bin/python3 ${./tiktok-audio-origin.py}";
           Restart = "on-failure";
         };
       };
@@ -210,16 +209,15 @@ pkgs.testers.nixosTest {
 
     machine.wait_for_unit("multi-user.target")
     machine.wait_for_unit("${fakeServicesUnit}")
+    machine.wait_for_unit("${telegymUnit}")
 
-    fake_base_url = "${fakeBaseUrl}"
-    fake_events_file = "${fakeEventsFile}"
+    telegym_base_url = "${telegymBaseUrl}"
     fake_token = "${fakeToken}"
     media_url = "${mediaUrl}"
     audio_url = "${audioUrl}"
     download_dir = "${downloadDir}"
     ready_dir_name = "${readyDirName}"
     media_manifest_name = "${mediaManifestName}"
-    video_file_id = "${videoFileId}"
     upload_file = "${uploadFile}"
     folder_name = base64.b64encode(media_url.encode()).decode().rstrip("=")
     cache_dir = "%s/%s" % (download_dir, folder_name)
@@ -228,19 +226,50 @@ pkgs.testers.nixosTest {
 
     machine.wait_until_succeeds("curl -fsS %s >/dev/null" % media_url)
     machine.wait_until_succeeds("curl -fsS %s >/dev/null" % audio_url)
-    machine.wait_until_succeeds("curl -fsS -X POST %s/bot%s/getMe | grep '\"ok\": true'" % (fake_base_url, fake_token))
+    machine.wait_until_succeeds("curl -fsS %s/health | jq -e '.status == \"ok\"' >/dev/null" % telegym_base_url)
 
     machine.succeed("systemctl start ${serviceUnit}")
     machine.wait_for_unit("${serviceUnit}")
-
-    machine.succeed(
-        "timeout 120 sh -c 'until grep \"^sendVideo upload \" %s; do sleep 1; done' "
-        "|| (journalctl -u ${serviceUnit} --no-pager; cat %s; false)"
-        % (fake_events_file, fake_events_file)
+    machine.wait_until_succeeds(
+        "curl -fsS %s/debug/bots | "
+        "jq -e --arg token %s '.bots | any(.token_full == $token)' >/dev/null"
+        % (telegym_base_url, shell_quote(fake_token))
     )
 
+    inject_payload = json.dumps(
+        {"token": fake_token, "chat_id": 1234, "text": media_url},
+        separators=(",", ":"),
+    )
+    machine.succeed(
+        "curl -fsS -H 'Content-Type: application/json' --data %s "
+        "%s/debug/inject/update | "
+        "jq -e '.ok and .delivery_method == \"polling\"' >/dev/null"
+        % (shell_quote(inject_payload), telegym_base_url)
+    )
+
+    messages_url = "%s/debug/messages/%s?chat_id=1234" % (
+        telegym_base_url,
+        fake_token,
+    )
+    machine.wait_until_succeeds(
+        "curl -fsS %s | "
+        "jq -e '[.messages[] | select(.video != null)] | length == 1' >/dev/null"
+        % shell_quote(messages_url)
+    )
+
+    messages = json.loads(machine.succeed("curl -fsS %s" % shell_quote(messages_url)))
+    video_messages = [message for message in messages["messages"] if message.get("video")]
+    assert len(video_messages) == 1, video_messages
+    video = video_messages[0]["video"]
+    video_file_id = video["file_id"]
+    assert video.get("file_name", "").endswith(".mp4"), video
+
+    machine.succeed("mkdir -p %s" % shell_quote("${fakeLogDir}"))
+    machine.succeed(
+        "curl -fsS %s/debug/files/%s -o %s"
+        % (telegym_base_url, video_file_id, shell_quote(upload_file))
+    )
     machine.succeed("test -s %s" % upload_file)
-    machine.succeed("grep -aq 'name=\"video\"' %s" % upload_file)
     machine.succeed("grep -aq 'ftyp' %s" % upload_file)
     machine.wait_until_succeeds("test -f %s" % shell_quote(manifest_file))
     manifest = json.loads(machine.succeed("cat %s" % shell_quote(manifest_file)))

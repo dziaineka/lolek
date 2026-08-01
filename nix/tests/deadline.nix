@@ -2,18 +2,24 @@
   pkgs,
   module,
   package,
+  telegym,
 }:
 
 let
   serviceName = "lolek";
   serviceUnit = "${serviceName}.service";
-  fakeServicesName = "lolek-deadline-services";
-  fakeServicesUnit = "${fakeServicesName}.service";
-  fakeHost = "127.0.0.1";
-  fakePort = 8083;
+  mediaOriginName = "lolek-deadline-media-origin";
+  mediaOriginUnit = "${mediaOriginName}.service";
+  testHost = "127.0.0.1";
+  mediaOriginPort = 8083;
+  mediaOriginBaseUrl = "http://${testHost}:${toString mediaOriginPort}";
+  mediaPath = "/media/deadline.mp4";
+  mediaUrl = "${mediaOriginBaseUrl}${mediaPath}";
+  telegymPort = 5678;
+  telegymBaseUrl = "http://${testHost}:${toString telegymPort}";
+  telegymUnit = "telegym-mock.service";
   fakeToken = "dummy-deadline-token";
-  fakeBaseUrl = "http://${fakeHost}:${toString fakePort}";
-  fakeEventsFile = "/tmp/${fakeServicesName}/events.log";
+  mediaOriginEventsFile = "/tmp/${mediaOriginName}/events.log";
   metricsPort = 9569;
   fakeYtDlp = pkgs.writeShellApplication {
     name = "yt-dlp";
@@ -41,15 +47,24 @@ pkgs.testers.nixosTest {
   containers.machine =
     { ... }:
     {
-      imports = [ module ];
+      imports = [
+        module
+        (import ./telegym-service.nix {
+          package = telegym;
+          port = telegymPort;
+        })
+      ];
 
-      environment.systemPackages = [ pkgs.curl ];
+      environment.systemPackages = [
+        pkgs.curl
+        pkgs.jq
+      ];
 
       services.lolek = {
         enable = true;
         package = testPackage;
         botTokenFile = pkgs.writeText "lolek-deadline-test-token" fakeToken;
-        allowedUrlPatterns = [ fakeHost ];
+        allowedUrlPatterns = [ testHost ];
         maxMessageDelaySeconds = 2;
         downloadCommandTimeout = 30;
         maxDownloadTries = 1;
@@ -60,23 +75,21 @@ pkgs.testers.nixosTest {
           port = metricsPort;
         };
         environment = {
-          LOLEK_TELEGRAM_BASE_URL = fakeBaseUrl;
+          LOLEK_TELEGRAM_BASE_URL = telegymBaseUrl;
         };
       };
 
-      systemd.services.${fakeServicesName} = {
-        description = "Fake external services for Lolek deadline test";
+      systemd.services.${mediaOriginName} = {
+        description = "Media origin for Lolek deadline test";
         wantedBy = [ "multi-user.target" ];
         after = [ "network.target" ];
         environment = {
-          LOLEK_DEADLINE_SERVICES_HOST = fakeHost;
-          LOLEK_DEADLINE_SERVICES_PORT = toString fakePort;
-          LOLEK_DEADLINE_SERVICES_TOKEN = fakeToken;
-          LOLEK_DEADLINE_SERVICES_EVENTS_FILE = fakeEventsFile;
-          PYTHONPATH = "${./.}";
+          LOLEK_DEADLINE_ORIGIN_HOST = testHost;
+          LOLEK_DEADLINE_ORIGIN_PORT = toString mediaOriginPort;
+          LOLEK_DEADLINE_ORIGIN_EVENTS_FILE = mediaOriginEventsFile;
         };
         serviceConfig = {
-          ExecStart = "${pkgs.python3}/bin/python3 ${./deadline-services.py}";
+          ExecStart = "${pkgs.python3}/bin/python3 ${./deadline-media-origin.py}";
           Restart = "on-failure";
         };
       };
@@ -85,31 +98,56 @@ pkgs.testers.nixosTest {
     };
 
   testScript = ''
-    machine.wait_for_unit("multi-user.target")
-    machine.wait_for_unit("${fakeServicesUnit}")
+    import json
+    import shlex
 
-    fake_base_url = "${fakeBaseUrl}"
-    fake_events_file = "${fakeEventsFile}"
+    def shell_quote(value):
+        return shlex.quote(value)
+
+    machine.wait_for_unit("multi-user.target")
+    machine.wait_for_unit("${mediaOriginUnit}")
+    machine.wait_for_unit("${telegymUnit}")
+
+    media_origin_events_file = "${mediaOriginEventsFile}"
+    media_url = "${mediaUrl}"
     fake_token = "${fakeToken}"
     metrics_url = "http://127.0.0.1:${toString metricsPort}/metrics"
+    telegym_base_url = "${telegymBaseUrl}"
+    messages_url = "%s/debug/messages/%s" % (telegym_base_url, fake_token)
 
     machine.wait_until_succeeds(
-        "curl -fsS -X POST %s/bot%s/getMe | grep '\"ok\": true'"
-        % (fake_base_url, fake_token)
+        "curl -fsSI %s >/dev/null" % shell_quote(media_url)
+    )
+    machine.wait_until_succeeds(
+        "curl -fsS %s/health | jq -e '.status == \"ok\"' >/dev/null"
+        % telegym_base_url
     )
 
     machine.succeed("systemctl start ${serviceUnit}")
     machine.wait_for_unit("${serviceUnit}")
-    machine.wait_until_succeeds("grep '^getUpdates update$' %s" % fake_events_file)
-    machine.wait_until_succeeds("grep '^media-start$' %s" % fake_events_file)
+    machine.wait_until_succeeds(
+        "curl -fsS %s/debug/bots | "
+        "jq -e --arg token %s '.bots | any(.token_full == $token)' >/dev/null"
+        % (telegym_base_url, shell_quote(fake_token))
+    )
+
+    payload = json.dumps(
+        {"token": fake_token, "chat_id": 1001, "text": media_url},
+        separators=(",", ":"),
+    )
+    machine.succeed(
+        "curl -fsS -H 'Content-Type: application/json' --data %s "
+        "%s/debug/inject/update | "
+        "jq -e '.ok and .delivery_method == \"polling\"' >/dev/null"
+        % (shell_quote(payload), telegym_base_url)
+    )
+    machine.wait_until_succeeds(
+        "grep '^media-start$' %s" % media_origin_events_file
+    )
 
     machine.wait_until_succeeds(
         "journalctl -u ${serviceUnit} --no-pager | grep 'overall deadline exceeded'"
     )
-    machine.succeed("sleep 1")
-    machine.fail("grep '^telegram-upload ' %s" % fake_events_file)
-    machine.succeed("systemctl is-active --quiet ${serviceUnit}")
-
     machine.wait_until_succeeds(
         "curl -fsS %s | grep -F 'lolek_messages_total{result=\"processing_deadline_exceeded\"} 1'"
         % metrics_url
@@ -117,5 +155,10 @@ pkgs.testers.nixosTest {
     machine.wait_until_succeeds(
         "curl -fsS %s | grep -F 'lolek_processing_active 0'" % metrics_url
     )
+    machine.succeed(
+        "curl -fsS %s | jq -e '.count == 0' >/dev/null"
+        % shell_quote(messages_url)
+    )
+    machine.succeed("systemctl is-active --quiet ${serviceUnit}")
   '';
 }

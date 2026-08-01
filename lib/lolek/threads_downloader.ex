@@ -29,14 +29,11 @@ defmodule Lolek.ThreadsDownloader do
   @spec download(String.t(), String.t()) :: {:ok, String.t()} | {:error, String.t()}
   def download(url, output_file_path) do
     with {:ok, normalized_url} <- normalize_url(url),
-         media_route_url = media_route_url(normalized_url),
-         {:ok, shortcode} <- extract_shortcode(normalized_url),
-         {:ok, post_id} <- decode_shortcode(shortcode),
-         {:ok, html_response} <- get(normalized_url, html_headers()),
-         {:ok, tokens} <- extract_tokens(html_response),
-         {:ok, media_url} <-
-           fetch_media_url([normalized_url, media_route_url], post_id, tokens) do
-      download_media_file(media_url, output_file_path)
+         {:ok, html_response} <- get(normalized_url, html_headers()) do
+      case fetch_media_url_from_page(html_response, normalized_url) do
+        {:ok, media_url} -> download_media_file(media_url, output_file_path)
+        {:error, reason} -> {:error, reason}
+      end
     end
   end
 
@@ -44,26 +41,22 @@ defmodule Lolek.ThreadsDownloader do
   def download_gallery(url, output_dir) do
     with :ok <- File.mkdir_p(output_dir),
          {:ok, normalized_url} <- normalize_url(url),
-         media_route_url = media_route_url(normalized_url),
-         {:ok, shortcode} <- extract_shortcode(normalized_url),
-         {:ok, post_id} <- decode_shortcode(shortcode),
-         {:ok, html_response} <- get(normalized_url, html_headers()),
-         {:ok, tokens} <- extract_tokens(html_response),
-         {:ok, media_items} <-
-           fetch_all_media_items([normalized_url, media_route_url], post_id, tokens) do
-      download_media_files(media_items, output_dir)
+         {:ok, html_response} <- get(normalized_url, html_headers()) do
+      case fetch_media_items_from_page(html_response, normalized_url) do
+        {:ok, [_ | _] = media_items} -> download_media_files(media_items, output_dir)
+        {:error, reason} -> {:error, reason}
+      end
     end
   end
 
   @spec caption(String.t()) :: {:ok, String.t() | nil} | {:error, String.t()}
   def caption(url) do
     with {:ok, normalized_url} <- normalize_url(url),
-         media_route_url = media_route_url(normalized_url),
-         {:ok, shortcode} <- extract_shortcode(normalized_url),
-         {:ok, post_id} <- decode_shortcode(shortcode),
-         {:ok, html_response} <- get(normalized_url, html_headers()),
-         {:ok, tokens} <- extract_tokens(html_response) do
-      fetch_caption([normalized_url, media_route_url], post_id, tokens)
+         {:ok, html_response} <- get(normalized_url, html_headers()) do
+      case caption_from_page(html_response, normalized_url) do
+        {:ok, caption} -> {:ok, caption}
+        {:error, reason} -> {:error, reason}
+      end
     end
   end
 
@@ -94,7 +87,7 @@ defmodule Lolek.ThreadsDownloader do
   def extract_shortcode(url) do
     case URI.parse(url) do
       %URI{path: path} when is_binary(path) ->
-        case Regex.run(~r|/[^/]+/post/([A-Za-z0-9_-]+)|, path) do
+        case Regex.run(~r|/(?:[^/]+/post\|share)/([A-Za-z0-9_-]+)|, path) do
           [_, shortcode] -> {:ok, shortcode}
           _ -> {:error, "Threads post shortcode not found"}
         end
@@ -128,6 +121,39 @@ defmodule Lolek.ThreadsDownloader do
 
   def decode_shortcode(_shortcode), do: {:error, "Invalid Threads shortcode"}
 
+  @spec fetch_media_url_from_page(http_response(), String.t()) ::
+          {:ok, String.t()} | {:error, String.t()}
+  def fetch_media_url_from_page(html_response, url) do
+    with {:ok, media_node} <- find_page_media(html_response, url) do
+      case media_node do
+        %{"video_versions" => [%{"url" => media_url} | _]} when is_binary(media_url) ->
+          {:ok, media_url}
+
+        _ ->
+          {:error, "Threads video URL was not found"}
+      end
+    end
+  end
+
+  @spec fetch_media_items_from_page(http_response(), String.t()) ::
+          {:ok, [media_item()]} | {:error, String.t()}
+  def fetch_media_items_from_page(html_response, url) do
+    with {:ok, media_node} <- find_page_media(html_response, url) do
+      case do_collect_media(media_node) do
+        [_ | _] = media_items -> {:ok, media_items}
+        [] -> {:error, "Threads media items were not found"}
+      end
+    end
+  end
+
+  @spec caption_from_page(http_response(), String.t()) ::
+          {:ok, String.t() | nil} | {:error, String.t()}
+  def caption_from_page(html_response, url) do
+    with {:ok, media_node} <- find_page_media(html_response, url) do
+      {:ok, find_caption(media_node)}
+    end
+  end
+
   @spec extract_tokens(http_response()) :: {:ok, token_bundle()} | {:error, String.t()}
   def extract_tokens(%{body: body, headers: headers}) do
     with {:ok, lsd} <- extract_regex(body, ~r/"LSD",\[\],\{"token":"([^"]+)"/, "LSD token"),
@@ -148,6 +174,58 @@ defmodule Lolek.ThreadsDownloader do
        }}
     end
   end
+
+  @spec find_page_media(http_response(), String.t()) :: {:ok, map()} | {:error, String.t()}
+  defp find_page_media(html_response, url) do
+    media_nodes =
+      html_response.body
+      |> extract_embedded_json()
+      |> Enum.flat_map(&collect_media_nodes/1)
+
+    media_node =
+      case extract_shortcode(url) do
+        {:ok, shortcode} ->
+          Enum.find(media_nodes, &(Map.get(&1, "code") == shortcode)) || List.first(media_nodes)
+
+        _ ->
+          List.first(media_nodes)
+      end
+
+    case media_node do
+      nil -> {:error, "Threads media data was not found"}
+      media_node -> {:ok, media_node}
+    end
+  end
+
+  @spec extract_embedded_json(String.t()) :: [term()]
+  defp extract_embedded_json(body) do
+    json_script_regex =
+      Regex.compile!("<script type=\"application/json\"[^>]*>(.*?)</script>", "s")
+
+    json_script_regex
+    |> Regex.scan(body, capture: :all_but_first)
+    |> Enum.flat_map(fn [json] ->
+      case Jason.decode(json) do
+        {:ok, term} -> [term]
+        {:error, _} -> []
+      end
+    end)
+  end
+
+  @spec collect_media_nodes(term()) :: [map()]
+  defp collect_media_nodes(%{"video_versions" => _} = media_node), do: [media_node]
+  defp collect_media_nodes(%{"image_versions2" => _} = media_node), do: [media_node]
+  defp collect_media_nodes(%{"carousel_media" => _} = media_node), do: [media_node]
+
+  defp collect_media_nodes(%{} = map) do
+    Enum.flat_map(Map.values(map), &collect_media_nodes/1)
+  end
+
+  defp collect_media_nodes(list) when is_list(list) do
+    Enum.flat_map(list, &collect_media_nodes/1)
+  end
+
+  defp collect_media_nodes(_), do: []
 
   @spec graphql_requests(String.t(), String.t(), token_bundle()) :: [map()]
   def graphql_requests(url, post_id, tokens) do
@@ -183,17 +261,6 @@ defmodule Lolek.ThreadsDownloader do
     end)
   end
 
-  @spec fetch_caption([String.t()], String.t(), token_bundle()) ::
-          {:ok, String.t() | nil} | {:error, String.t()}
-  defp fetch_caption(urls, post_id, tokens) do
-    urls
-    |> Enum.uniq()
-    |> Enum.flat_map(&graphql_requests(&1, post_id, tokens))
-    |> Enum.reduce_while({:error, "Threads caption was not found"}, fn request, acc ->
-      handle_caption_request(request, acc, tokens)
-    end)
-  end
-
   @spec handle_graphql_request(map(), token_bundle()) ::
           {:halt, {:ok, String.t()}} | {:cont, {:error, String.t()}}
   defp handle_graphql_request(request, tokens) do
@@ -207,54 +274,6 @@ defmodule Lolek.ThreadsDownloader do
       {:error, reason} ->
         Logger.warning("Threads GraphQL request failed: #{reason}")
         {:cont, {:error, "Threads video URL was not found"}}
-    end
-  end
-
-  @spec handle_caption_request(
-          map(),
-          {:ok, String.t() | nil} | {:error, String.t()},
-          token_bundle()
-        ) ::
-          {:halt, {:ok, String.t()}} | {:cont, {:ok, nil} | {:error, String.t()}}
-  defp handle_caption_request(request, acc, tokens) do
-    case execute_graphql_request(request, tokens) do
-      {:ok, response} ->
-        case extract_caption(response.body) do
-          {:ok, nil} -> {:cont, {:ok, nil}}
-          {:ok, caption} -> {:halt, {:ok, caption}}
-        end
-
-      {:error, reason} ->
-        Logger.warning("Threads GraphQL request failed: #{reason}")
-        {:cont, acc}
-    end
-  end
-
-  @spec fetch_all_media_items([String.t()], String.t(), token_bundle()) ::
-          {:ok, [media_item()]} | {:error, String.t()}
-  defp fetch_all_media_items(urls, post_id, tokens) do
-    urls
-    |> Enum.uniq()
-    |> Enum.flat_map(&graphql_requests(&1, post_id, tokens))
-    |> Enum.reduce_while({:error, "Threads media items were not found"}, fn request, _acc ->
-      handle_all_media_items_request(request, tokens)
-    end)
-  end
-
-  @spec handle_all_media_items_request(map(), token_bundle()) ::
-          {:halt, {:ok, [media_item()]}} | {:cont, {:error, String.t()}}
-  defp handle_all_media_items_request(request, tokens) do
-    case execute_graphql_request(request, tokens) do
-      {:ok, response} ->
-        case extract_all_media_items(response.body) do
-          {:ok, [_ | _] = items} -> {:halt, {:ok, items}}
-          {:ok, []} -> {:cont, {:error, "Threads media items were not found"}}
-          {:error, _} -> {:cont, {:error, "Threads media items were not found"}}
-        end
-
-      {:error, reason} ->
-        Logger.warning("Threads GraphQL request failed: #{reason}")
-        {:cont, {:error, "Threads media items were not found"}}
     end
   end
 
@@ -441,7 +460,10 @@ defmodule Lolek.ThreadsDownloader do
   defp html_headers do
     [
       {"accept", "text/html,application/xhtml+xml"},
-      {"accept-language", "en-US,en;q=0.9"}
+      {"accept-language", "en-US,en;q=0.9"},
+      {"sec-fetch-site", "none"},
+      {"sec-fetch-mode", "navigate"},
+      {"sec-fetch-dest", "document"}
     ]
   end
 

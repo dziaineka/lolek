@@ -50,3 +50,4 @@ config/cookies.txt
 
 # claude config
 .claude/settings.local.json
+.playwright-mcp/

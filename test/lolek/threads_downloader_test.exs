@@ -15,6 +15,132 @@ defmodule Lolek.ThreadsDownloaderTest do
              )
   end
 
+  test "extracts shortcode from threads share url" do
+    assert {:ok, "_gJTgboOD"} =
+             Lolek.ThreadsDownloader.extract_shortcode("https://www.threads.com/share/_gJTgboOD/")
+  end
+
+  defp page_response(media_nodes) do
+    json =
+      Jason.encode!(%{
+        "require" => [
+          [
+            "RelayPrefetchedStreamCache",
+            "handle",
+            nil,
+            [
+              %{
+                "__bbox" => %{
+                  "require" => [
+                    [
+                      "adp_BarcelonaPermalinkMobilePostColumnPageQueryRelayPreloader",
+                      "handle",
+                      nil,
+                      [
+                        %{
+                          "__bbox" => %{
+                            "result" => %{
+                              "data" => %{"media" => media_nodes}
+                            }
+                          }
+                        }
+                      ]
+                    ]
+                  ]
+                }
+              }
+            ]
+          ]
+        ]
+      })
+
+    %{status: 200, body: ~s(<script type="application/json">#{json}</script>), headers: []}
+  end
+
+  test "extracts media url from embedded page data for share url" do
+    response =
+      page_response(%{
+        "code" => "DbXqqNsDStW",
+        "video_versions" => [%{"url" => "https://cdn.example.com/video.mp4"}]
+      })
+
+    assert {:ok, "https://cdn.example.com/video.mp4"} =
+             Lolek.ThreadsDownloader.fetch_media_url_from_page(
+               response,
+               "https://www.threads.com/share/_gJTgboOD/"
+             )
+  end
+
+  test "prefers media node matching the url shortcode" do
+    response =
+      page_response([
+        %{
+          "code" => "Dbe27wNEfUd",
+          "video_versions" => [%{"url" => "https://cdn.example.com/related.mp4"}]
+        },
+        %{
+          "code" => "DbXqqNsDStW",
+          "video_versions" => [%{"url" => "https://cdn.example.com/main.mp4"}]
+        }
+      ])
+
+    assert {:ok, "https://cdn.example.com/main.mp4"} =
+             Lolek.ThreadsDownloader.fetch_media_url_from_page(
+               response,
+               "https://www.threads.com/@tatsiana_16/post/DbXqqNsDStW"
+             )
+  end
+
+  test "returns error when embedded page data has no media" do
+    response = page_response(%{"code" => "DbXqqNsDStW", "pk" => "123"})
+
+    assert {:error, "Threads media data was not found"} =
+             Lolek.ThreadsDownloader.fetch_media_url_from_page(
+               response,
+               "https://www.threads.com/share/_gJTgboOD/"
+             )
+  end
+
+  test "extracts caption from embedded page data" do
+    response =
+      page_response(%{
+        "code" => "DbXqqNsDStW",
+        "video_versions" => [%{"url" => "https://cdn.example.com/video.mp4"}],
+        "caption" => %{"text" => "Threads post text"}
+      })
+
+    assert {:ok, "Threads post text"} =
+             Lolek.ThreadsDownloader.caption_from_page(
+               response,
+               "https://www.threads.com/share/_gJTgboOD/"
+             )
+  end
+
+  test "extracts all media items from carousel in embedded page data" do
+    response =
+      page_response(%{
+        "code" => "DbXqqNsDStW",
+        "carousel_media" => [
+          %{"video_versions" => [%{"url" => "https://cdn.example.com/1.mp4"}]},
+          %{
+            "image_versions2" => %{
+              "candidates" => [%{"url" => "https://cdn.example.com/2.jpg"}]
+            }
+          }
+        ]
+      })
+
+    assert {:ok,
+            [
+              %{ext: ".mp4", url: "https://cdn.example.com/1.mp4"},
+              %{ext: ".jpg", url: "https://cdn.example.com/2.jpg"}
+            ]} =
+             Lolek.ThreadsDownloader.fetch_media_items_from_page(
+               response,
+               "https://www.threads.com/share/_gJTgboOD/"
+             )
+  end
+
   test "decodes shortcode into numeric post id" do
     assert {:ok, "3886214701562734339"} = Lolek.ThreadsDownloader.decode_shortcode("DXum65XjCcD")
   end

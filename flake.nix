@@ -74,7 +74,7 @@
       apps = forAllSystems (system: {
         get-test-cases = {
           type = "app";
-          program = "${self.packages.${system}.get-test-cases}/bin/get-test-cases";
+          program = nixpkgs.lib.getExe self.packages.${system}.get-test-cases;
           meta.description = "List media-producing upstream extractor test cases";
         };
       });

@@ -2,6 +2,7 @@
 """List media-producing test cases from gallery-dl and yt-dlp."""
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -68,8 +69,8 @@ def load_upstreams():
     return gallery_dl_results, gen_extractor_classes
 
 
-def emit_gallery_dl_cases(gallery_dl_results):
-    """Emit gallery-dl cases expected to yield images or videos."""
+def gallery_dl_cases(gallery_dl_results):
+    """Yield gallery-dl cases expected to produce images or videos."""
     for site in sorted({site for site, _subcategory in GALLERY_DL_MEDIA}):
         for case in gallery_dl_results.category(site):
             extractor = case["#class"]
@@ -83,20 +84,16 @@ def emit_gallery_dl_cases(gallery_dl_results):
                 and case.get("#count") != 0
                 and case.get("#results") != ()
             ):
-                print(
-                    json.dumps(
-                        {
-                            "source": "gallery-dl",
-                            "service": site,
-                            "kind": GALLERY_DL_MEDIA[extractor_key],
-                            "url": case["#url"],
-                        }
-                    )
-                )
+                yield {
+                    "source": "gallery-dl",
+                    "service": site,
+                    "kind": GALLERY_DL_MEDIA[extractor_key],
+                    "url": case["#url"],
+                }
 
 
-def emit_yt_dlp_cases(gen_extractor_classes):
-    """Emit yt-dlp cases expected to yield videos."""
+def yt_dlp_cases(gen_extractor_classes):
+    """Yield yt-dlp cases expected to produce videos."""
     for extractor in gen_extractor_classes():
         extractor_key = extractor.ie_key()
         if extractor_key not in YT_DLP_VIDEO_EXTRACTORS:
@@ -111,18 +108,69 @@ def emit_yt_dlp_cases(gen_extractor_classes):
                 continue
 
             if not case.get("skip") and info.get("ext"):
-                print(
-                    json.dumps(
-                        {
-                            "source": "yt-dlp",
-                            "service": extractor_key.removesuffix("VM")
-                            .removesuffix("Story")
-                            .lower(),
-                            "kind": "video",
-                            "url": url,
-                        }
-                    )
-                )
+                yield {
+                    "source": "yt-dlp",
+                    "service": extractor_key.removesuffix("VM")
+                    .removesuffix("Story")
+                    .lower(),
+                    "kind": "video",
+                    "url": url,
+                }
+
+
+def case_id(service, url):
+    """Return a readable deterministic identifier for an exact URL."""
+    digest = hashlib.sha256(url.encode("utf-8")).hexdigest()
+    return f"{service}-{digest[:16]}"
+
+
+def normalize_cases(cases):
+    """Deduplicate URL variants and combine their upstream provenance."""
+    by_url = {}
+
+    for case in cases:
+        url = case["url"]
+        existing = by_url.setdefault(
+            url,
+            {
+                "id": case_id(case["service"], url),
+                "service": case["service"],
+                "sources": set(),
+                "kinds": set(),
+                "url": url,
+            },
+        )
+
+        if existing["service"] != case["service"]:
+            raise ValueError(
+                f"URL appears under multiple services: {url!r}: "
+                f"{existing['service']!r}, {case['service']!r}"
+            )
+
+        existing["sources"].add(case["source"])
+        existing["kinds"].add(case["kind"])
+
+    normalized = []
+    identifiers = set()
+
+    for case in sorted(
+        by_url.values(), key=lambda item: (item["service"], item["url"])
+    ):
+        if case["id"] in identifiers:
+            raise ValueError(f"Generated duplicate case ID: {case['id']}")
+
+        identifiers.add(case["id"])
+        case["sources"] = sorted(case["sources"])
+        case["kinds"] = sorted(case["kinds"])
+        normalized.append(case)
+
+    return normalized
+
+
+def emit_cases(cases):
+    """Write normalized cases as JSON Lines."""
+    for case in cases:
+        print(json.dumps(case))
 
 
 def main():
@@ -130,8 +178,11 @@ def main():
     args = parse_args()
     add_source_paths(args)
     gallery_dl_results, gen_extractor_classes = load_upstreams()
-    emit_gallery_dl_cases(gallery_dl_results)
-    emit_yt_dlp_cases(gen_extractor_classes)
+    cases = [
+        *gallery_dl_cases(gallery_dl_results),
+        *yt_dlp_cases(gen_extractor_classes),
+    ]
+    emit_cases(normalize_cases(cases))
 
 
 if __name__ == "__main__":

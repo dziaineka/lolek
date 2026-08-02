@@ -4,6 +4,7 @@
   module ? null,
   package ? null,
   telegym ? null,
+  testCases ? null,
 }:
 
 let
@@ -103,6 +104,16 @@ in
       module
       package
       telegym
+      ;
+  };
+
+  nixos-corpus = import ./tests/corpus.nix {
+    inherit
+      pkgs
+      module
+      package
+      telegym
+      testCases
       ;
   };
 }

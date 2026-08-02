@@ -68,6 +68,7 @@
           module = self.nixosModules.default;
           package = self.packages.${system}.lolek;
           telegym = self.packages.${system}.telegym;
+          testCases = self.packages.${system}.get-test-cases;
         }
       );
 

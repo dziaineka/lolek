@@ -105,14 +105,24 @@ rec {
       export PYTHONPATH="${galleryDlTestSource}:${ytDlpTestSource}"
       ${testCasePython}/bin/python3 ${getTestCasesScript} \
         | ${pkgs.jq}/bin/jq --exit-status --slurp \
-          'map(.service) | unique | . == [
-            "coub",
-            "facebook",
-            "instagram",
-            "tiktok",
-            "twitter",
-            "youtube"
-          ]' >/dev/null
+          '
+            (map(.service) | unique) == [
+              "coub",
+              "facebook",
+              "instagram",
+              "tiktok",
+              "twitter",
+              "youtube"
+            ] and
+            all(.[];
+              (.id | test("^[a-z0-9-]+-[0-9a-f]{16}$")) and
+              (.url | type == "string" and length > 0) and
+              (.sources | type == "array" and length > 0) and
+              (.kinds | type == "array" and length > 0)
+            ) and
+            (map(.id) | length) == (map(.id) | unique | length) and
+            (map(.url) | length) == (map(.url) | unique | length)
+          ' >/dev/null
     '';
   };
 

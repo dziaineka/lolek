@@ -86,6 +86,30 @@ jobs:
       - name: Run check
         run: nix build .#get-test-cases -L
 
+  nixos-corpus:
+    name: NixOS upstream corpus test
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      NIX_CONFIG: system-features = benchmark big-parallel kvm nixos-test uid-range
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          android: true
+          dotnet: true
+          haskell: true
+          tool-cache: false
+
+      - name: Set up Nix
+        uses: ./.github/actions/setup-nix
+
+      - name: Run test
+        run: nix build .#checks.x86_64-linux.nixos-corpus -L
+
   nixos-module-url-allowlist:
     name: NixOS module URL allowlist test
     runs-on: ubuntu-latest

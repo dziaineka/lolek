@@ -23,7 +23,7 @@ let
   ytDlpTestSource = pkgs.yt-dlp.src;
   galleryDlTestSource = pkgs.gallery-dl.src;
   getTestCasesScript = root + "/scripts/get-test-cases.py";
-  version = "5.2.1";
+  version = "5.2.2";
   mkLolek =
     {
       curl ? pkgs.curl,

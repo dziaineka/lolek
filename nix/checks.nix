@@ -21,7 +21,7 @@ let
     makeWrapper = pkgs.makeBinaryWrapper;
     rebar3 = rebar3WithPlugins;
   };
-  version = "5.2.1";
+  version = "5.2.2";
   mixCheckSrc = lib.fileset.toSource {
     inherit root;
     fileset = lib.fileset.gitTracked root;

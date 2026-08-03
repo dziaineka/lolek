@@ -342,6 +342,184 @@ defmodule Lolek.ConverterTest do
   end
 
   @tag :tmp_dir
+  test "converts a heic image to jpeg", %{tmp_dir: tmp_dir} do
+    preserve_converter_env(fn ->
+      bin_dir = Path.join(tmp_dir, "bin")
+      file_path = Path.join([tmp_dir, "gallery", "001.heic"])
+      prepared_path = file_path <> ".telegram.jpg"
+      ffmpeg_args_file = Path.join(tmp_dir, "ffmpeg.args")
+
+      File.mkdir_p!(Path.dirname(file_path))
+      File.write!(file_path, "heic data")
+
+      put_fake_executable(bin_dir, "ffmpeg", """
+      output=
+      for arg do
+        printf '%s\\n' "$arg" >> "#{ffmpeg_args_file}"
+        output="$arg"
+      done
+      printf ok > "$output"
+      """)
+
+      put_compression_env()
+      Application.put_env(:lolek, :max_file_size_to_send_to_telegram, 100)
+
+      System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
+      {:ok, _apps} = Application.ensure_all_started(:erlexec)
+
+      assert {:ok, {:prepared_media, ^tmp_dir, [^prepared_path]}} =
+               Lolek.Converter.adapt_to_telegram({:downloaded_media, tmp_dir, [file_path]})
+
+      assert File.read!(prepared_path) == "ok"
+      refute File.exists?(file_path)
+
+      ffmpeg_args = File.read!(ffmpeg_args_file)
+      assert ffmpeg_args =~ "-i\n#{file_path}\n"
+      assert ffmpeg_args =~ "-q:v\n2\n"
+      assert ffmpeg_args =~ "#{prepared_path}\n"
+    end)
+  end
+
+  @tag :tmp_dir
+  test "converts webp and avif images to jpeg", %{tmp_dir: tmp_dir} do
+    preserve_converter_env(fn ->
+      bin_dir = Path.join(tmp_dir, "bin")
+      gallery_dir = Path.join(tmp_dir, "gallery")
+      File.mkdir_p!(gallery_dir)
+      webp_path = Path.join(gallery_dir, "01.webp")
+      avif_path = Path.join(gallery_dir, "02.avif")
+      prepared_webp = webp_path <> ".telegram.jpg"
+      prepared_avif = avif_path <> ".telegram.jpg"
+
+      File.write!(webp_path, "webp data")
+      File.write!(avif_path, "avif data")
+
+      put_fake_executable(bin_dir, "ffmpeg", """
+      output=
+      for arg do output="$arg"; done
+      printf ok > "$output"
+      """)
+
+      put_compression_env()
+      Application.put_env(:lolek, :max_file_size_to_send_to_telegram, 100)
+
+      System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
+      {:ok, _apps} = Application.ensure_all_started(:erlexec)
+
+      assert {:ok, {:prepared_media, ^tmp_dir, [^prepared_webp, ^prepared_avif]}} =
+               Lolek.Converter.adapt_to_telegram(
+                 {:downloaded_media, tmp_dir, [webp_path, avif_path]}
+               )
+
+      assert File.read!(prepared_webp) == "ok"
+      assert File.read!(prepared_avif) == "ok"
+      refute File.exists?(webp_path)
+      refute File.exists?(avif_path)
+    end)
+  end
+
+  @tag :tmp_dir
+  test "keeps png and jpeg images without invoking ffmpeg", %{tmp_dir: tmp_dir} do
+    preserve_converter_env(fn ->
+      bin_dir = Path.join(tmp_dir, "bin")
+      png_path = Path.join([tmp_dir, "gallery", "01.png"])
+      jpeg_path = Path.join([tmp_dir, "gallery", "02.jpeg"])
+
+      File.mkdir_p!(Path.dirname(png_path))
+      File.write!(png_path, "png data")
+      File.write!(jpeg_path, "jpeg data")
+      put_fake_executable(bin_dir, "ffmpeg", "exit 1")
+      put_compression_env()
+      Application.put_env(:lolek, :max_file_size_to_send_to_telegram, 100)
+
+      System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
+      {:ok, _apps} = Application.ensure_all_started(:erlexec)
+
+      assert {:ok, {:prepared_media, ^tmp_dir, [^png_path, ^jpeg_path]}} =
+               Lolek.Converter.adapt_to_telegram(
+                 {:downloaded_media, tmp_dir, [png_path, jpeg_path]}
+               )
+
+      assert File.read!(png_path) == "png data"
+      assert File.read!(jpeg_path) == "jpeg data"
+    end)
+  end
+
+  @tag :tmp_dir
+  test "keeps gif images without invoking ffmpeg", %{tmp_dir: tmp_dir} do
+    preserve_converter_env(fn ->
+      bin_dir = Path.join(tmp_dir, "bin")
+      file_path = Path.join([tmp_dir, "gallery", "01.gif"])
+
+      File.mkdir_p!(Path.dirname(file_path))
+      File.write!(file_path, "gif data")
+      put_fake_executable(bin_dir, "ffmpeg", "exit 1")
+      put_compression_env()
+      Application.put_env(:lolek, :max_file_size_to_send_to_telegram, 100)
+
+      System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
+      {:ok, _apps} = Application.ensure_all_started(:erlexec)
+
+      assert {:ok, {:prepared_media, ^tmp_dir, [^file_path]}} =
+               Lolek.Converter.adapt_to_telegram({:downloaded_media, tmp_dir, [file_path]})
+    end)
+  end
+
+  @tag :tmp_dir
+  test "omits image when ffmpeg conversion fails", %{tmp_dir: tmp_dir} do
+    preserve_converter_env(fn ->
+      bin_dir = Path.join(tmp_dir, "bin")
+      file_path = Path.join([tmp_dir, "gallery", "001.heic"])
+      prepared_path = file_path <> ".telegram.jpg"
+
+      File.mkdir_p!(Path.dirname(file_path))
+      File.write!(file_path, "heic data")
+      put_fake_executable(bin_dir, "ffmpeg", "exit 1")
+      put_compression_env()
+      Application.put_env(:lolek, :max_file_size_to_send_to_telegram, 100)
+
+      System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
+      {:ok, _apps} = Application.ensure_all_started(:erlexec)
+
+      assert {:error, :no_usable_media_files} =
+               Lolek.Converter.adapt_to_telegram({:downloaded_media, tmp_dir, [file_path]})
+
+      assert File.exists?(file_path)
+      refute File.exists?(prepared_path)
+    end)
+  end
+
+  @tag :tmp_dir
+  test "removes converted image output that remains above the upload limit", %{tmp_dir: tmp_dir} do
+    preserve_converter_env(fn ->
+      bin_dir = Path.join(tmp_dir, "bin")
+      file_path = Path.join([tmp_dir, "gallery", "001.heic"])
+      prepared_path = file_path <> ".telegram.jpg"
+
+      File.mkdir_p!(Path.dirname(file_path))
+      File.write!(file_path, "heic data")
+
+      put_fake_executable(bin_dir, "ffmpeg", """
+      output=
+      for arg do output="$arg"; done
+      printf toolarge > "$output"
+      """)
+
+      put_compression_env()
+      Application.put_env(:lolek, :max_file_size_to_send_to_telegram, 5)
+
+      System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
+      {:ok, _apps} = Application.ensure_all_started(:erlexec)
+
+      assert {:error, :no_usable_media_files} =
+               Lolek.Converter.adapt_to_telegram({:downloaded_media, tmp_dir, [file_path]})
+
+      assert File.exists?(file_path)
+      refute File.exists?(prepared_path)
+    end)
+  end
+
+  @tag :tmp_dir
   test "uses vaapi encoder when configured", %{tmp_dir: tmp_dir} do
     preserve_converter_env(fn ->
       bin_dir = Path.join(tmp_dir, "bin")

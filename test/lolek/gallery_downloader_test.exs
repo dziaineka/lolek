@@ -116,7 +116,7 @@ defmodule Lolek.GalleryDownloaderTest do
       preserve_env(fn ->
         Application.put_env(:lolek, :max_file_size_to_send_to_telegram, 1000)
 
-        for name <- ~w(a.jpg b.png c.gif d.webp e.avif) do
+        for name <- ~w(a.jpg b.png c.gif d.webp e.avif f.heic g.heif) do
           File.write!(Path.join(tmp_dir, name), "data")
         end
 
@@ -125,10 +125,10 @@ defmodule Lolek.GalleryDownloaderTest do
         end
 
         files = Lolek.GalleryDownloader.list_media_files(tmp_dir)
-        assert length(files) == 10
+        assert length(files) == 12
 
         assert Enum.all?(files, fn p ->
-                 Path.extname(p) in ~w(.jpg .png .gif .webp .avif .mp4 .mkv .webm .mov .m4v)
+                 Path.extname(p) in ~w(.jpg .png .gif .webp .avif .heic .heif .mp4 .mkv .webm .mov .m4v)
                end)
       end)
     end
@@ -198,8 +198,29 @@ defmodule Lolek.GalleryDownloaderTest do
     end
 
     test "returns false for image extensions" do
-      for ext <- ~w(.jpg .jpeg .png .gif .webp .avif) do
+      for ext <- ~w(.jpg .jpeg .png .gif .webp .avif .heic .heif) do
         refute Lolek.GalleryDownloader.video_file?("photo#{ext}"),
+               "expected false for #{ext}"
+      end
+    end
+  end
+
+  describe "image_file?/1" do
+    test "returns true for all supported image extensions" do
+      for ext <- ~w(.jpg .jpeg .png .gif .webp .avif .heic .heif) do
+        assert Lolek.GalleryDownloader.image_file?("photo#{ext}"),
+               "expected true for #{ext}"
+      end
+    end
+
+    test "is case-insensitive" do
+      assert Lolek.GalleryDownloader.image_file?("PHOTO.HEIC")
+      assert Lolek.GalleryDownloader.image_file?("Photo.Heif")
+    end
+
+    test "returns false for video extensions" do
+      for ext <- ~w(.mp4 .mkv .webm .mov .m4v) do
+        refute Lolek.GalleryDownloader.image_file?("video#{ext}"),
                "expected false for #{ext}"
       end
     end

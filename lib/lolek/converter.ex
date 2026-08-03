@@ -4,6 +4,7 @@ defmodule Lolek.Converter do
   """
   require Logger
   @compressed_name "compressed.mp4"
+  @telegram_photo_extensions ~w(.jpg .jpeg .png)
 
   @type encoding_strategy :: :compress | :convert
   @type h264_encoder :: :software | {:vaapi, String.t()} | {:qsv, String.t()}
@@ -40,12 +41,64 @@ defmodule Lolek.Converter do
 
   @spec prepare_media_file(String.t(), String.t()) :: {:ok, String.t()} | {:error, term()}
   defp prepare_media_file(cache_root, file_path) do
-    if Lolek.GalleryDownloader.video_file?(file_path) do
-      prepare_video(file_path, prepared_video_path(cache_root, file_path))
-    else
-      with :ok <- ensure_telegram_file_size(file_path) do
-        {:ok, file_path}
-      end
+    cond do
+      Lolek.GalleryDownloader.video_file?(file_path) ->
+        prepare_video(file_path, prepared_video_path(cache_root, file_path))
+
+      convertible_image?(file_path) ->
+        prepare_image(file_path, prepared_image_path(file_path))
+
+      true ->
+        with :ok <- ensure_telegram_file_size(file_path) do
+          {:ok, file_path}
+        end
+    end
+  end
+
+  @spec convertible_image?(String.t()) :: boolean()
+  defp convertible_image?(file_path) do
+    ext = file_path |> Path.extname() |> String.downcase()
+
+    Lolek.GalleryDownloader.image_file?(file_path) and
+      ext not in @telegram_photo_extensions and ext != ".gif"
+  end
+
+  @spec prepared_image_path(String.t()) :: String.t()
+  defp prepared_image_path(file_path) do
+    file_path <> ".telegram.jpg"
+  end
+
+  @spec prepare_image(String.t(), String.t()) :: {:ok, String.t()} | {:error, term()}
+  defp prepare_image(file_path, prepared_path) do
+    with :ok <- convert_image(file_path, prepared_path),
+         :ok <- remove_encoded_source(file_path, prepared_path) do
+      {:ok, prepared_path}
+    end
+  end
+
+  @spec convert_image(String.t(), String.t()) :: :ok | {:error, term()}
+  defp convert_image(file_path, prepared_path) do
+    args = ["-y", "-i", file_path, "-q:v", "2", prepared_path]
+
+    case Lolek.Command.run("ffmpeg", args,
+           timeout: command_timeout(:convert_command_timeout_seconds)
+         ) do
+      {:ok, result} ->
+        Logger.info("Converted image to JPEG: #{inspect(result)}")
+
+        case ensure_telegram_file_size(prepared_path) do
+          :ok ->
+            :ok
+
+          {:error, _reason} = error ->
+            File.rm(prepared_path)
+            error
+        end
+
+      {:error, error} ->
+        Logger.error("Error when converting image: #{inspect(error)}")
+        File.rm(prepared_path)
+        {:error, error}
     end
   end
 

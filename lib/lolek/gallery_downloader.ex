@@ -3,7 +3,7 @@ defmodule Lolek.GalleryDownloader do
   Downloads images and GIFs from social media URLs using gallery-dl.
   """
 
-  @image_extensions ~w(.jpg .jpeg .png .gif .webp .avif)
+  @image_extensions ~w(.jpg .jpeg .png .gif .webp .avif .heic .heif)
   @video_extensions ~w(.mp4 .mkv .webm .mov .m4v)
 
   @spec download(String.t(), String.t()) :: {:ok, [String.t()]} | {:error, term()}
@@ -108,7 +108,7 @@ defmodule Lolek.GalleryDownloader do
   end
 
   @spec image_file?(String.t()) :: boolean()
-  defp image_file?(path) do
+  def image_file?(path) do
     path |> Path.extname() |> String.downcase() |> then(&(&1 in @image_extensions))
   end
 

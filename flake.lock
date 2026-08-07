@@ -2,11 +2,11 @@
   "nodes": {
     "nixpkgs": {
       "locked": {
-        "lastModified": 1780088794,
-        "narHash": "sha256-xlx04b4gmZ2V238QadlxYoDO7h1roqXAnjBJQquedPI=",
+        "lastModified": 1785682367,
+        "narHash": "sha256-SYVGEhF/PUNDvmkRjZ+cXqkqDo1n6nOuAYHCdIzSAbM=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "257de32294e74ce9f3693e34a360401ccaa11011",
+        "rev": "586dfe60dafc66030196fc64574f9b4e9d2e1d4a",
         "type": "github"
       },
       "original": {
@@ -25,11 +25,11 @@
     "telegym": {
       "flake": false,
       "locked": {
-        "lastModified": 1785591747,
-        "narHash": "sha256-jqBalzhQu4ULjuin3K/wCUBEBTEJKVPQ6cNvw42bWTo=",
+        "lastModified": 1785679772,
+        "narHash": "sha256-det9D0vZS2iyNfHYsH2MwO3SyUPV6YDzVSNbuplpWe8=",
         "owner": "booxter",
         "repo": "telegym",
-        "rev": "6cc55d261e4dc5b9dd7e7f56f0d81eaaef52744c",
+        "rev": "74f7ab5ffb2e530e7a5d36ea575f4cad3e1c6a64",
         "type": "github"
       },
       "original": {

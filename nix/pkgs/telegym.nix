@@ -6,7 +6,7 @@
 
 pkgs.buildGoModule {
   pname = "telegym";
-  version = "0.1.0-unstable-2026-08-01";
+  version = "0.1.0-unstable-2026-08-02";
   inherit src;
 
   vendorHash = "sha256-ZhVfO2FPHpEHcptSJI3l6P0QVDBub7CPEFQB2GhD0eI=";

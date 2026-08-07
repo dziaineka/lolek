@@ -5,9 +5,8 @@ import argparse
 import hashlib
 import json
 import os
-from pathlib import Path
 import sys
-
+from pathlib import Path
 
 GALLERY_DL_MEDIA = {
     ("tiktok", "post"): "image_or_video",
@@ -58,8 +57,9 @@ def load_upstreams():
     os.environ.setdefault("YTDLP_NO_LAZY_EXTRACTORS", "true")
 
     try:
-        from test import results as gallery_dl_results
         from yt_dlp.extractor import gen_extractor_classes
+
+        from test import results as gallery_dl_results
     except ImportError as error:
         raise SystemExit(
             "Unable to import upstream tests. Pass --gallery-dl-source and "

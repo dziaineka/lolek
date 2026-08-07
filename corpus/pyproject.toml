@@ -1,0 +1,76 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lolek-corpus"
+version = "0.1.0"
+description = "Exercise Lolek against live upstream extractor corpus cases"
+readme = "README.md"
+requires-python = ">=3.13"
+license = "MIT"
+authors = [
+  { name = "Lolek contributors" },
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.13",
+  "Typing :: Typed",
+]
+dependencies = [
+  "pydantic>=2.12,<3",
+]
+
+[project.optional-dependencies]
+dev = [
+  "ruff>=0.15",
+  "ty>=0.0.38",
+]
+
+[project.scripts]
+live-corpus = "lolek_corpus.cli:cli"
+
+[project.urls]
+Repository = "https://github.com/skaborik/lolek_bot"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+lolek_corpus = ["data/*.json", "py.typed"]
+
+[tool.ruff]
+target-version = "py313"
+
+[tool.ruff.lint]
+select = [
+  "A001",
+  "A002",
+  "ANN",
+  "ARG",
+  "B",
+  "C4",
+  "E4",
+  "E7",
+  "E9",
+  "F",
+  "I",
+  "PERF",
+  "PIE",
+  "RET",
+  "RUF",
+  "SIM",
+  "UP",
+]
+ignore = [
+  # JSON and subprocess responses are dynamic at their validation boundary.
+  "ANN401",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*.py" = ["ANN"]

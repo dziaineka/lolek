@@ -2,7 +2,6 @@ import os
 from enum import Enum
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-
 HOST = os.environ["LOLEK_MEDIA_ORIGIN_HOST"]
 PORT = int(os.environ["LOLEK_MEDIA_ORIGIN_PORT"])
 
@@ -58,9 +57,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Accept-Ranges", "bytes")
         self.send_header("Content-Length", str(length))
         if status == 206:
-            self.send_header(
-                "Content-Range", "bytes %d-%d/%d" % (start, end, file_size)
-            )
+            self.send_header("Content-Range", f"bytes {start}-{end}/{file_size}")
         self.end_headers()
 
         if include_body:
@@ -85,7 +82,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.serve_path(True)
 
-    def log_message(self, format, *args):
+    def log_message(self, _format, *_args):
         return
 
 

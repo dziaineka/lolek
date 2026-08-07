@@ -10,7 +10,7 @@ pkgs.writeShellApplication {
   ];
   text = ''
     treefmt "$@"
+    git ls-files -z -- '*.py' '**/*.py' | xargs -0 -r ruff check --fix
     git ls-files -z -- '*.py' '**/*.py' | xargs -0 -r ruff format
-    git ls-files -z -- '*.py' '**/*.py' | xargs -0 -r ruff check
   '';
 }

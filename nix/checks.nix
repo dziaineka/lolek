@@ -1,6 +1,7 @@
 {
   pkgs,
   root,
+  corpus,
   module ? null,
   package ? null,
   telegym ? null,
@@ -9,26 +10,16 @@
 
 let
   lib = pkgs.lib;
-  beamPackages = pkgs.beam.packages.erlang_29;
-  elixir = beamPackages.elixir_1_20;
-  rebar3WithPlugins = beamPackages.rebar3WithPlugins {
-    globalPlugins = [ beamPackages.pc ];
-  };
-  fetchMixDeps = beamPackages.fetchMixDeps.override {
-    rebar3 = rebar3WithPlugins;
-  };
-  mixRelease = beamPackages.mixRelease.override {
-    makeWrapper = pkgs.makeBinaryWrapper;
-    rebar3 = rebar3WithPlugins;
-  };
+  mixBuilders = import ./pkgs/mix-builders.nix { inherit pkgs; };
+  inherit (mixBuilders) fetchMixDeps mixRelease;
   version = "5.2.2";
-  mixCheckSrc = lib.fileset.toSource {
+  checkSrc = lib.fileset.toSource {
     inherit root;
     fileset = lib.fileset.gitTracked root;
   };
   mixCheckDeps = fetchMixDeps {
     pname = "lolek-mix-check-deps";
-    inherit version elixir;
+    inherit version;
     src = root;
     mixEnv = "dev";
     hash = "sha256-NckDnRTaNZufkNOdrF9KRFuZE1mEr5s2UpCMyvltXU0=";
@@ -37,8 +28,8 @@ in
 {
   mix-check = mixRelease {
     pname = "lolek-mix-check";
-    inherit version elixir;
-    src = mixCheckSrc;
+    inherit version;
+    src = checkSrc;
     mixEnv = "dev";
     mixFodDeps = mixCheckDeps;
     erlangDeterministicBuilds = false;
@@ -65,6 +56,34 @@ in
       runHook postInstall
     '';
   };
+
+  python-typecheck =
+    pkgs.runCommand "lolek-python-typecheck"
+      {
+        nativeBuildInputs = [
+          corpus
+          pkgs.ty
+        ];
+      }
+      ''
+        cd ${checkSrc}/corpus
+        ty check src tests
+        touch "$out"
+      '';
+
+  python-lint =
+    pkgs.runCommand "lolek-python-lint"
+      {
+        nativeBuildInputs = [ pkgs.ruff ];
+      }
+      ''
+        cd ${checkSrc}
+        # checkSrc is a read-only Nix store path, so Ruff cannot create its
+        # usual .ruff_cache directory alongside the sources.
+        ruff format --check --no-cache .
+        ruff check --no-cache .
+        touch "$out"
+      '';
 }
 // pkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
   nixos-module-url-allowlist = import ./tests/module-url-allowlist.nix {

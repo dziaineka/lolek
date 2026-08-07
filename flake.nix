@@ -67,18 +67,29 @@
           root = ./.;
           module = self.nixosModules.default;
           package = self.packages.${system}.lolek;
+          corpus = self.packages.${system}.corpus;
           telegym = self.packages.${system}.telegym;
           testCases = self.packages.${system}.get-test-cases;
         }
       );
 
-      apps = forAllSystems (system: {
-        get-test-cases = {
-          type = "app";
-          program = nixpkgs.lib.getExe self.packages.${system}.get-test-cases;
-          meta.description = "List media-producing upstream extractor test cases";
-        };
-      });
+      apps = forAllSystems (
+        system:
+        let
+          mkApp = name: description: {
+            type = "app";
+            program = nixpkgs.lib.getExe self.packages.${system}.${name};
+            meta = { inherit description; };
+          };
+        in
+        {
+          get-test-cases = mkApp "get-test-cases" "List upstream extractor test cases";
+          live-corpus = mkApp "live-corpus" "Test Lolek through live media services";
+          live-corpus-check = mkApp "live-corpus-check" "Detect live yt-dlp regressions";
+          live-corpus-gallery = mkApp "live-corpus-gallery" "Test live gallery-dl media";
+          live-corpus-gallery-check = mkApp "live-corpus-gallery-check" "Detect live gallery-dl regressions";
+        }
+      );
 
       formatter = forAllSystems (
         system:

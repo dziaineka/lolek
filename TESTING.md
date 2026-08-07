@@ -59,3 +59,56 @@ This test validates corpus recognition and Lolek's complete media pipeline
 without external network access. It deliberately does not validate that the
 real upstream extractors can still download the live URLs; that remains a
 separate, network-dependent concern.
+
+## Live corpus tests
+
+Run selected upstream cases through the packaged bot and Telegym while using
+the real `gallery-dl`, `yt-dlp`, and `ffmpeg`:
+
+```console
+nix run .#live-corpus -- --case coub-f7f8bd840092a5ad
+```
+
+Use the check apps for complete regression sweeps:
+
+```console
+nix run .#live-corpus-check -- --report no-gallery-report.json
+nix run .#live-corpus-gallery-check -- --report gallery-report.json
+```
+
+The `no-gallery` profile disables gallery downloads and covers yt-dlp cases
+plus default allowlist rejections. The `gallery` profile enables gallery-dl
+with yt-dlp fallback and covers the full reviewed corpus. Both profiles use a
+temporary home directory, supply no cookies or ambient downloader
+configuration, and exercise Lolek's default settings.
+
+A full gallery check takes roughly 10 minutes with the stability-oriented
+default pacing. The runner interleaves services and applies service-local
+delays with deterministic jitter. Use repeatable `--service` or `--case`
+filters and `--limit` for a smaller sweep. Run
+`nix run .#live-corpus -- --help` for all controls.
+
+Bundled profile policies record exact successful media shapes and reviewed
+anonymous extractor failures. The check apps retry an unexpected result once
+before confirming it. Known failures and intermittent results remain
+non-fatal; repeatable regressions and inconclusive runs return nonzero.
+
+For each successful first pass, the runner validates the Telegym capture with
+`ffprobe`, its size and Telegram-compatible H.264/MP4 shape, and Lolek's cache
+manifest. It then injects the same URL again and requires reuse of the same
+Telegram file ID without another upload. Between cases it clears Telegym's
+captured messages and files and removes only that case's temporary Lolek
+cache. A host lock prevents concurrent live sweeps.
+
+Use `--report path.json` for a structured result report. Process logs and
+temporary downloads are removed on exit unless `--keep-work-dir` is passed.
+The `Live corpus` CI job runs both profiles sequentially and uploads their
+JSON reports.
+
+The runner is also an independent Python project under `corpus/`. Its
+[README](corpus/README.md) documents locked `uv` development and conventional
+editable `pip` installation. Nix builds the same wheel with:
+
+```console
+nix build .#corpus
+```

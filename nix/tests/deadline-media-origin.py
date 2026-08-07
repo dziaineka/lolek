@@ -3,7 +3,6 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-
 HOST = os.environ["LOLEK_DEADLINE_ORIGIN_HOST"]
 PORT = int(os.environ["LOLEK_DEADLINE_ORIGIN_PORT"])
 EVENTS_FILE = os.environ["LOLEK_DEADLINE_ORIGIN_EVENTS_FILE"]
@@ -15,9 +14,8 @@ os.makedirs(os.path.dirname(EVENTS_FILE), exist_ok=True)
 
 
 def log_event(message):
-    with lock:
-        with open(EVENTS_FILE, "a", encoding="utf-8") as log:
-            log.write("%s\n" % message)
+    with lock, open(EVENTS_FILE, "a", encoding="utf-8") as log:
+        log.write(f"{message}\n")
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -51,7 +49,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
 
-    def log_message(self, format, *args):
+    def log_message(self, _format, *_args):
         return
 
 

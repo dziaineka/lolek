@@ -1,11 +1,10 @@
 import json
 import mimetypes
 import os
-from pathlib import Path
 import threading
-from urllib.parse import unquote, urlparse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-
+from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 HOST = os.environ["LOLEK_TEST_CORPUS_ORIGIN_HOST"]
 PORT = int(os.environ["LOLEK_TEST_CORPUS_ORIGIN_PORT"])
@@ -81,7 +80,7 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def log_message(self, format, *args):
+    def log_message(self, _format, *_args):
         return
 
 

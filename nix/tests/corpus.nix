@@ -155,19 +155,13 @@ pkgs.testers.nixosTest {
     import collections
     import shlex
 
-    excluded_case_ids = {
-        "instagram-0f907fb33f1910ed",  # /dm/p/ URL
-        "instagram-1d7be7be57ab8dc9",  # /s/ highlight URL
-        "instagram-a75131d6ab55ab49",  # /s/ highlight URL with query
-        "instagram-8c9bbcf0768a8c07",  # /share/ URL
-        "instagram-db21962c060f473c",  # /share/p/ URL
-        "instagram-1c767dcb890c6e7c",  # /share/reel/ URL
-        "tiktok-55f87b26f24fb0b0",  # empty creator URL
-        "tiktok-d002a92595909a47",  # tiktokv.com URL
-        "tiktok-46edf7e225c62877",  # tiktokv.com URL
-        "tiktok-1537d1ac8eebe333",  # tiktokv.com URL
-        "tiktok-b574d67252886ad2",  # tiktokv.com URL
-    }
+    expectations = json.loads(
+        open(
+            "${../../corpus/src/lolek_corpus/data/expectations.json}",
+            encoding="utf-8",
+        ).read()
+    )
+    excluded_case_ids = set(expectations["default_rejected"])
 
     def shell_quote(value):
         return shlex.quote(value)

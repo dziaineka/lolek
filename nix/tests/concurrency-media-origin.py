@@ -3,7 +3,6 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-
 HOST = os.environ["LOLEK_CONCURRENCY_ORIGIN_HOST"]
 PORT = int(os.environ["LOLEK_CONCURRENCY_ORIGIN_PORT"])
 EVENTS_FILE = os.environ["LOLEK_CONCURRENCY_ORIGIN_EVENTS_FILE"]
@@ -24,7 +23,7 @@ MEDIA_NAMES = [
     "rate-d",
     "rate-e",
 ]
-MEDIA_BY_PATH = {"/media/%s.mp4" % name: name for name in MEDIA_NAMES}
+MEDIA_BY_PATH = {f"/media/{name}.mp4": name for name in MEDIA_NAMES}
 
 
 lock = threading.Lock()
@@ -35,9 +34,8 @@ os.makedirs(CONTROL_DIR, exist_ok=True)
 
 
 def log_event(message):
-    with lock:
-        with open(EVENTS_FILE, "a", encoding="utf-8") as log:
-            log.write("%s\n" % message)
+    with lock, open(EVENTS_FILE, "a", encoding="utf-8") as log:
+        log.write(f"{message}\n")
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -59,16 +57,16 @@ class Handler(BaseHTTPRequestHandler):
                 should_log_start = True
 
         if should_log_start:
-            log_event("media-start %s" % name)
+            log_event(f"media-start {name}")
 
-        release_file = os.path.join(CONTROL_DIR, "release-%s" % name)
+        release_file = os.path.join(CONTROL_DIR, f"release-{name}")
         while not os.path.exists(release_file):
             time.sleep(0.1)
 
         with open(MEDIA_FILE, "rb") as media_file:
             self.wfile.write(media_file.read())
 
-        log_event("media-finish %s" % name)
+        log_event(f"media-finish {name}")
 
     def do_HEAD(self):
         name = MEDIA_BY_PATH.get(self.path)
@@ -86,7 +84,7 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self.serve_media(name, True)
 
-    def log_message(self, format, *args):
+    def log_message(self, _format, *_args):
         return
 
 

@@ -2,7 +2,6 @@ import hashlib
 import json
 from urllib.parse import quote
 
-
 IMAGE_FIXTURES = (
     "landscape.jpg",
     "portrait.jpg",
@@ -64,8 +63,7 @@ def fixture_kind(fixture):
 
 
 def fixture_url(origin, case_id, fixture):
-    return "%s/media/%s/%s" % (
-        origin.rstrip("/"),
-        quote(case_id, safe=""),
-        quote(fixture, safe=""),
+    return (
+        f"{origin.rstrip('/')}/media/"
+        f"{quote(case_id, safe='')}/{quote(fixture, safe='')}"
     )

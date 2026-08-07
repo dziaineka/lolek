@@ -1,11 +1,10 @@
 import json
 import os
-from pathlib import Path
 import sys
+from pathlib import Path
 from urllib.request import Request, urlopen
 
 import corpus_test_common
-
 
 CORPUS_PATH = os.environ["LOLEK_TEST_CORPUS_PATH"]
 ORIGIN = os.environ["LOLEK_TEST_CORPUS_ORIGIN"]

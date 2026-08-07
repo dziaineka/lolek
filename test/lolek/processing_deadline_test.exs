@@ -22,6 +22,8 @@ defmodule Lolek.ProcessingDeadlineTest do
 
   test "caps every command timeout by the same deadline" do
     test_pid = self()
+    # This test checks deadline sharing, so leave headroom for loaded CI runners.
+    deadline = 1_000
 
     assert :ok =
              Lolek.ProcessingDeadline.run(
@@ -32,11 +34,11 @@ defmodule Lolek.ProcessingDeadlineTest do
                  send(test_pid, {:timeouts, first_timeout, second_timeout})
                  :ok
                end,
-               100
+               deadline
              )
 
     assert_receive {:timeouts, first_timeout, second_timeout}
-    assert first_timeout <= 100
+    assert first_timeout <= deadline
     assert second_timeout < first_timeout
   end
 

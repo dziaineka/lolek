@@ -1,0 +1,7 @@
+extend = "corpus/pyproject.toml"
+
+[lint.extend-per-file-ignores]
+# Small fixture entry points and the extractor script are linted but are not
+# part of the typed live runner API.
+"nix/tests/*.py" = ["ANN"]
+"scripts/get-test-cases.py" = ["ANN"]

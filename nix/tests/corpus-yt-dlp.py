@@ -1,11 +1,10 @@
 import json
 import os
-from pathlib import Path
 import sys
+from pathlib import Path
 from urllib.request import Request, urlopen
 
 import corpus_test_common
-
 
 CORPUS_PATH = os.environ["LOLEK_TEST_CORPUS_PATH"]
 ORIGIN = os.environ["LOLEK_TEST_CORPUS_ORIGIN"]
@@ -55,7 +54,7 @@ def main():
 
     if "--simulate" in arguments:
         post_event({"type": "formats", "case_id": case["id"]})
-        print('[{"format_id":"corpus-fixture"}]')
+        print(json.dumps([{"format_id": "corpus-fixture"}]))
         return
 
     case_scenario = corpus_test_common.scenario(case)

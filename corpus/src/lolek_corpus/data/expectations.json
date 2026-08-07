@@ -1,0 +1,1410 @@
+{
+  "schema_version": 2,
+  "default_rejected": [
+    "instagram-0f907fb33f1910ed",
+    "instagram-1d7be7be57ab8dc9",
+    "instagram-a75131d6ab55ab49",
+    "instagram-8c9bbcf0768a8c07",
+    "instagram-db21962c060f473c",
+    "instagram-1c767dcb890c6e7c",
+    "tiktok-55f87b26f24fb0b0",
+    "tiktok-d002a92595909a47",
+    "tiktok-46edf7e225c62877",
+    "tiktok-1537d1ac8eebe333",
+    "tiktok-b574d67252886ad2"
+  ],
+  "profiles": {
+    "no-gallery": {
+      "cases": {
+        "facebook-25abdbde5e20e670": {
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "authentication_required"
+            }
+          ],
+          "reason": "Facebook currently requires authentication for this post"
+        },
+        "facebook-327746f8eb4fd5fa": {
+          "outcome": "default_limit",
+          "expected": {
+            "terminal_result": "error",
+            "media_count": 0,
+            "failure_reason": "download_output_missing"
+          },
+          "reason": "yt-dlp emits no file when all formats exceed the default download limit"
+        },
+        "facebook-4d412904bd0fe011": {
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "authentication_required"
+            }
+          ],
+          "reason": "Facebook currently requires authentication for this post"
+        },
+        "facebook-5d9f80f4934cba51": {
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "extractor_error"
+            }
+          ],
+          "reason": "yt-dlp currently cannot parse this Facebook event"
+        },
+        "facebook-e39d8036acfe7518": {
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "extractor_error"
+            }
+          ],
+          "reason": "yt-dlp currently cannot parse this Facebook video"
+        },
+        "instagram-2506a66b248676ef": {
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "authentication_required"
+            }
+          ],
+          "reason": "Instagram currently returns an empty anonymous media response"
+        },
+        "tiktok-4c8cc7f1d9b9775f": {
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "stale_redirect"
+            }
+          ],
+          "reason": "The short URL currently redirects to the TikTok home page"
+        },
+        "tiktok-5ba7cbd6d3ceeb0c": {
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "access_blocked"
+            }
+          ],
+          "reason": "TikTok currently reports this post blocked for the runner IP"
+        },
+        "tiktok-b2cdd033f5d14d52": {
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "access_blocked"
+            }
+          ],
+          "reason": "TikTok currently reports this post blocked for the runner IP"
+        },
+        "tiktok-d07b06630b0ff4e7": {
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "access_blocked"
+            }
+          ],
+          "reason": "TikTok currently reports this post blocked for the runner IP"
+        },
+        "tiktok-fde389a66730fa73": {
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "stale_redirect"
+            }
+          ],
+          "reason": "The short URL currently redirects to the TikTok home page"
+        },
+        "twitter-00c801534e901d98": {
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "stale_media"
+            }
+          ],
+          "reason": "The linked Amplify media host currently returns Domain Not Found"
+        },
+        "twitter-3d3aac28bad9f97c": {
+          "outcome": "default_limit",
+          "expected": {
+            "terminal_result": "no_usable_media_files",
+            "media_count": 0,
+            "failure_reason": "default_media_limit"
+          },
+          "reason": "The downloaded video exceeds the default media preparation limits"
+        }
+      }
+    },
+    "gallery": {
+      "cases": {
+        "coub-f7f8bd840092a5ad": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "video"
+            ]
+          }
+        },
+        "facebook-095cf8ec5124b11e": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "stale_media"
+            }
+          ],
+          "reason": "The referenced upstream media is currently unavailable"
+        },
+        "facebook-2125a6de401b0b83": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "photo"
+            ]
+          }
+        },
+        "facebook-25abdbde5e20e670": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "authentication_required"
+            }
+          ],
+          "reason": "Anonymous access currently requires authentication"
+        },
+        "facebook-25c5610453c40631": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "photo"
+            ]
+          }
+        },
+        "facebook-2fcc9df7797ecf2c": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "video"
+            ]
+          }
+        },
+        "facebook-2fd1eb1612781d3a": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "stale_media"
+            }
+          ],
+          "reason": "The referenced upstream media is currently unavailable"
+        },
+        "facebook-327746f8eb4fd5fa": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "download_output_missing"
+            }
+          ],
+          "reason": "The extractor currently produces no downloadable output"
+        },
+        "facebook-443030da0191cfe2": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "photo"
+            ]
+          }
+        },
+        "facebook-4d412904bd0fe011": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "authentication_required"
+            }
+          ],
+          "reason": "Anonymous access currently requires authentication"
+        },
+        "facebook-56f79ab481b1ee5b": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "video"
+            ]
+          }
+        },
+        "facebook-5d9f80f4934cba51": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "extractor_error"
+            }
+          ],
+          "reason": "The anonymous extractor currently fails to parse this post"
+        },
+        "facebook-80e81e6fcbf0efb2": {
+          "outcome": "default_limit",
+          "expected": {
+            "terminal_result": "no_usable_media_files",
+            "media_count": 0,
+            "failure_reason": "default_media_limit"
+          },
+          "reason": "The media exceeds the default preparation limits"
+        },
+        "facebook-841fd6ad15e6e762": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "photo"
+            ]
+          }
+        },
+        "facebook-9ba03fb4230eed25": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "photo"
+            ]
+          }
+        },
+        "facebook-9d29bf5ffc63c2ff": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "video"
+            ]
+          }
+        },
+        "facebook-9d2d38b9fa8ff466": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "photo"
+            ]
+          }
+        },
+        "facebook-b918eeb7e502695b": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "photo"
+            ]
+          }
+        },
+        "facebook-ca1bf389a2890c26": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "photo"
+            ]
+          }
+        },
+        "facebook-e39d8036acfe7518": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "extractor_error"
+            }
+          ],
+          "reason": "The anonymous extractor currently fails to parse this post"
+        },
+        "facebook-e460dd8e05dd31ce": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "photo"
+            ]
+          }
+        },
+        "facebook-e4a6f53173c46279": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "video"
+            ]
+          }
+        },
+        "instagram-0c005ed9af734a1b": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "authentication_required"
+            }
+          ],
+          "reason": "Anonymous access currently requires authentication"
+        },
+        "instagram-119fbec1ce31f889": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "video"
+            ]
+          }
+        },
+        "instagram-1940a5d35e6789be": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "download_output_missing"
+            },
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "authentication_required"
+            }
+          ],
+          "reason": "Anonymous extractors currently require authentication or produce no downloadable output"
+        },
+        "instagram-2506a66b248676ef": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "authentication_required"
+            }
+          ],
+          "reason": "Anonymous access currently requires authentication"
+        },
+        "instagram-3ce70dc144914870": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "authentication_required"
+            }
+          ],
+          "reason": "Anonymous access currently requires authentication"
+        },
+        "instagram-9124d887ad7895f3": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "video"
+            ]
+          }
+        },
+        "instagram-92254e3d17afdba7": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "video"
+            ]
+          }
+        },
+        "instagram-935d6c5e55cae793": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "authentication_required"
+            }
+          ],
+          "reason": "Anonymous access currently requires authentication"
+        },
+        "instagram-a6fba17b7bc008ef": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "video"
+            ]
+          }
+        },
+        "instagram-b4717e481d6f4ff3": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "video"
+            ]
+          }
+        },
+        "instagram-d151b46ac82563d5": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "no_video_formats",
+              "media_count": 0,
+              "failure_reason": "authentication_required"
+            }
+          ],
+          "reason": "Anonymous access currently requires authentication"
+        },
+        "instagram-e951cbf5a8bb85d7": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "authentication_required"
+            }
+          ],
+          "reason": "Anonymous access currently requires authentication"
+        },
+        "instagram-eac1fa9cefefa9fc": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "no_video_formats",
+              "media_count": 0,
+              "failure_reason": "authentication_required"
+            }
+          ],
+          "reason": "Anonymous access currently requires authentication"
+        },
+        "instagram-ff5bc6deb5aef077": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "video"
+            ]
+          }
+        },
+        "tiktok-09628deb377eea87": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 16,
+            "media_kinds": [
+              "photo",
+              "photo",
+              "photo",
+              "photo",
+              "photo",
+              "photo",
+              "photo",
+              "photo",
+              "photo",
+              "photo",
+              "photo",
+              "photo",
+              "photo",
+              "photo",
+              "photo",
+              "photo"
+            ]
+          }
+        },
+        "tiktok-0e6d19b2303b3314": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "stale_redirect"
+            }
+          ],
+          "reason": "The short URL currently redirects to the TikTok home page"
+        },
+        "tiktok-18a7f64d8b7f8f0e": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 16,
+            "media_kinds": [
+              "photo",
+              "photo",
+              "photo",
+              "photo",
+              "photo",
+              "photo",
+              "photo",
+              "photo",
+              "photo",
+              "photo",
+              "photo",
+              "photo",
+              "photo",
+              "photo",
+              "photo",
+              "photo"
+            ]
+          }
+        },
+        "tiktok-2750b93f196cc74b": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 2,
+            "media_kinds": [
+              "photo",
+              "photo"
+            ]
+          }
+        },
+        "tiktok-3365d79782267c3b": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "stale_redirect"
+            }
+          ],
+          "reason": "The short URL currently redirects to the TikTok home page"
+        },
+        "tiktok-40b368a1c94e973b": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "stale_redirect"
+            }
+          ],
+          "reason": "The short URL currently redirects to the TikTok home page"
+        },
+        "tiktok-4c8cc7f1d9b9775f": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "stale_redirect"
+            }
+          ],
+          "reason": "The short URL currently redirects to the TikTok home page"
+        },
+        "tiktok-4de8c81ca5c36d39": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "video"
+            ]
+          }
+        },
+        "tiktok-5ba7cbd6d3ceeb0c": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "access_blocked"
+            }
+          ],
+          "reason": "TikTok currently blocks the runner IP for this post"
+        },
+        "tiktok-671a5a892694b1c4": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "video"
+            ]
+          }
+        },
+        "tiktok-77fbe298d2acf317": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "stale_redirect"
+            }
+          ],
+          "reason": "The short URL currently redirects to the TikTok home page"
+        },
+        "tiktok-871e59a50422520e": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "access_blocked"
+            }
+          ],
+          "reason": "TikTok currently blocks the runner IP for this post"
+        },
+        "tiktok-8dd11d09b6490509": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "stale_redirect"
+            }
+          ],
+          "reason": "The short URL currently redirects to the TikTok home page"
+        },
+        "tiktok-aae3c76960ff3ebc": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "video"
+            ]
+          }
+        },
+        "tiktok-b2cdd033f5d14d52": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "access_blocked"
+            }
+          ],
+          "reason": "TikTok currently blocks the runner IP for this post"
+        },
+        "tiktok-bf482a11024012ce": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "video"
+            ]
+          }
+        },
+        "tiktok-c75b9e8927149806": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "video"
+            ]
+          }
+        },
+        "tiktok-ce5191818b0bfca0": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 2,
+            "media_kinds": [
+              "photo",
+              "photo"
+            ]
+          }
+        },
+        "tiktok-d07b06630b0ff4e7": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "access_blocked"
+            }
+          ],
+          "reason": "TikTok currently blocks the runner IP for this post"
+        },
+        "tiktok-d0b227ee2c00c9a9": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "stale_redirect"
+            }
+          ],
+          "reason": "The short URL currently redirects to the TikTok home page"
+        },
+        "tiktok-dc7f4076b4060c60": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "video"
+            ]
+          }
+        },
+        "tiktok-e256f2dcb5d849d5": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "photo"
+            ]
+          }
+        },
+        "tiktok-f7547a945fb07aec": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "photo"
+            ]
+          }
+        },
+        "tiktok-fde389a66730fa73": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "stale_redirect"
+            }
+          ],
+          "reason": "The short URL currently redirects to the TikTok home page"
+        },
+        "twitter-00c801534e901d98": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "stale_media"
+            }
+          ],
+          "reason": "The referenced upstream media is currently unavailable"
+        },
+        "twitter-0a908ddb932f1561": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "video"
+            ]
+          }
+        },
+        "twitter-0cb70eefe4209022": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "video"
+            ]
+          }
+        },
+        "twitter-0fd1b92ded574314": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "no_video_formats",
+              "media_count": 0,
+              "failure_reason": "no_video_formats"
+            }
+          ],
+          "reason": "Neither extractor currently exposes usable media formats"
+        },
+        "twitter-141d7f07267bce49": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "video"
+            ]
+          }
+        },
+        "twitter-15dc45b9432b7a46": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "video"
+            ]
+          }
+        },
+        "twitter-1ac00be39eabd5d1": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "video"
+            ]
+          }
+        },
+        "twitter-1c8936cd300b4126": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "photo"
+            ]
+          }
+        },
+        "twitter-1f10efb962c2424f": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "no_video_formats",
+              "media_count": 0,
+              "failure_reason": "no_video_formats"
+            }
+          ],
+          "reason": "Neither extractor currently exposes usable media formats"
+        },
+        "twitter-255b4314407e3a3e": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "video"
+            ]
+          }
+        },
+        "twitter-28936fcb40f2f9d1": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "photo"
+            ]
+          }
+        },
+        "twitter-2b3eb52a30b7d703": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "no_video_formats",
+              "media_count": 0,
+              "failure_reason": "no_video_formats"
+            }
+          ],
+          "reason": "Neither extractor currently exposes usable media formats"
+        },
+        "twitter-2c652349f706f12b": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "video"
+            ]
+          }
+        },
+        "twitter-3c0d89a5319eb9ec": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 2,
+            "media_kinds": [
+              "video",
+              "video"
+            ]
+          }
+        },
+        "twitter-3d3aac28bad9f97c": {
+          "outcome": "default_limit",
+          "expected": {
+            "terminal_result": "no_usable_media_files",
+            "media_count": 0,
+            "failure_reason": "default_media_limit"
+          },
+          "reason": "The media exceeds the default preparation limits"
+        },
+        "twitter-4140c74f779caf10": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 2,
+            "media_kinds": [
+              "photo",
+              "video"
+            ]
+          }
+        },
+        "twitter-4a4b4651e5e76af4": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "video"
+            ]
+          }
+        },
+        "twitter-5004359b2627cd90": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "stale_media"
+            }
+          ],
+          "reason": "The referenced upstream media is currently unavailable"
+        },
+        "twitter-555a0cc4e2604ceb": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "unsupported_media"
+            }
+          ],
+          "reason": "The post currently resolves to an unsupported non-media URL"
+        },
+        "twitter-63216ac713427f29": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "authentication_required"
+            }
+          ],
+          "reason": "Anonymous access currently requires authentication"
+        },
+        "twitter-6c3374554dc99e36": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "no_video_formats",
+              "media_count": 0,
+              "failure_reason": "no_video_formats"
+            }
+          ],
+          "reason": "Neither extractor currently exposes usable media formats"
+        },
+        "twitter-73663b00a61d5f0d": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "video"
+            ]
+          }
+        },
+        "twitter-8824697a0f4915da": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "unsupported_media"
+            }
+          ],
+          "reason": "The post currently resolves to an unsupported non-media URL"
+        },
+        "twitter-887d211e67e9ba7b": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "video"
+            ]
+          }
+        },
+        "twitter-a045da0886f76417": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "no_video_formats",
+              "media_count": 0,
+              "failure_reason": "no_video_formats"
+            }
+          ],
+          "reason": "Neither extractor currently exposes usable media formats"
+        },
+        "twitter-a4c88ea759a53158": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 2,
+            "media_kinds": [
+              "photo",
+              "video"
+            ]
+          }
+        },
+        "twitter-a789a64c233c5f22": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "photo"
+            ]
+          }
+        },
+        "twitter-ac4d1829a0ce712f": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "no_video_formats",
+              "media_count": 0,
+              "failure_reason": "no_video_formats"
+            }
+          ],
+          "reason": "Neither extractor currently exposes usable media formats"
+        },
+        "twitter-ae7da5bede896f6e": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "no_video_formats",
+              "media_count": 0,
+              "failure_reason": "no_video_formats"
+            }
+          ],
+          "reason": "Neither extractor currently exposes usable media formats"
+        },
+        "twitter-b714f56be174f5d6": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 3,
+            "media_kinds": [
+              "photo",
+              "photo",
+              "video"
+            ]
+          }
+        },
+        "twitter-c0278024bbe545e5": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 4,
+            "media_kinds": [
+              "photo",
+              "photo",
+              "photo",
+              "photo"
+            ]
+          }
+        },
+        "twitter-c5e346d1a98632bf": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "stale_media"
+            }
+          ],
+          "reason": "The referenced upstream media is currently unavailable"
+        },
+        "twitter-cf7d90078e27f4a2": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "video"
+            ]
+          }
+        },
+        "twitter-cf9a69275113f24d": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "video"
+            ]
+          }
+        },
+        "twitter-d196efac52435457": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "photo"
+            ]
+          }
+        },
+        "twitter-de5f8c8062dd49f1": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 4,
+            "media_kinds": [
+              "photo",
+              "photo",
+              "photo",
+              "photo"
+            ]
+          }
+        },
+        "twitter-e12043749fab13fa": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 2,
+            "media_kinds": [
+              "video",
+              "video"
+            ]
+          }
+        },
+        "twitter-e2be429f49fad85a": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "video"
+            ]
+          }
+        },
+        "twitter-e497625f0137b7d7": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 2,
+            "media_kinds": [
+              "photo",
+              "photo"
+            ]
+          }
+        },
+        "twitter-e85049b5c849e3eb": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "video"
+            ]
+          }
+        },
+        "twitter-ed1e0713297b9868": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "video"
+            ]
+          }
+        },
+        "twitter-f09f13854610ef4f": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "no_video_formats",
+              "media_count": 0,
+              "failure_reason": "no_video_formats"
+            }
+          ],
+          "reason": "Neither extractor currently exposes usable media formats"
+        },
+        "twitter-fadf0f774722a7cd": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok"
+          },
+          "acceptable": [
+            {
+              "terminal_result": "error",
+              "media_count": 0,
+              "failure_reason": "authentication_required"
+            }
+          ],
+          "reason": "Anonymous access currently requires authentication"
+        },
+        "youtube-f7fc130695ddefe0": {
+          "outcome": "success",
+          "expected": {
+            "terminal_result": "ok",
+            "media_count": 1,
+            "media_kinds": [
+              "video"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

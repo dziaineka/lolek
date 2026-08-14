@@ -183,7 +183,7 @@ defmodule Lolek.File do
 
     with :ok <- File.mkdir_p(ready_path) do
       case File.write(manifest_path, Jason.encode!(manifest)) do
-        :ok -> :ok
+        :ok -> cleanup_media_cache(cache_root)
         {:error, reason} -> {:error, {:media_manifest_write, reason}}
       end
     end
@@ -191,6 +191,29 @@ defmodule Lolek.File do
 
   def move_to_ready_to_telegram(_another_file_state) do
     :ok
+  end
+
+  @spec cleanup_media_cache(String.t()) :: :ok | {:error, term()}
+  defp cleanup_media_cache(cache_root) do
+    media_paths =
+      Path.wildcard(Path.join(cache_root, "#{@downloaded_name}*")) ++
+        [Path.join(cache_root, @compressed_name), Path.join(cache_root, @gallery_subdir)]
+
+    case Enum.find_value(media_paths, &remove_cache_path/1) do
+      nil -> :ok
+      {:error, _reason} = error -> error
+    end
+  end
+
+  @spec remove_cache_path(String.t()) :: false | {:error, term()}
+  defp remove_cache_path(path) do
+    case File.rm_rf(path) do
+      {:ok, _removed} ->
+        false
+
+      {:error, failed_path, reason} ->
+        {:error, {:media_cache_cleanup, failed_path, reason}}
+    end
   end
 
   @spec get_folder_path(String.t()) :: {:ok, String.t()}

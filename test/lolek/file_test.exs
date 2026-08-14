@@ -43,6 +43,47 @@ defmodule Lolek.FileTest do
   end
 
   @tag :tmp_dir
+  test "cleans media after persisting sent media", %{tmp_dir: tmp_dir} do
+    downloaded_path = Path.join(tmp_dir, "downloaded.mp4")
+    compressed_path = Path.join(tmp_dir, "compressed.mp4")
+    gallery_path = Path.join([tmp_dir, "gallery", "photo.jpg"])
+    metadata_path = Path.join(tmp_dir, "source_metadata.json")
+    manifest_path = Path.join([tmp_dir, "ready_to_telegram", "media_manifest.json"])
+
+    File.mkdir_p!(Path.dirname(gallery_path))
+    File.write!(downloaded_path, "downloaded")
+    File.write!(compressed_path, "compressed")
+    File.write!(gallery_path, "photo")
+    File.write!(metadata_path, "metadata")
+
+    assert :ok =
+             Lolek.File.move_to_ready_to_telegram({:sent_media, tmp_dir, [{".mp4", "video-id"}]})
+
+    refute File.exists?(downloaded_path)
+    refute File.exists?(compressed_path)
+    refute File.exists?(Path.dirname(gallery_path))
+    assert File.read!(metadata_path) == "metadata"
+
+    assert Jason.decode!(File.read!(manifest_path)) == [
+             %{"ext" => ".mp4", "file_id" => "video-id"}
+           ]
+  end
+
+  @tag :tmp_dir
+  test "keeps media when the sent-media manifest cannot be persisted", %{tmp_dir: tmp_dir} do
+    downloaded_path = Path.join(tmp_dir, "downloaded.mp4")
+    ready_path = Path.join(tmp_dir, "ready_to_telegram")
+
+    File.write!(downloaded_path, "downloaded")
+    File.write!(ready_path, "not a directory")
+
+    assert {:error, _reason} =
+             Lolek.File.move_to_ready_to_telegram({:sent_media, tmp_dir, [{".mp4", "video-id"}]})
+
+    assert File.read!(downloaded_path) == "downloaded"
+  end
+
+  @tag :tmp_dir
   test "reads existing gallery manifests as ready media", %{tmp_dir: tmp_dir} do
     ready_path = Path.join(tmp_dir, "ready_to_telegram")
     manifest_path = Path.join(ready_path, "gallery_manifest.json")

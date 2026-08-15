@@ -6,6 +6,11 @@ defmodule Lolek.FileCleanerTest do
     :max_download_dir_size
   ]
 
+  setup do
+    start_supervised!({Registry, keys: :unique, name: Lolek.UrlProcessingRegistry})
+    :ok
+  end
+
   @tag :tmp_dir
   test "uses configured download directory and max size", %{tmp_dir: tmp_dir} do
     preserve_cleaner_env(fn ->
@@ -42,6 +47,23 @@ defmodule Lolek.FileCleanerTest do
     assert :ok = Lolek.FileCleaner.cleanup_downloads_directory("/tmp/lolek-missing-downloads", 0)
   end
 
+  @tag :tmp_dir
+  test "does not remove cache entries that are being processed", %{tmp_dir: tmp_dir} do
+    active_entry = create_cache_entry(tmp_dir, "active", [{"downloaded.mp4", 6}])
+    inactive_entry = create_cache_entry(tmp_dir, "inactive", [{"downloaded.mp4", 6}])
+
+    touch!(active_entry, {{2024, 1, 1}, {0, 0, 0}})
+    touch!(inactive_entry, {{2024, 1, 2}, {0, 0, 0}})
+
+    processing_pid = register_active_entry("active")
+
+    assert :ok = Lolek.FileCleaner.cleanup_downloads_directory(tmp_dir, 0)
+    assert File.exists?(active_entry)
+    refute File.exists?(inactive_entry)
+
+    send(processing_pid, :stop)
+  end
+
   defp create_cache_entry(downloads_dir, name, files) do
     entry_dir = Path.join(downloads_dir, name)
 
@@ -56,6 +78,23 @@ defmodule Lolek.FileCleanerTest do
 
   defp touch!(path, time) do
     File.touch!(path, time)
+  end
+
+  defp register_active_entry(name) do
+    parent = self()
+
+    pid =
+      spawn_link(fn ->
+        {:ok, _owner} = Registry.register(Lolek.UrlProcessingRegistry, name, nil)
+        send(parent, :entry_registered)
+
+        receive do
+          :stop -> :ok
+        end
+      end)
+
+    assert_receive :entry_registered
+    pid
   end
 
   defp preserve_cleaner_env(fun) do

@@ -5,6 +5,8 @@ defmodule Lolek.FileCleaner do
   use GenServer
   require Logger
 
+  @registry Lolek.UrlProcessingRegistry
+
   @type calendar_time :: :calendar.datetime()
 
   @spec start_link() :: GenServer.on_start()
@@ -116,6 +118,22 @@ defmodule Lolek.FileCleaner do
   @spec process_cleanup_entry(map(), integer()) ::
           {:cont, integer()} | {:halt, integer()}
   defp process_cleanup_entry(entry, remaining) do
+    case Registry.register(@registry, entry.name, nil) do
+      {:ok, _owner} ->
+        try do
+          remove_cache_entry(entry, remaining)
+        after
+          Registry.unregister(@registry, entry.name)
+        end
+
+      {:error, {:already_registered, _owner_pid}} ->
+        Logger.info("Skipping active cache entry #{entry.name}")
+        {:cont, remaining}
+    end
+  end
+
+  @spec remove_cache_entry(map(), integer()) :: {:cont, integer()}
+  defp remove_cache_entry(entry, remaining) do
     case File.rm_rf(entry.path) do
       {:ok, _removed} ->
         Logger.info("Removed #{entry.name} (#{entry.size} bytes)")

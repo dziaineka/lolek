@@ -60,12 +60,72 @@ defmodule Lolek.FileCleaner do
 
     if total_size > max_size do
       Logger.info("Cleaning downloads directory...")
-      cleanup_oldest_entries(entries, total_size - max_size)
+      cleanup_oldest_media(entries, total_size - max_size)
+
+      remaining_entries = refresh_cache_entries(downloads_dir, entries)
+      remaining_size = remaining_entries |> Enum.map(& &1.size) |> Enum.sum()
+
+      if remaining_size > max_size do
+        cleanup_oldest_entries(remaining_entries, remaining_size - max_size)
+      end
     else
       Logger.info("Downloads directory is within the size limit.")
     end
 
     :ok
+  end
+
+  @spec refresh_cache_entries(String.t(), [map()]) :: [map()]
+  defp refresh_cache_entries(downloads_dir, previous_entries) do
+    # Removing media updates the cache directory's mtime. Keep the original
+    # timestamps so phase two still evicts entries in the order phase one saw.
+    previous_mtimes = Map.new(previous_entries, &{&1.name, &1.mtime})
+
+    downloads_dir
+    |> cache_entries()
+    |> Enum.map(fn entry ->
+      %{entry | mtime: Map.get(previous_mtimes, entry.name, entry.mtime)}
+    end)
+  end
+
+  @spec cleanup_oldest_media([map()], integer()) :: :ok
+  defp cleanup_oldest_media(entries, space_to_free) do
+    _remaining =
+      entries
+      |> Enum.sort_by(& &1.mtime)
+      |> Enum.reduce_while(space_to_free, fn entry, remaining ->
+        if remaining <= 0 do
+          {:halt, remaining}
+        else
+          remove_entry_media(entry, remaining)
+        end
+      end)
+
+    :ok
+  end
+
+  @spec remove_entry_media(map(), integer()) :: {:cont, integer()}
+  defp remove_entry_media(entry, remaining) do
+    with_cache_entry_lock(entry, {:cont, remaining}, fn ->
+      result = Lolek.File.remove_cached_media(entry.path)
+      remaining_size = path_size(entry.path)
+      freed = max(entry.size - remaining_size, 0)
+
+      log_media_removal(result, entry, freed)
+
+      {:cont, remaining - freed}
+    end)
+  end
+
+  @spec log_media_removal(:ok | {:error, term()}, map(), non_neg_integer()) :: :ok
+  defp log_media_removal(:ok, entry, freed) when freed > 0 do
+    Logger.info("Removed cached media from #{entry.name} (#{freed} bytes)")
+  end
+
+  defp log_media_removal(:ok, _entry, _freed), do: :ok
+
+  defp log_media_removal({:error, reason}, entry, _freed) do
+    Logger.warning("Failed to remove cached media from #{entry.name}: #{inspect(reason)}")
   end
 
   @spec cache_entries(String.t()) :: [
@@ -118,17 +178,24 @@ defmodule Lolek.FileCleaner do
   @spec process_cleanup_entry(map(), integer()) ::
           {:cont, integer()} | {:halt, integer()}
   defp process_cleanup_entry(entry, remaining) do
+    with_cache_entry_lock(entry, {:cont, remaining}, fn ->
+      remove_cache_entry(entry, remaining)
+    end)
+  end
+
+  @spec with_cache_entry_lock(map(), term(), (-> term())) :: term()
+  defp with_cache_entry_lock(entry, busy_result, fun) do
     case Registry.register(@registry, entry.name, nil) do
       {:ok, _owner} ->
         try do
-          remove_cache_entry(entry, remaining)
+          fun.()
         after
           Registry.unregister(@registry, entry.name)
         end
 
       {:error, {:already_registered, _owner_pid}} ->
         Logger.info("Skipping active cache entry #{entry.name}")
-        {:cont, remaining}
+        busy_result
     end
   end
 

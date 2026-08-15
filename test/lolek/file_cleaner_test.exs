@@ -25,21 +25,51 @@ defmodule Lolek.FileCleanerTest do
   end
 
   @tag :tmp_dir
-  test "removes oldest top-level cache entries until total recursive size is within limit", %{
+  test "removes oldest media while preserving cache metadata", %{
     tmp_dir: tmp_dir
   } do
-    old_entry = create_cache_entry(tmp_dir, "old", [{"ready_to_telegram/old.mp4", 6}])
-    middle_entry = create_cache_entry(tmp_dir, "middle", [{"compressed.mp4", 6}])
-    new_entry = create_cache_entry(tmp_dir, "new", [{"downloaded.mp4", 6}])
+    old_entry =
+      create_cache_entry(tmp_dir, "old", [
+        {"ready_to_telegram/media_manifest.json", 2},
+        {"source_metadata.json", 2},
+        {"downloaded.mp4", 6}
+      ])
+
+    new_entry =
+      create_cache_entry(tmp_dir, "new", [
+        {"ready_to_telegram/media_manifest.json", 2},
+        {"source_metadata.json", 2}
+      ])
 
     touch!(old_entry, {{2024, 1, 1}, {0, 0, 0}})
-    touch!(middle_entry, {{2024, 1, 2}, {0, 0, 0}})
-    touch!(new_entry, {{2024, 1, 3}, {0, 0, 0}})
+    touch!(new_entry, {{2024, 1, 2}, {0, 0, 0}})
 
-    assert :ok = Lolek.FileCleaner.cleanup_downloads_directory(tmp_dir, 12)
+    assert :ok = Lolek.FileCleaner.cleanup_downloads_directory(tmp_dir, 8)
+
+    assert File.exists?(old_entry)
+    assert File.exists?(new_entry)
+    refute File.exists?(Path.join(old_entry, "downloaded.mp4"))
+    assert File.exists?(Path.join(old_entry, "ready_to_telegram/media_manifest.json"))
+    assert File.exists?(Path.join(old_entry, "source_metadata.json"))
+  end
+
+  @tag :tmp_dir
+  test "removes whole oldest entries when media cleanup is insufficient", %{tmp_dir: tmp_dir} do
+    old_entry =
+      create_cache_entry(tmp_dir, "old", [
+        {"ready_to_telegram/media_manifest.json", 6},
+        {"downloaded.mp4", 6}
+      ])
+
+    new_entry =
+      create_cache_entry(tmp_dir, "new", [{"ready_to_telegram/media_manifest.json", 6}])
+
+    touch!(old_entry, {{2024, 1, 1}, {0, 0, 0}})
+    touch!(new_entry, {{2024, 1, 2}, {0, 0, 0}})
+
+    assert :ok = Lolek.FileCleaner.cleanup_downloads_directory(tmp_dir, 6)
 
     refute File.exists?(old_entry)
-    assert File.exists?(middle_entry)
     assert File.exists?(new_entry)
   end
 

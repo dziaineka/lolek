@@ -183,7 +183,7 @@ defmodule Lolek.File do
 
     with :ok <- File.mkdir_p(ready_path),
          :ok <- persist_media_manifest(ready_path, manifest_path, manifest) do
-      cleanup_media_cache(cache_root)
+      remove_cached_media(cache_root)
     end
   end
 
@@ -241,8 +241,8 @@ defmodule Lolek.File do
     end
   end
 
-  @spec cleanup_media_cache(String.t()) :: :ok | {:error, term()}
-  defp cleanup_media_cache(cache_root) do
+  @spec remove_cached_media(String.t()) :: :ok | {:error, term()}
+  def remove_cached_media(cache_root) do
     media_paths =
       Path.wildcard(Path.join(cache_root, "#{@downloaded_name}*")) ++
         [Path.join(cache_root, @compressed_name), Path.join(cache_root, @gallery_subdir)]

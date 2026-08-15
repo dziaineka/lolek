@@ -274,13 +274,15 @@ pkgs.testers.nixosTest {
     machine.wait_until_succeeds("test -f %s" % shell_quote(manifest_file))
     manifest = json.loads(machine.succeed("cat %s" % shell_quote(manifest_file)))
     assert manifest == [{"ext": ".mp4", "file_id": video_file_id}], manifest
-    machine.succeed("test $(%s) -eq 1" % stream_count_command("v", prepared_file))
-    machine.succeed("test $(%s) -eq 1" % stream_count_command("a", prepared_file))
+    machine.succeed("test $(%s) -eq 1" % stream_count_command("v", upload_file))
+    machine.succeed("test $(%s) -eq 1" % stream_count_command("a", upload_file))
     machine.succeed(
         "test $(ffprobe -v error -select_streams a:0 "
         "-show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 %s) = aac"
-        % shell_quote(prepared_file)
+        % shell_quote(upload_file)
     )
+    machine.succeed("test ! -e %s" % shell_quote(prepared_file))
+    machine.succeed("test ! -e %s" % shell_quote("%s/gallery" % cache_dir))
     machine.succeed(
         "journalctl -u ${serviceUnit} --no-pager | grep 'TikTok audio mux attempt failed'"
     )

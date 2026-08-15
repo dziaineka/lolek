@@ -208,6 +208,7 @@ pkgs.testers.nixosTest {
     legacy_cache_file = "%s/%s.mp4" % (legacy_ready_dir, legacy_video_file_id)
     compressed_folder_name = base64.b64encode(compressed_media_url.encode()).decode().rstrip("=")
     compressed_cache_dir = "%s/%s" % (download_dir, compressed_folder_name)
+    cleanup_test_dir = "${stateDir}/cleanup-test"
 
     def inject(url):
         payload = json.dumps(
@@ -417,6 +418,10 @@ pkgs.testers.nixosTest {
         "test $(stat -c %%s %s) -le %d"
         % (passthrough_media_file, max_file_size_to_send_to_telegram)
     )
+    machine.succeed(
+        "test ! -e %s"
+        % shell_quote("%s/downloaded.mp4" % passthrough_cache_dir)
+    )
 
     compressed_manifest_file = "%s/%s/%s" % (
         compressed_cache_dir,
@@ -434,10 +439,48 @@ pkgs.testers.nixosTest {
         % (compressed_media_file, max_file_size_to_send_to_telegram)
     )
     compressed_prepared_file = "%s/compressed.mp4" % compressed_cache_dir
+    machine.succeed("test ! -e %s" % shell_quote(compressed_prepared_file))
     machine.succeed(
-        "test $(stat -c %%s %s) -le %d"
-        % (compressed_prepared_file, max_file_size_to_send_to_telegram)
+        "test ! -e %s"
+        % shell_quote("%s/downloaded.mp4" % compressed_cache_dir)
     )
+
+    # Cleanup should discard media first and preserve reusable metadata when
+    # removing that media is enough to satisfy the size limit.
+    cleanup_entries = [
+        "%s/older" % cleanup_test_dir,
+        "%s/newer" % cleanup_test_dir,
+    ]
+    for entry in cleanup_entries:
+        machine.succeed("mkdir -p %s" % shell_quote(entry))
+        machine.succeed(
+            "printf meta > %s"
+            % shell_quote("%s/source_metadata.json" % entry)
+        )
+        machine.succeed("truncate -s 8 %s" % shell_quote("%s/downloaded.mp4" % entry))
+    machine.succeed(
+        "chown -R %s:%s %s"
+        % (service_user, service_group, shell_quote(cleanup_test_dir))
+    )
+
+    machine.succeed(
+        "${package}/bin/lolek rpc "
+        "'Lolek.FileCleaner.cleanup_downloads_directory(\"%s\", 8)'"
+        % cleanup_test_dir
+    )
+    for entry in cleanup_entries:
+        machine.succeed("test -f %s" % shell_quote("%s/source_metadata.json" % entry))
+        machine.succeed("test ! -e %s" % shell_quote("%s/downloaded.mp4" % entry))
+
+    # If metadata alone still exceeds the limit, cleanup should evict whole
+    # entries in the same pass.
+    machine.succeed(
+        "${package}/bin/lolek rpc "
+        "'Lolek.FileCleaner.cleanup_downloads_directory(\"%s\", 0)'"
+        % cleanup_test_dir
+    )
+    machine.succeed("test ! -e %s" % shell_quote(cleanup_entries[0]))
+    machine.succeed("test ! -e %s" % shell_quote(cleanup_entries[1]))
 
     # The optional Prometheus endpoint should expose metrics from the exercised service path.
     machine.succeed("curl -fsS %s > %s" % (metrics_url, metrics_file))

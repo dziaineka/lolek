@@ -84,6 +84,44 @@ defmodule Lolek.FileTest do
   end
 
   @tag :tmp_dir
+  test "atomically replaces an existing sent-media manifest", %{tmp_dir: tmp_dir} do
+    ready_path = Path.join(tmp_dir, "ready_to_telegram")
+    manifest_path = Path.join(ready_path, "media_manifest.json")
+    temporary_path = manifest_path <> ".tmp"
+
+    File.mkdir_p!(ready_path)
+    File.write!(manifest_path, Jason.encode!([%{"ext" => ".jpg", "file_id" => "old-id"}]))
+
+    assert :ok =
+             Lolek.File.move_to_ready_to_telegram({:sent_media, tmp_dir, [{".mp4", "new-id"}]})
+
+    assert Jason.decode!(File.read!(manifest_path)) == [
+             %{"ext" => ".mp4", "file_id" => "new-id"}
+           ]
+
+    refute File.exists?(temporary_path)
+  end
+
+  @tag :tmp_dir
+  test "keeps the existing manifest and media when atomic replacement fails", %{tmp_dir: tmp_dir} do
+    ready_path = Path.join(tmp_dir, "ready_to_telegram")
+    manifest_path = Path.join(ready_path, "media_manifest.json")
+    temporary_path = manifest_path <> ".tmp"
+    downloaded_path = Path.join(tmp_dir, "downloaded.mp4")
+    old_manifest = Jason.encode!([%{"ext" => ".jpg", "file_id" => "old-id"}])
+
+    File.mkdir_p!(temporary_path)
+    File.write!(manifest_path, old_manifest)
+    File.write!(downloaded_path, "downloaded")
+
+    assert {:error, {:media_manifest_write, :eisdir}} =
+             Lolek.File.move_to_ready_to_telegram({:sent_media, tmp_dir, [{".mp4", "new-id"}]})
+
+    assert File.read!(manifest_path) == old_manifest
+    assert File.read!(downloaded_path) == "downloaded"
+  end
+
+  @tag :tmp_dir
   test "reads existing gallery manifests as ready media", %{tmp_dir: tmp_dir} do
     ready_path = Path.join(tmp_dir, "ready_to_telegram")
     manifest_path = Path.join(ready_path, "gallery_manifest.json")

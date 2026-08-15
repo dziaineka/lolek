@@ -292,70 +292,73 @@ pkgs.testers.nixosTest {
             if case == first_case:
                 first_case_messages = messages
 
-    for index, case in enumerate(rejected_cases, start=1):
-        inject(case, 40000 + index)
+    with subtest("reject excluded corpus URLs"):
+        for index, case in enumerate(rejected_cases, start=1):
+            inject(case, 40000 + index)
 
-    machine.wait_until_succeeds(
-        "curl -fsS %s | "
-        "grep -F 'lolek_messages_total{result=\"no_url\"} %d' >/dev/null"
-        % (metrics_url, len(rejected_cases))
-    )
-    wait_for_idle()
-
-    for index, _case in enumerate(rejected_cases, start=1):
-        machine.succeed(
-            "curl -fsS %s | jq -e '.count == 0' >/dev/null"
-            % shell_quote(messages_url(40000 + index))
+        machine.wait_until_succeeds(
+            "curl -fsS %s | "
+            "grep -F 'lolek_messages_total{result=\"no_url\"} %d' >/dev/null"
+            % (metrics_url, len(rejected_cases))
         )
+        wait_for_idle()
 
-    events_response = json.loads(
-        machine.succeed("curl -fsS %s/debug/events" % origin_base_url)
-    )
-    events = events_response["events"]
-    events_by_case = collections.defaultdict(list)
-    for event in events:
-        events_by_case[event["case_id"]].append(event)
-
-    for case in accepted_cases:
-        case_scenario = scenario(case)
-        case_events = events_by_case[case["id"]]
-        event_types = collections.Counter(event["type"] for event in case_events)
-        assert event_types["metadata"] == 1, case_events
-        assert event_types["gallery"] == 1, case_events
-        assert event_types["formats"] == 0, case_events
-        assert event_types["media"] == len(case_scenario["fixtures"]), case_events
-
-        if case_scenario["route"] == "gallery-dl":
-            assert event_types["download"] == 0, case_events
-            assert any(
-                event["type"] == "gallery" and event["handled"]
-                for event in case_events
-            )
-        else:
-            assert event_types["download"] == 1, case_events
-            assert any(
-                event["type"] == "gallery" and not event["handled"]
-                for event in case_events
+        for index, _case in enumerate(rejected_cases, start=1):
+            machine.succeed(
+                "curl -fsS %s | jq -e '.count == 0' >/dev/null"
+                % shell_quote(messages_url(40000 + index))
             )
 
-    for case in rejected_cases:
-        assert events_by_case[case["id"]] == []
+    with subtest("use the expected downloader route for each corpus case"):
+        events_response = json.loads(
+            machine.succeed("curl -fsS %s/debug/events" % origin_base_url)
+        )
+        events = events_response["events"]
+        events_by_case = collections.defaultdict(list)
+        for event in events:
+            events_by_case[event["case_id"]].append(event)
 
-    events_before_cache_hit = len(events)
-    cache_chat_id = 50000
-    inject(first_case, cache_chat_id)
-    cached_messages = wait_for_messages(
-        cache_chat_id,
-        len(scenario(first_case)["fixtures"]),
-    )
-    wait_for_idle()
-    assert sorted(message_file_id(message) for message in cached_messages) == sorted(
-        message_file_id(message) for message in first_case_messages
-    )
-    events_after_cache_hit = json.loads(
-        machine.succeed("curl -fsS %s/debug/events" % origin_base_url)
-    )["events"]
-    assert len(events_after_cache_hit) == events_before_cache_hit
+        for case in accepted_cases:
+            case_scenario = scenario(case)
+            case_events = events_by_case[case["id"]]
+            event_types = collections.Counter(event["type"] for event in case_events)
+            assert event_types["metadata"] == 1, case_events
+            assert event_types["gallery"] == 1, case_events
+            assert event_types["formats"] == 0, case_events
+            assert event_types["media"] == len(case_scenario["fixtures"]), case_events
+
+            if case_scenario["route"] == "gallery-dl":
+                assert event_types["download"] == 0, case_events
+                assert any(
+                    event["type"] == "gallery" and event["handled"]
+                    for event in case_events
+                )
+            else:
+                assert event_types["download"] == 1, case_events
+                assert any(
+                    event["type"] == "gallery" and not event["handled"]
+                    for event in case_events
+                )
+
+        for case in rejected_cases:
+            assert events_by_case[case["id"]] == []
+
+    with subtest("reuse Telegram file IDs without another download"):
+        events_before_cache_hit = len(events)
+        cache_chat_id = 50000
+        inject(first_case, cache_chat_id)
+        cached_messages = wait_for_messages(
+            cache_chat_id,
+            len(scenario(first_case)["fixtures"]),
+        )
+        wait_for_idle()
+        assert sorted(message_file_id(message) for message in cached_messages) == sorted(
+            message_file_id(message) for message in first_case_messages
+        )
+        events_after_cache_hit = json.loads(
+            machine.succeed("curl -fsS %s/debug/events" % origin_base_url)
+        )["events"]
+        assert len(events_after_cache_hit) == events_before_cache_hit
 
     machine.succeed("systemctl is-active --quiet ${serviceUnit}")
   '';

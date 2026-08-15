@@ -315,203 +315,202 @@ pkgs.testers.nixosTest {
     )
     machine.succeed("mkdir -p %s" % shell_quote("${uploadDir}"))
 
-    # A small MP4 should be uploaded without ffmpeg compression.
-    inject(passthrough_media_url)
-    messages = wait_for_video_count(1)
-    passthrough_message = messages[0]
-    passthrough_video = passthrough_message["video"]
-    passthrough_video_file_id = passthrough_video["file_id"]
-    assert passthrough_video["file_name"] == "%s.mp4" % passthrough_source_title
-    assert passthrough_source_caption in passthrough_message["caption"]
-    machine.succeed(
-        "curl -fsS %s/debug/files/%s -o %s"
-        % (
-            telegym_base_url,
-            passthrough_video_file_id,
-            shell_quote(passthrough_upload_file),
-        )
-    )
-    machine.succeed("test -s %s" % shell_quote(passthrough_upload_file))
-    machine.succeed("grep -aq 'ftyp' %s" % shell_quote(passthrough_upload_file))
-    machine.succeed(
-        "curl -fsS %s/debug/files | jq -e '.count == 1' >/dev/null"
-        % telegym_base_url
-    )
-    wait_for_idle()
-
-    # The same URL should reuse the cached Telegram file ID without another upload.
-    inject(passthrough_media_url)
-    messages = wait_for_video_count(2)
-    assert messages[0]["video"]["file_id"] == passthrough_video_file_id, messages[0]
-    machine.succeed(
-        "curl -fsS %s/debug/files | jq -e '.count == 1' >/dev/null"
-        % telegym_base_url
-    )
-    wait_for_idle()
-
-    # A pre-manifest cache should be sent without downloading unavailable media.
-    inject(legacy_media_url)
-    messages = wait_for_video_count(3)
-    assert messages[0]["video"]["file_id"] == legacy_video_file_id, messages[0]
-    wait_for_idle()
-    machine.succeed(
-        "journalctl -u ${serviceUnit} --no-pager | "
-        "grep -F %s | grep -F 'result=ok:ready_media:count=1'"
-        % shell_quote("Finished download for url: %s;" % legacy_media_url)
-    )
-    machine.succeed("test -f %s" % shell_quote(legacy_cache_file))
-    machine.succeed(
-        "test ! -e %s"
-        % shell_quote("%s/%s" % (legacy_ready_dir, media_manifest_name))
-    )
-
-    # Media larger than the Telegram send limit should go through compression.
-    inject(compressed_media_url)
-    messages = wait_for_video_count(4)
-    compressed_video_file_id = messages[0]["video"]["file_id"]
-    machine.succeed(
-        "curl -fsS %s/debug/files/%s -o %s"
-        % (
-            telegym_base_url,
-            compressed_video_file_id,
-            shell_quote(compressed_upload_file),
-        )
-    )
-    machine.succeed("test -s %s" % shell_quote(compressed_upload_file))
-    machine.succeed("grep -aq 'ftyp' %s" % shell_quote(compressed_upload_file))
-    machine.succeed(
-        "curl -fsS %s/debug/files | jq -e '.count == 2' >/dev/null"
-        % telegym_base_url
-    )
-    wait_for_idle()
-    machine.succeed(
-        "test $(journalctl -u ${serviceUnit} --no-pager | grep -c 'Compressed video with libx264') -eq 1"
-    )
-
-    # Both uploads should have Telegym's returned file IDs cached in manifests.
-    passthrough_manifest_file = "%s/%s/%s" % (
-        passthrough_cache_dir,
-        ready_dir_name,
-        media_manifest_name,
-    )
-    passthrough_manifest = json.loads(
-        machine.succeed("cat %s" % shell_quote(passthrough_manifest_file))
-    )
-    assert passthrough_manifest == [
-        {"ext": ".mp4", "file_id": passthrough_video_file_id}
-    ], passthrough_manifest
-    machine.succeed(
-        "grep -aq %s %s"
-        % (
-            shell_quote('"caption":"%s"' % passthrough_source_caption),
-            shell_quote(passthrough_metadata_file),
-        )
-    )
-    machine.succeed(
-        "grep -aq %s %s"
-        % (
-            shell_quote('"title":"%s"' % passthrough_source_title),
-            shell_quote(passthrough_metadata_file),
-        )
-    )
-    machine.succeed(
-        "test $(stat -c %%s %s) -le %d"
-        % (passthrough_media_file, max_file_size_to_send_to_telegram)
-    )
-    machine.succeed(
-        "test ! -e %s"
-        % shell_quote("%s/downloaded.mp4" % passthrough_cache_dir)
-    )
-
-    compressed_manifest_file = "%s/%s/%s" % (
-        compressed_cache_dir,
-        ready_dir_name,
-        media_manifest_name,
-    )
-    compressed_manifest = json.loads(
-        machine.succeed("cat %s" % shell_quote(compressed_manifest_file))
-    )
-    assert compressed_manifest == [
-        {"ext": ".mp4", "file_id": compressed_video_file_id}
-    ], compressed_manifest
-    machine.succeed(
-        "test $(stat -c %%s %s) -gt %d"
-        % (compressed_media_file, max_file_size_to_send_to_telegram)
-    )
-    compressed_prepared_file = "%s/compressed.mp4" % compressed_cache_dir
-    machine.succeed("test ! -e %s" % shell_quote(compressed_prepared_file))
-    machine.succeed(
-        "test ! -e %s"
-        % shell_quote("%s/downloaded.mp4" % compressed_cache_dir)
-    )
-
-    # Cleanup should discard media first and preserve reusable metadata when
-    # removing that media is enough to satisfy the size limit.
-    cleanup_entries = [
-        "%s/older" % cleanup_test_dir,
-        "%s/newer" % cleanup_test_dir,
-    ]
-    for entry in cleanup_entries:
-        machine.succeed("mkdir -p %s" % shell_quote(entry))
+    with subtest("upload passthrough media without compression"):
+        inject(passthrough_media_url)
+        messages = wait_for_video_count(1)
+        passthrough_message = messages[0]
+        passthrough_video = passthrough_message["video"]
+        passthrough_video_file_id = passthrough_video["file_id"]
+        assert passthrough_video["file_name"] == "%s.mp4" % passthrough_source_title
+        assert passthrough_source_caption in passthrough_message["caption"]
         machine.succeed(
-            "printf meta > %s"
-            % shell_quote("%s/source_metadata.json" % entry)
+            "curl -fsS %s/debug/files/%s -o %s"
+            % (
+                telegym_base_url,
+                passthrough_video_file_id,
+                shell_quote(passthrough_upload_file),
+            )
         )
-        machine.succeed("truncate -s 8 %s" % shell_quote("%s/downloaded.mp4" % entry))
-    machine.succeed(
-        "chown -R %s:%s %s"
-        % (service_user, service_group, shell_quote(cleanup_test_dir))
-    )
+        machine.succeed("test -s %s" % shell_quote(passthrough_upload_file))
+        machine.succeed("grep -aq 'ftyp' %s" % shell_quote(passthrough_upload_file))
+        machine.succeed(
+            "curl -fsS %s/debug/files | jq -e '.count == 1' >/dev/null"
+            % telegym_base_url
+        )
+        wait_for_idle()
 
-    machine.succeed(
-        "${package}/bin/lolek rpc "
-        "'Lolek.FileCleaner.cleanup_downloads_directory(\"%s\", 8)'"
-        % cleanup_test_dir
-    )
-    for entry in cleanup_entries:
-        machine.succeed("test -f %s" % shell_quote("%s/source_metadata.json" % entry))
-        machine.succeed("test ! -e %s" % shell_quote("%s/downloaded.mp4" % entry))
+    with subtest("reuse a cached Telegram file ID"):
+        inject(passthrough_media_url)
+        messages = wait_for_video_count(2)
+        assert messages[0]["video"]["file_id"] == passthrough_video_file_id, messages[0]
+        machine.succeed(
+            "curl -fsS %s/debug/files | jq -e '.count == 1' >/dev/null"
+            % telegym_base_url
+        )
+        wait_for_idle()
 
-    # If metadata alone still exceeds the limit, cleanup should evict whole
-    # entries in the same pass.
-    machine.succeed(
-        "${package}/bin/lolek rpc "
-        "'Lolek.FileCleaner.cleanup_downloads_directory(\"%s\", 0)'"
-        % cleanup_test_dir
-    )
-    machine.succeed("test ! -e %s" % shell_quote(cleanup_entries[0]))
-    machine.succeed("test ! -e %s" % shell_quote(cleanup_entries[1]))
+    with subtest("reuse a pre-manifest cache entry"):
+        inject(legacy_media_url)
+        messages = wait_for_video_count(3)
+        assert messages[0]["video"]["file_id"] == legacy_video_file_id, messages[0]
+        wait_for_idle()
+        machine.succeed(
+            "journalctl -u ${serviceUnit} --no-pager | "
+            "grep -F %s | grep -F 'result=ok:ready_media:count=1'"
+            % shell_quote("Finished download for url: %s;" % legacy_media_url)
+        )
+        machine.succeed("test -f %s" % shell_quote(legacy_cache_file))
+        machine.succeed(
+            "test ! -e %s"
+            % shell_quote("%s/%s" % (legacy_ready_dir, media_manifest_name))
+        )
 
-    # The optional Prometheus endpoint should expose metrics from the exercised service path.
-    machine.succeed("curl -fsS %s > %s" % (metrics_url, metrics_file))
-    machine.succeed(
-        "grep -F 'lolek_messages_total{result=\"ok\"} 4' %s" % metrics_file
-    )
-    machine.succeed(
-        "grep -F 'lolek_chat_rate_limiter_total{result=\"admitted\"} 4' %s"
-        % metrics_file
-    )
-    machine.succeed(
-        "grep -F 'lolek_cache_lookup_total{state=\"new_file\"} 2' %s" % metrics_file
-    )
-    machine.succeed(
-        "grep -F 'lolek_cache_lookup_total{state=\"ready_to_telegram\"} 2' %s"
-        % metrics_file
-    )
-    machine.succeed(
-        "grep -F 'lolek_processing_stage_total{result=\"ok\",stage=\"telegram_send\"} 4' %s"
-        % metrics_file
-    )
-    machine.succeed(
-        "grep -F 'lolek_processing_stage_duration_seconds_count{result=\"ok\",stage=\"telegram_send\"} 4' %s"
-        % metrics_file
-    )
-    machine.succeed("grep -F 'lolek_processing_active 0' %s" % metrics_file)
+    with subtest("compress media above the Telegram size limit"):
+        inject(compressed_media_url)
+        messages = wait_for_video_count(4)
+        compressed_video_file_id = messages[0]["video"]["file_id"]
+        machine.succeed(
+            "curl -fsS %s/debug/files/%s -o %s"
+            % (
+                telegym_base_url,
+                compressed_video_file_id,
+                shell_quote(compressed_upload_file),
+            )
+        )
+        machine.succeed("test -s %s" % shell_quote(compressed_upload_file))
+        machine.succeed("grep -aq 'ftyp' %s" % shell_quote(compressed_upload_file))
+        machine.succeed(
+            "curl -fsS %s/debug/files | jq -e '.count == 2' >/dev/null"
+            % telegym_base_url
+        )
+        wait_for_idle()
+        machine.succeed(
+            "test $(journalctl -u ${serviceUnit} --no-pager | grep -c 'Compressed video with libx264') -eq 1"
+        )
 
-    # On-demand cleanup should remove new-format cache entries while leaving the service alive.
-    machine.succeed("${package}/bin/lolek rpc 'Lolek.FileCleaner.cleanup_now()'")
-    machine.succeed("test ! -e %s" % passthrough_cache_dir)
-    machine.succeed("test ! -e %s" % compressed_cache_dir)
+    with subtest("persist file IDs and remove uploaded media"):
+        passthrough_manifest_file = "%s/%s/%s" % (
+            passthrough_cache_dir,
+            ready_dir_name,
+            media_manifest_name,
+        )
+        passthrough_manifest = json.loads(
+            machine.succeed("cat %s" % shell_quote(passthrough_manifest_file))
+        )
+        assert passthrough_manifest == [
+            {"ext": ".mp4", "file_id": passthrough_video_file_id}
+        ], passthrough_manifest
+        machine.succeed(
+            "grep -aq %s %s"
+            % (
+                shell_quote('"caption":"%s"' % passthrough_source_caption),
+                shell_quote(passthrough_metadata_file),
+            )
+        )
+        machine.succeed(
+            "grep -aq %s %s"
+            % (
+                shell_quote('"title":"%s"' % passthrough_source_title),
+                shell_quote(passthrough_metadata_file),
+            )
+        )
+        machine.succeed(
+            "test $(stat -c %%s %s) -le %d"
+            % (passthrough_media_file, max_file_size_to_send_to_telegram)
+        )
+        machine.succeed(
+            "test ! -e %s"
+            % shell_quote("%s/downloaded.mp4" % passthrough_cache_dir)
+        )
+
+        compressed_manifest_file = "%s/%s/%s" % (
+            compressed_cache_dir,
+            ready_dir_name,
+            media_manifest_name,
+        )
+        compressed_manifest = json.loads(
+            machine.succeed("cat %s" % shell_quote(compressed_manifest_file))
+        )
+        assert compressed_manifest == [
+            {"ext": ".mp4", "file_id": compressed_video_file_id}
+        ], compressed_manifest
+        machine.succeed(
+            "test $(stat -c %%s %s) -gt %d"
+            % (compressed_media_file, max_file_size_to_send_to_telegram)
+        )
+        compressed_prepared_file = "%s/compressed.mp4" % compressed_cache_dir
+        machine.succeed("test ! -e %s" % shell_quote(compressed_prepared_file))
+        machine.succeed(
+            "test ! -e %s"
+            % shell_quote("%s/downloaded.mp4" % compressed_cache_dir)
+        )
+
+    with subtest("remove media before reusable metadata"):
+        cleanup_entries = [
+            "%s/older" % cleanup_test_dir,
+            "%s/newer" % cleanup_test_dir,
+        ]
+        for entry in cleanup_entries:
+            machine.succeed("mkdir -p %s" % shell_quote(entry))
+            machine.succeed(
+                "printf meta > %s"
+                % shell_quote("%s/source_metadata.json" % entry)
+            )
+            machine.succeed("truncate -s 8 %s" % shell_quote("%s/downloaded.mp4" % entry))
+        machine.succeed(
+            "chown -R %s:%s %s"
+            % (service_user, service_group, shell_quote(cleanup_test_dir))
+        )
+
+        machine.succeed(
+            "${package}/bin/lolek rpc "
+            "'Lolek.FileCleaner.cleanup_downloads_directory(\"%s\", 8)'"
+            % cleanup_test_dir
+        )
+        for entry in cleanup_entries:
+            machine.succeed("test -f %s" % shell_quote("%s/source_metadata.json" % entry))
+            machine.succeed("test ! -e %s" % shell_quote("%s/downloaded.mp4" % entry))
+
+    with subtest("evict whole entries when metadata exceeds the limit"):
+        machine.succeed(
+            "${package}/bin/lolek rpc "
+            "'Lolek.FileCleaner.cleanup_downloads_directory(\"%s\", 0)'"
+            % cleanup_test_dir
+        )
+        machine.succeed("test ! -e %s" % shell_quote(cleanup_entries[0]))
+        machine.succeed("test ! -e %s" % shell_quote(cleanup_entries[1]))
+
+    with subtest("expose metrics for the exercised service paths"):
+        machine.succeed("curl -fsS %s > %s" % (metrics_url, metrics_file))
+        machine.succeed(
+            "grep -F 'lolek_messages_total{result=\"ok\"} 4' %s" % metrics_file
+        )
+        machine.succeed(
+            "grep -F 'lolek_chat_rate_limiter_total{result=\"admitted\"} 4' %s"
+            % metrics_file
+        )
+        machine.succeed(
+            "grep -F 'lolek_cache_lookup_total{state=\"new_file\"} 2' %s" % metrics_file
+        )
+        machine.succeed(
+            "grep -F 'lolek_cache_lookup_total{state=\"ready_to_telegram\"} 2' %s"
+            % metrics_file
+        )
+        machine.succeed(
+            "grep -F 'lolek_processing_stage_total{result=\"ok\",stage=\"telegram_send\"} 4' %s"
+            % metrics_file
+        )
+        machine.succeed(
+            "grep -F 'lolek_processing_stage_duration_seconds_count{result=\"ok\",stage=\"telegram_send\"} 4' %s"
+            % metrics_file
+        )
+        machine.succeed("grep -F 'lolek_processing_active 0' %s" % metrics_file)
+
+    with subtest("remove cache entries with on-demand cleanup"):
+        machine.succeed("${package}/bin/lolek rpc 'Lolek.FileCleaner.cleanup_now()'")
+        machine.succeed("test ! -e %s" % passthrough_cache_dir)
+        machine.succeed("test ! -e %s" % compressed_cache_dir)
+
     machine.succeed("systemctl is-active --quiet ${serviceUnit}")
   '';
 }

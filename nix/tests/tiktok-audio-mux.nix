@@ -236,59 +236,63 @@ pkgs.testers.nixosTest {
         % (telegym_base_url, shell_quote(fake_token))
     )
 
-    inject_payload = json.dumps(
-        {"token": fake_token, "chat_id": 1234, "text": media_url},
-        separators=(",", ":"),
-    )
-    machine.succeed(
-        "curl -fsS -H 'Content-Type: application/json' --data %s "
-        "%s/debug/inject/update | "
-        "jq -e '.ok and .delivery_method == \"polling\"' >/dev/null"
-        % (shell_quote(inject_payload), telegym_base_url)
-    )
+    with subtest("mux TikTok audio before upload"):
+        inject_payload = json.dumps(
+            {"token": fake_token, "chat_id": 1234, "text": media_url},
+            separators=(",", ":"),
+        )
+        machine.succeed(
+            "curl -fsS -H 'Content-Type: application/json' --data %s "
+            "%s/debug/inject/update | "
+            "jq -e '.ok and .delivery_method == \"polling\"' >/dev/null"
+            % (shell_quote(inject_payload), telegym_base_url)
+        )
 
-    messages_url = "%s/debug/messages/%s?chat_id=1234" % (
-        telegym_base_url,
-        fake_token,
-    )
-    machine.wait_until_succeeds(
-        "curl -fsS %s | "
-        "jq -e '[.messages[] | select(.video != null)] | length == 1' >/dev/null"
-        % shell_quote(messages_url)
-    )
+        messages_url = "%s/debug/messages/%s?chat_id=1234" % (
+            telegym_base_url,
+            fake_token,
+        )
+        machine.wait_until_succeeds(
+            "curl -fsS %s | "
+            "jq -e '[.messages[] | select(.video != null)] | length == 1' >/dev/null"
+            % shell_quote(messages_url)
+        )
 
-    messages = json.loads(machine.succeed("curl -fsS %s" % shell_quote(messages_url)))
-    video_messages = [message for message in messages["messages"] if message.get("video")]
-    assert len(video_messages) == 1, video_messages
-    video = video_messages[0]["video"]
-    video_file_id = video["file_id"]
-    assert video.get("file_name", "").endswith(".mp4"), video
+        messages = json.loads(machine.succeed("curl -fsS %s" % shell_quote(messages_url)))
+        video_messages = [message for message in messages["messages"] if message.get("video")]
+        assert len(video_messages) == 1, video_messages
+        video = video_messages[0]["video"]
+        video_file_id = video["file_id"]
+        assert video.get("file_name", "").endswith(".mp4"), video
 
-    machine.succeed("mkdir -p %s" % shell_quote("${fakeLogDir}"))
-    machine.succeed(
-        "curl -fsS %s/debug/files/%s -o %s"
-        % (telegym_base_url, video_file_id, shell_quote(upload_file))
-    )
-    machine.succeed("test -s %s" % upload_file)
-    machine.succeed("grep -aq 'ftyp' %s" % upload_file)
-    machine.wait_until_succeeds("test -f %s" % shell_quote(manifest_file))
-    manifest = json.loads(machine.succeed("cat %s" % shell_quote(manifest_file)))
-    assert manifest == [{"ext": ".mp4", "file_id": video_file_id}], manifest
-    machine.succeed("test $(%s) -eq 1" % stream_count_command("v", upload_file))
-    machine.succeed("test $(%s) -eq 1" % stream_count_command("a", upload_file))
-    machine.succeed(
-        "test $(ffprobe -v error -select_streams a:0 "
-        "-show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 %s) = aac"
-        % shell_quote(upload_file)
-    )
-    machine.succeed("test ! -e %s" % shell_quote(prepared_file))
-    machine.succeed("test ! -e %s" % shell_quote("%s/gallery" % cache_dir))
-    machine.succeed(
-        "journalctl -u ${serviceUnit} --no-pager | grep 'TikTok audio mux attempt failed'"
-    )
-    machine.succeed(
-        "journalctl -u ${serviceUnit} --no-pager | grep 'Muxed TikTok audio into gallery video'"
-    )
+        machine.succeed("mkdir -p %s" % shell_quote("${fakeLogDir}"))
+        machine.succeed(
+            "curl -fsS %s/debug/files/%s -o %s"
+            % (telegym_base_url, video_file_id, shell_quote(upload_file))
+        )
+        machine.succeed("test -s %s" % upload_file)
+        machine.succeed("grep -aq 'ftyp' %s" % upload_file)
+        machine.succeed("test $(%s) -eq 1" % stream_count_command("v", upload_file))
+        machine.succeed("test $(%s) -eq 1" % stream_count_command("a", upload_file))
+        machine.succeed(
+            "test $(ffprobe -v error -select_streams a:0 "
+            "-show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 %s) = aac"
+            % shell_quote(upload_file)
+        )
+        machine.succeed(
+            "journalctl -u ${serviceUnit} --no-pager | grep 'TikTok audio mux attempt failed'"
+        )
+        machine.succeed(
+            "journalctl -u ${serviceUnit} --no-pager | grep 'Muxed TikTok audio into gallery video'"
+        )
+
+    with subtest("persist the file ID and remove cached media"):
+        machine.wait_until_succeeds("test -f %s" % shell_quote(manifest_file))
+        manifest = json.loads(machine.succeed("cat %s" % shell_quote(manifest_file)))
+        assert manifest == [{"ext": ".mp4", "file_id": video_file_id}], manifest
+        machine.succeed("test ! -e %s" % shell_quote(prepared_file))
+        machine.succeed("test ! -e %s" % shell_quote("%s/gallery" % cache_dir))
+
     machine.succeed("systemctl is-active --quiet ${serviceUnit}")
   '';
 }

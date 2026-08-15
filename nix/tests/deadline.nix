@@ -131,34 +131,35 @@ pkgs.testers.nixosTest {
         % (telegym_base_url, shell_quote(fake_token))
     )
 
-    payload = json.dumps(
-        {"token": fake_token, "chat_id": 1001, "text": media_url},
-        separators=(",", ":"),
-    )
-    machine.succeed(
-        "curl -fsS -H 'Content-Type: application/json' --data %s "
-        "%s/debug/inject/update | "
-        "jq -e '.ok and .delivery_method == \"polling\"' >/dev/null"
-        % (shell_quote(payload), telegym_base_url)
-    )
-    machine.wait_until_succeeds(
-        "grep '^media-start$' %s" % media_origin_events_file
-    )
+    with subtest("stop processing at the overall deadline"):
+        payload = json.dumps(
+            {"token": fake_token, "chat_id": 1001, "text": media_url},
+            separators=(",", ":"),
+        )
+        machine.succeed(
+            "curl -fsS -H 'Content-Type: application/json' --data %s "
+            "%s/debug/inject/update | "
+            "jq -e '.ok and .delivery_method == \"polling\"' >/dev/null"
+            % (shell_quote(payload), telegym_base_url)
+        )
+        machine.wait_until_succeeds(
+            "grep '^media-start$' %s" % media_origin_events_file
+        )
 
-    machine.wait_until_succeeds(
-        "journalctl -u ${serviceUnit} --no-pager | grep 'overall deadline exceeded'"
-    )
-    machine.wait_until_succeeds(
-        "curl -fsS %s | grep -F 'lolek_messages_total{result=\"processing_deadline_exceeded\"} 1'"
-        % metrics_url
-    )
-    machine.wait_until_succeeds(
-        "curl -fsS %s | grep -F 'lolek_processing_active 0'" % metrics_url
-    )
-    machine.succeed(
-        "curl -fsS %s | jq -e '.count == 0' >/dev/null"
-        % shell_quote(messages_url)
-    )
+        machine.wait_until_succeeds(
+            "journalctl -u ${serviceUnit} --no-pager | grep 'overall deadline exceeded'"
+        )
+        machine.wait_until_succeeds(
+            "curl -fsS %s | grep -F 'lolek_messages_total{result=\"processing_deadline_exceeded\"} 1'"
+            % metrics_url
+        )
+        machine.wait_until_succeeds(
+            "curl -fsS %s | grep -F 'lolek_processing_active 0'" % metrics_url
+        )
+        machine.succeed(
+            "curl -fsS %s | jq -e '.count == 0' >/dev/null"
+            % shell_quote(messages_url)
+        )
     machine.succeed("systemctl is-active --quiet ${serviceUnit}")
   '';
 }

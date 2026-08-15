@@ -181,16 +181,64 @@ defmodule Lolek.File do
         %{"file_id" => file_id, "ext" => ext}
       end)
 
-    with :ok <- File.mkdir_p(ready_path) do
-      case File.write(manifest_path, Jason.encode!(manifest)) do
-        :ok -> cleanup_media_cache(cache_root)
-        {:error, reason} -> {:error, {:media_manifest_write, reason}}
-      end
+    with :ok <- File.mkdir_p(ready_path),
+         :ok <- persist_media_manifest(ready_path, manifest_path, manifest) do
+      cleanup_media_cache(cache_root)
     end
   end
 
   def move_to_ready_to_telegram(_another_file_state) do
     :ok
+  end
+
+  @spec persist_media_manifest(String.t(), String.t(), [map()]) :: :ok | {:error, term()}
+  defp persist_media_manifest(ready_path, manifest_path, manifest) do
+    temporary_path = manifest_path <> ".tmp"
+
+    try do
+      with :ok <- write_synced_manifest(temporary_path, manifest),
+           :ok <- replace_manifest(temporary_path, manifest_path) do
+        sync_directory(ready_path)
+      end
+    after
+      File.rm(temporary_path)
+    end
+  end
+
+  @spec write_synced_manifest(String.t(), [map()]) :: :ok | {:error, term()}
+  defp write_synced_manifest(path, manifest) do
+    case File.write(path, Jason.encode!(manifest), [:sync]) do
+      :ok -> :ok
+      {:error, reason} -> {:error, {:media_manifest_write, reason}}
+    end
+  end
+
+  @spec replace_manifest(String.t(), String.t()) :: :ok | {:error, term()}
+  defp replace_manifest(temporary_path, manifest_path) do
+    case File.rename(temporary_path, manifest_path) do
+      :ok -> :ok
+      {:error, reason} -> {:error, {:media_manifest_rename, reason}}
+    end
+  end
+
+  @spec sync_directory(String.t()) :: :ok | {:error, term()}
+  defp sync_directory(path) do
+    case :file.open(String.to_charlist(path), [:read, :raw, :directory]) do
+      {:ok, io_device} -> sync_open_directory(io_device)
+      {:error, reason} -> {:error, {:media_manifest_directory_sync, reason}}
+    end
+  end
+
+  @spec sync_open_directory(:file.io_device()) :: :ok | {:error, term()}
+  defp sync_open_directory(io_device) do
+    try do
+      case :file.sync(io_device) do
+        :ok -> :ok
+        {:error, reason} -> {:error, {:media_manifest_directory_sync, reason}}
+      end
+    after
+      :file.close(io_device)
+    end
   end
 
   @spec cleanup_media_cache(String.t()) :: :ok | {:error, term()}

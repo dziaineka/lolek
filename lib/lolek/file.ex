@@ -436,12 +436,18 @@ defmodule Lolek.File do
 
   @spec check_if_downloaded(String.t()) :: :not_downloaded | {:exists, Lolek.File.file_state()}
   defp check_if_downloaded(folder_path) do
-    case get_file_path_by_pattern(folder_path, @downloaded_name) do
-      {:ok, file_path} ->
-        {
-          :exists,
-          {:downloaded_media, folder_path, [file_path]}
-        }
+    case File.ls(folder_path) do
+      {:ok, file_names} ->
+        files =
+          file_names
+          |> Enum.filter(&String.contains?(&1, @downloaded_name))
+          |> Enum.sort()
+          |> Enum.map(&Path.join(folder_path, &1))
+
+        case files do
+          [] -> :not_downloaded
+          files -> {:exists, {:downloaded_media, folder_path, files}}
+        end
 
       _ ->
         :not_downloaded

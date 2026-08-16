@@ -4,6 +4,8 @@ defmodule Lolek.Url do
   """
 
   @threads_hosts ["threads.com", "www.threads.com", "threads.net", "www.threads.net"]
+  @youtube_post_hosts ["youtube.com", "www.youtube.com", "m.youtube.com"]
+  @youtube_post_path_regex ~r{^/post/[A-Za-z0-9_-]+/?$}
   @url_regex ~r/(:?https|http):\/\/\S+/
 
   @spec extract_url(String.t()) :: {:ok, String.t()} | {:error, atom()}
@@ -70,6 +72,23 @@ defmodule Lolek.Url do
         }
         |> URI.to_string()
         |> String.downcase()
+
+      %URI{scheme: scheme, host: host, path: path} = uri
+      when scheme in ["http", "https"] and host in @youtube_post_hosts and is_binary(path) ->
+        if Regex.match?(@youtube_post_path_regex, path) do
+          %URI{
+            uri
+            | scheme: "https",
+              host: "www.youtube.com",
+              port: nil,
+              path: String.trim_trailing(path, "/"),
+              query: nil,
+              fragment: nil
+          }
+          |> URI.to_string()
+        else
+          String.downcase(url)
+        end
 
       _ ->
         String.downcase(url)

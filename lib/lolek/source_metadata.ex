@@ -65,6 +65,7 @@ defmodule Lolek.SourceMetadata do
   defp fetch_metadata(url) do
     case Lolek.Downloader.downloader_module(url) do
       Lolek.ThreadsDownloader -> fetch_threads_metadata(url)
+      Lolek.YoutubePostDownloader -> fetch_youtube_post_metadata(url)
       :yt_dlp -> fetch_yt_dlp_metadata(url)
     end
   end
@@ -84,6 +85,13 @@ defmodule Lolek.SourceMetadata do
   @spec fetch_threads_metadata(String.t()) :: {:ok, t()} | {:error, term()}
   defp fetch_threads_metadata(url) do
     with {:ok, caption} <- Lolek.ThreadsDownloader.caption(url) do
+      {:ok, %{caption: caption, title: caption}}
+    end
+  end
+
+  @spec fetch_youtube_post_metadata(String.t()) :: {:ok, t()} | {:error, term()}
+  defp fetch_youtube_post_metadata(url) do
+    with {:ok, caption} <- Lolek.YoutubePostDownloader.caption(url) do
       {:ok, %{caption: caption, title: caption}}
     end
   end

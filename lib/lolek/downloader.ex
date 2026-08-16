@@ -6,6 +6,8 @@ defmodule Lolek.Downloader do
   @downloaded_name "downloaded.mp4"
   @gallery_subdir "gallery"
   @threads_hosts ["threads.com", "www.threads.com", "threads.net", "www.threads.net"]
+  @youtube_post_hosts ["youtube.com", "www.youtube.com", "m.youtube.com"]
+  @youtube_post_path_regex ~r{^/post/}
 
   @type formats_probe :: :not_probed | :has_formats | :no_formats | :inconclusive
   @type download_error :: :no_video_formats | String.t()
@@ -47,6 +49,9 @@ defmodule Lolek.Downloader do
     log_url = Lolek.Url.normalize_for_log(url)
 
     case download_once(url, output_path) do
+      {:ok, {:downloaded_media, _, _} = file_state} ->
+        {:ok, file_state}
+
       {:ok, _} ->
         case Lolek.File.get_file_path_by_pattern(output_path, @downloaded_name) do
           {:ok, file_path} -> {:ok, {:downloaded_media, output_path, [file_path]}}
@@ -110,20 +115,30 @@ defmodule Lolek.Downloader do
   @spec do_gallery_download(String.t(), String.t()) :: {:ok, [String.t()]} | {:error, term()}
   defp do_gallery_download(url, gallery_dir) do
     case downloader_module(url) do
-      Lolek.ThreadsDownloader -> Lolek.ThreadsDownloader.download_gallery(url, gallery_dir)
-      :yt_dlp -> Lolek.GalleryDownloader.download(url, gallery_dir)
+      Lolek.ThreadsDownloader ->
+        Lolek.ThreadsDownloader.download_gallery(url, gallery_dir)
+
+      Lolek.YoutubePostDownloader ->
+        Lolek.YoutubePostDownloader.download_gallery(url, gallery_dir)
+
+      :yt_dlp ->
+        Lolek.GalleryDownloader.download(url, gallery_dir)
     end
   end
 
   @spec download_once(String.t(), String.t()) :: {:ok, term()} | {:error, term()}
   defp download_once(url, output_path) do
-    output_file_path = Path.join(output_path, @downloaded_name)
-
     case downloader_module(url) do
       Lolek.ThreadsDownloader ->
+        output_file_path = Path.join(output_path, @downloaded_name)
         Lolek.ThreadsDownloader.download(url, output_file_path)
 
+      Lolek.YoutubePostDownloader ->
+        Lolek.YoutubePostDownloader.download(url, output_path)
+
       :yt_dlp ->
+        output_file_path = Path.join(output_path, @downloaded_name)
+
         Lolek.Command.run(
           "yt-dlp",
           yt_dlp_cookies_args() ++
@@ -171,11 +186,23 @@ defmodule Lolek.Downloader do
     |> :timer.seconds()
   end
 
-  @spec downloader_module(String.t()) :: Lolek.ThreadsDownloader | :yt_dlp
+  @spec downloader_module(String.t()) ::
+          Lolek.ThreadsDownloader | Lolek.YoutubePostDownloader | :yt_dlp
   def downloader_module(url) do
     case URI.parse(url) do
-      %URI{host: host} when host in @threads_hosts -> Lolek.ThreadsDownloader
-      _ -> :yt_dlp
+      %URI{host: host} when host in @threads_hosts ->
+        Lolek.ThreadsDownloader
+
+      %URI{host: host, path: path}
+      when host in @youtube_post_hosts and is_binary(path) ->
+        if Regex.match?(@youtube_post_path_regex, path) do
+          Lolek.YoutubePostDownloader
+        else
+          :yt_dlp
+        end
+
+      _ ->
+        :yt_dlp
     end
   end
 
@@ -184,6 +211,7 @@ defmodule Lolek.Downloader do
     case downloader_module(url) do
       :yt_dlp -> probe_formats(url)
       Lolek.ThreadsDownloader -> :inconclusive
+      Lolek.YoutubePostDownloader -> :inconclusive
     end
   end
 

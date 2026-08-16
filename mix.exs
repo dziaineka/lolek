@@ -29,7 +29,7 @@ defmodule Lolek.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:ex_gram, "0.67.0"},
+      {:ex_gram, "0.69.0"},
       {:req, "0.7.2", override: true},
       {:html_entities, "0.5.2"},
       {:jason, "1.4.5"},

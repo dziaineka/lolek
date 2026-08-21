@@ -5,7 +5,7 @@
     nixpkgs.url = "github:NixOS/nixpkgs/release-26.05";
     telegym = {
       url = "github:booxter/telegym/lolek-missing-features";
-      flake = false;
+      inputs.nixpkgs.follows = "nixpkgs";
     };
   };
 
@@ -55,7 +55,7 @@
         import ./nix/package.nix {
           pkgs = pkgsFor system;
           root = ./.;
-          telegymSrc = telegym;
+          telegym = telegym.packages.${system}.telegym;
           inherit systems;
         }
       );
@@ -68,7 +68,8 @@
           module = self.nixosModules.default;
           package = self.packages.${system}.lolek;
           corpus = self.packages.${system}.corpus;
-          telegym = self.packages.${system}.telegym;
+          telegym = telegym.packages.${system}.telegym;
+          telegymModule = telegym.nixosModules.default;
           testCases = self.packages.${system}.get-test-cases;
         }
       );

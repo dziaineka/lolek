@@ -5,6 +5,7 @@
   module ? null,
   package ? null,
   telegym ? null,
+  telegymModule ? null,
   testCases ? null,
 }:
 
@@ -96,6 +97,7 @@ in
       module
       package
       telegym
+      telegymModule
       ;
   };
 
@@ -105,6 +107,7 @@ in
       module
       package
       telegym
+      telegymModule
       ;
   };
 
@@ -114,6 +117,7 @@ in
       module
       package
       telegym
+      telegymModule
       ;
   };
 
@@ -123,6 +127,7 @@ in
       module
       package
       telegym
+      telegymModule
       ;
   };
 
@@ -132,6 +137,7 @@ in
       module
       package
       telegym
+      telegymModule
       testCases
       ;
   };

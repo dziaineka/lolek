@@ -23,13 +23,17 @@
       }
     },
     "telegym": {
-      "flake": false,
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
       "locked": {
-        "lastModified": 1785679772,
-        "narHash": "sha256-det9D0vZS2iyNfHYsH2MwO3SyUPV6YDzVSNbuplpWe8=",
+        "lastModified": 1787266455,
+        "narHash": "sha256-1FlDPWbKeVwEsKbUJKE+NLEBA7OIO6fWgx7p7q+QCk4=",
         "owner": "booxter",
         "repo": "telegym",
-        "rev": "74f7ab5ffb2e530e7a5d36ea575f4cad3e1c6a64",
+        "rev": "5cbd75aef9b393bb97ff7e86f18d1d200a6af627",
         "type": "github"
       },
       "original": {

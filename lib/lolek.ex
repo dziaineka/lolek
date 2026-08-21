@@ -8,6 +8,8 @@ defmodule Lolek do
   @caption_ellipsis "..."
   @max_upload_file_name_bytes 180
   @max_media_group_size 10
+  @flood_wait_attempts 2
+  @max_flood_wait_ms 60_000
   @gif_extensions ~w(.gif)
   @photo_extensions ~w(.jpg .jpeg .png .webp .avif)
 
@@ -120,6 +122,8 @@ defmodule Lolek do
     end
   end
 
+  # Batches already in the chat cannot be taken back, so only a first batch
+  # that never landed is an error.
   @spec send_media_group_items(integer(), [media_item()], keyword()) ::
           {:ok, [{String.t(), String.t()}]} | {:error, term()}
   defp send_media_group_items(chat_id, items, context) do
@@ -139,12 +143,25 @@ defmodule Lolek do
           {:cont, {:ok, acc_entries ++ entries}}
 
         {:ok, other} ->
-          {:halt, {:error, {:unexpected_telegram_response, other}}}
+          halt_media_group(acc_entries, {:error, {:unexpected_telegram_response, other}}, idx)
 
         {:error, _} = error ->
-          {:halt, error}
+          halt_media_group(acc_entries, error, idx)
       end
     end)
+  end
+
+  @spec halt_media_group([{String.t(), String.t()}], {:error, term()}, non_neg_integer()) ::
+          {:halt, {:ok, [{String.t(), String.t()}]} | {:error, term()}}
+  defp halt_media_group([], error, _idx), do: {:halt, error}
+
+  defp halt_media_group(acc_entries, {:error, reason}, idx) do
+    Logger.warning(
+      "Media group batch #{idx} failed after #{length(acc_entries)} items were sent; " <>
+        "keeping what reached the chat. Reason: #{inspect(reason)}"
+    )
+
+    {:halt, {:ok, acc_entries}}
   end
 
   @spec send_media_group_batch(integer(), [term()], keyword()) ::
@@ -615,17 +632,83 @@ defmodule Lolek do
   end
 
   @spec call_telegram((-> {:ok, term()} | {:error, term()})) :: {:ok, term()} | {:error, term()}
-  defp call_telegram(fun) do
+  defp call_telegram(fun), do: call_telegram(fun, @flood_wait_attempts)
+
+  @spec call_telegram((-> {:ok, term()} | {:error, term()}), pos_integer()) ::
+          {:ok, term()} | {:error, term()}
+  defp call_telegram(fun, attempts_left) do
     if Lolek.ProcessingDeadline.expired?() do
       {:error, :processing_deadline_exceeded}
     else
-      case fun.() do
-        {:error, %ExGram.Error{} = error} -> {:error, {:telegram_api, error}}
-        result -> result
+      case run_telegram_call(fun) do
+        {:error, {:telegram_api, error}} = failure ->
+          retry_after_flood_wait(fun, error, attempts_left, failure)
+
+        result ->
+          result
       end
+    end
+  end
+
+  @spec run_telegram_call((-> {:ok, term()} | {:error, term()})) ::
+          {:ok, term()} | {:error, term()}
+  defp run_telegram_call(fun) do
+    case fun.() do
+      {:error, %ExGram.Error{} = error} -> {:error, {:telegram_api, error}}
+      result -> result
     end
   rescue
     error in ExGram.Error ->
       {:error, {:telegram_api, error}}
+  end
+
+  # The wait never outlives the processing deadline.
+  @spec retry_after_flood_wait(
+          (-> {:ok, term()} | {:error, term()}),
+          ExGram.Error.t(),
+          pos_integer(),
+          {:error, term()}
+        ) :: {:ok, term()} | {:error, term()}
+  defp retry_after_flood_wait(fun, error, attempts_left, failure) do
+    with true <- attempts_left > 1,
+         {:ok, wait_ms} <- flood_wait_ms(error),
+         true <- wait_ms <= remaining_deadline_ms() do
+      Logger.warning("Telegram flood limit, waiting #{wait_ms}ms before a retry")
+      Process.sleep(wait_ms)
+      call_telegram(fun, attempts_left - 1)
+    else
+      _ -> failure
+    end
+  end
+
+  @spec flood_wait_ms(ExGram.Error.t()) :: {:ok, pos_integer()} | :error
+  defp flood_wait_ms(%ExGram.Error{code: 429, metadata: metadata}) do
+    case retry_after_seconds(metadata) do
+      seconds when is_integer(seconds) and seconds >= 0 ->
+        {:ok, min((seconds + 1) * 1000, @max_flood_wait_ms)}
+
+      _ ->
+        :error
+    end
+  end
+
+  defp flood_wait_ms(_error), do: :error
+
+  @spec retry_after_seconds(term()) :: integer() | nil
+  defp retry_after_seconds(%{parameters: parameters}) when is_list(parameters) do
+    Enum.find_value(parameters, fn
+      %{retry_after: seconds} when is_integer(seconds) -> seconds
+      _ -> nil
+    end)
+  end
+
+  defp retry_after_seconds(_metadata), do: nil
+
+  @spec remaining_deadline_ms() :: non_neg_integer()
+  defp remaining_deadline_ms do
+    case Lolek.ProcessingDeadline.limit_timeout(:infinity) do
+      :infinity -> @max_flood_wait_ms
+      remaining when is_integer(remaining) -> remaining
+    end
   end
 end

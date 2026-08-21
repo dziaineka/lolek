@@ -103,6 +103,80 @@ defmodule Lolek.SendFileTest do
     end)
   end
 
+  test "waits out a flood limit and sends the media on the retry" do
+    preserve_telegram_env(fn ->
+      flood_wait_env(retry_after: 0)
+
+      assert {:ok, {:ready_media, [{"file-id", ".mp4"}]}} =
+               Lolek.send_file(123, {:ready_media, [{"file-id", ".mp4"}]})
+
+      assert_receive {:send_video, 123, "file-id", _}
+      assert_receive {:send_video, 123, "file-id", _}
+      refute_receive {:send_video, _, _, _}
+    end)
+  end
+
+  test "gives up on a flood limit that repeats" do
+    preserve_telegram_env(fn ->
+      flood_wait_env(retry_after: 0, failures: 2)
+
+      assert {:error, {:telegram_api, %ExGram.Error{code: 429}}} =
+               Lolek.send_file(123, {:ready_media, [{"file-id", ".mp4"}]})
+
+      assert_receive {:send_video, 123, "file-id", _}
+      assert_receive {:send_video, 123, "file-id", _}
+      refute_receive {:send_video, _, _, _}
+    end)
+  end
+
+  test "does not wait for a flood limit longer than the processing deadline" do
+    preserve_telegram_env(fn ->
+      flood_wait_env(retry_after: 59)
+      test_pid = self()
+
+      Lolek.ProcessingDeadline.run(
+        fn ->
+          result = Lolek.send_file(123, {:ready_media, [{"file-id", ".mp4"}]})
+          send(test_pid, {:flood_result, result})
+        end,
+        200
+      )
+
+      assert_receive {:flood_result, {:error, {:telegram_api, %ExGram.Error{code: 429}}}}
+      assert_receive {:send_video, 123, "file-id", _}
+      refute_receive {:send_video, _, _, _}
+    end)
+  end
+
+  test "a rejection that is not a flood limit is returned at once" do
+    preserve_telegram_env(fn ->
+      flood_wait_env(retry_after: 0)
+
+      Application.put_env(:lolek, :telegram_test_error, %ExGram.Error{
+        code: 400,
+        message: "Bad Request"
+      })
+
+      assert {:error, {:telegram_api, %ExGram.Error{code: 400}}} =
+               Lolek.send_file(123, {:ready_media, [{"file-id", ".mp4"}]})
+
+      assert_receive {:send_video, 123, "file-id", _}
+      refute_receive {:send_video, _, _, _}
+    end)
+  end
+
+  test "a flood limit without the retry hint is not waited out" do
+    preserve_telegram_env(fn ->
+      flood_wait_env(retry_after: nil)
+
+      assert {:error, {:telegram_api, %ExGram.Error{code: 429}}} =
+               Lolek.send_file(123, {:ready_media, [{"file-id", ".mp4"}]})
+
+      assert_receive {:send_video, 123, "file-id", _}
+      refute_receive {:send_video, _, _, _}
+    end)
+  end
+
   test "returns an error when Telegram raises while sending" do
     preserve_telegram_env(fn ->
       error = %ExGram.Error{code: 500, message: "Internal Error"}
@@ -424,6 +498,52 @@ defmodule Lolek.SendFileTest do
       assert_receive {:send_media_group, 123, second_batch, []}
       assert length(first_batch) == 9
       assert length(second_batch) == 2
+    end)
+  end
+
+  test "keeps a gallery half that already reached the chat" do
+    preserve_telegram_env(fn ->
+      files = for index <- 1..11, do: tmp_file("gallery-#{index}.jpg", "media")
+
+      messages =
+        for index <- 1..9 do
+          %ExGram.Model.Message{
+            photo: [%ExGram.Model.PhotoSize{file_id: "gallery-file-#{index}"}]
+          }
+        end
+
+      Application.put_env(:lolek, :telegram_client, Lolek.SendFileTest.GalleryTailFailsClient)
+      Application.put_env(:lolek, :telegram_test_parent, self())
+      Application.put_env(:lolek, :telegram_test_attempts, :atomics.new(1, []))
+      Application.put_env(:lolek, :telegram_test_result, {:ok, messages})
+      Application.put_env(:lolek, :max_gallery_media, 11)
+
+      assert {:ok, {:sent_media, "/tmp", entries}} =
+               Lolek.send_file(123, {:prepared_media, "/tmp", files})
+
+      assert length(entries) == 9
+      assert_receive {:send_media_group, 123, first_batch, []}
+      assert_receive {:send_media_group, 123, second_batch, []}
+      assert length(first_batch) == 9
+      assert length(second_batch) == 2
+    end)
+  end
+
+  test "reports an error when the first media group never lands" do
+    preserve_telegram_env(fn ->
+      files = for index <- 1..11, do: tmp_file("gallery-#{index}.jpg", "media")
+
+      Application.put_env(:lolek, :telegram_client, TelegramClient)
+      Application.put_env(:lolek, :max_gallery_media, 11)
+
+      Application.put_env(
+        :lolek,
+        :telegram_test_result,
+        {:error, %ExGram.Error{code: 400, message: "Bad Request"}}
+      )
+
+      assert {:error, {:telegram_api, %ExGram.Error{code: 400}}} =
+               Lolek.send_file(123, {:prepared_media, "/tmp", files})
     end)
   end
 
@@ -806,6 +926,35 @@ defmodule Lolek.SendFileTest do
     end)
   end
 
+  # A client that answers with 429 first and succeeds afterwards. `retry_after`
+  # of nil models a flood limit Telegram sent without the hint.
+  defp flood_wait_env(opts) do
+    retry_after = Keyword.fetch!(opts, :retry_after)
+
+    parameters =
+      case retry_after do
+        nil -> []
+        seconds -> [%ExGram.Model.ResponseParameters{retry_after: seconds}]
+      end
+
+    Application.put_env(:lolek, :telegram_client, Lolek.SendFileTest.FloodWaitTelegramClient)
+    Application.put_env(:lolek, :telegram_test_parent, self())
+    Application.put_env(:lolek, :telegram_test_attempts, :atomics.new(1, []))
+    Application.put_env(:lolek, :telegram_test_flood_failures, Keyword.get(opts, :failures, 1))
+
+    Application.put_env(:lolek, :telegram_test_error, %ExGram.Error{
+      code: 429,
+      message: "Too Many Requests",
+      metadata: %{parameters: parameters}
+    })
+
+    Application.put_env(
+      :lolek,
+      :telegram_test_result,
+      {:ok, %ExGram.Model.Message{video: %ExGram.Model.Video{file_id: "telegram-file-id"}}}
+    )
+  end
+
   defp preserve_telegram_env(fun) do
     client = Application.fetch_env(:lolek, :telegram_client)
     result = Application.fetch_env(:lolek, :telegram_test_result)
@@ -897,5 +1046,100 @@ defmodule Lolek.SendFileTest.RaisingTelegramClient do
   @impl true
   def edit_message_caption(_chat_id, _message_id, _options) do
     raise Application.fetch_env!(:lolek, :telegram_test_error)
+  end
+end
+
+defmodule Lolek.SendFileTest.FloodWaitTelegramClient do
+  @moduledoc """
+  Fails the first attempts with a flood limit, then succeeds.
+  """
+
+  @behaviour Lolek.Telegram
+
+  @impl true
+  def send_video(chat_id, video, options) do
+    respond({:send_video, chat_id, video, options})
+  end
+
+  @impl true
+  def send_document(chat_id, document, options) do
+    respond({:send_document, chat_id, document, options})
+  end
+
+  @impl true
+  def send_photo(chat_id, photo, options) do
+    respond({:send_photo, chat_id, photo, options})
+  end
+
+  @impl true
+  def send_animation(chat_id, animation, options) do
+    respond({:send_animation, chat_id, animation, options})
+  end
+
+  @impl true
+  def send_media_group(chat_id, media, options) do
+    respond({:send_media_group, chat_id, media, options})
+  end
+
+  @impl true
+  def edit_message_caption(chat_id, message_id, options) do
+    respond({:edit_message_caption, chat_id, message_id, options})
+  end
+
+  defp respond(call) do
+    if parent = Application.get_env(:lolek, :telegram_test_parent) do
+      send(parent, call)
+    end
+
+    counter = Application.fetch_env!(:lolek, :telegram_test_attempts)
+    attempt = :atomics.add_get(counter, 1, 1)
+    failures = Application.get_env(:lolek, :telegram_test_flood_failures, 1)
+
+    if attempt <= failures do
+      {:error, Application.fetch_env!(:lolek, :telegram_test_error)}
+    else
+      Application.fetch_env!(:lolek, :telegram_test_result)
+    end
+  end
+end
+
+defmodule Lolek.SendFileTest.GalleryTailFailsClient do
+  @moduledoc """
+  Takes the first media group and rejects every one after it.
+  """
+
+  @behaviour Lolek.Telegram
+
+  @impl true
+  def send_video(_chat_id, _video, _options), do: rejected()
+
+  @impl true
+  def send_document(_chat_id, _document, _options), do: rejected()
+
+  @impl true
+  def send_photo(_chat_id, _photo, _options), do: rejected()
+
+  @impl true
+  def send_animation(_chat_id, _animation, _options), do: rejected()
+
+  @impl true
+  def edit_message_caption(_chat_id, _message_id, _options), do: rejected()
+
+  @impl true
+  def send_media_group(chat_id, media, options) do
+    if parent = Application.get_env(:lolek, :telegram_test_parent) do
+      send(parent, {:send_media_group, chat_id, media, options})
+    end
+
+    counter = Application.fetch_env!(:lolek, :telegram_test_attempts)
+
+    case :atomics.add_get(counter, 1, 1) do
+      1 -> Application.fetch_env!(:lolek, :telegram_test_result)
+      _ -> rejected()
+    end
+  end
+
+  defp rejected do
+    {:error, %ExGram.Error{code: 400, message: "Bad Request"}}
   end
 end

@@ -2,16 +2,12 @@
   pkgs,
   root,
   systems,
-  telegymSrc,
+  telegym,
 }:
 
 let
   lolek = import ./pkgs/lolek.nix {
     inherit pkgs root systems;
-  };
-  telegym = import ./pkgs/telegym.nix {
-    inherit pkgs systems;
-    src = telegymSrc;
   };
   corpusPackages = import ./pkgs/corpus.nix {
     inherit
@@ -25,6 +21,6 @@ let
 in
 corpusPackages
 // {
-  inherit lolek telegym;
+  inherit lolek;
   default = lolek;
 }

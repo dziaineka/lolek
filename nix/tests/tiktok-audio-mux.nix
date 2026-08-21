@@ -3,6 +3,7 @@
   module,
   package,
   telegym,
+  telegymModule,
 }:
 
 let
@@ -138,11 +139,14 @@ pkgs.testers.nixosTest {
     {
       imports = [
         module
-        (import ./telegym-service.nix {
-          package = telegym;
-          port = telegymPort;
-        })
+        telegymModule
       ];
+
+      services.telegym-mock = {
+        enable = true;
+        package = telegym;
+        port = telegymPort;
+      };
 
       environment.systemPackages = [
         pkgs.curl

@@ -1,19 +1,14 @@
+# yt-dlp nightly version (https://github.com/yt-dlp/yt-dlp-nightly-builds/releases), installed
+# as a PyPI dev-release in the final stage
+ARG YT_DLP_VERSION=2026.08.20.234504
+
 #### Builder
 FROM hexpm/elixir:1.20.2-erlang-29.0.2-debian-trixie-20260623-slim AS buildcontainer
 
-RUN mkdir /ytdlp
-WORKDIR /ytdlp
-
 # install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-  wget git gnupg make gcc g++ libc-dev \
+  git gnupg make gcc g++ libc-dev \
   && rm -rf /var/lib/apt/lists/*
-
-# yt-dlp source (https://github.com/yt-dlp/yt-dlp)
-ARG YT_DLP_VERSION=2026.06.09
-ARG YT_DLP_SHA256=e5d57466682cfa9d61e9cf7c8a4f09b00f4a62af37d3bbdc4bcffdf63615feac
-RUN wget -O yt-dlp https://github.com/yt-dlp/yt-dlp/releases/download/${YT_DLP_VERSION}/yt-dlp \
-&& echo "${YT_DLP_SHA256}  yt-dlp" | sha256sum -c
 
 RUN mkdir /app
 WORKDIR /app
@@ -50,10 +45,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   libstdc++6 \
   && rm -rf /var/lib/apt/lists/*
 
-COPY --from=buildcontainer /ytdlp/yt-dlp /usr/local/bin
-RUN chmod 755 /usr/local/bin/yt-dlp
+# yt-dlp: provides both the CLI and the yt_dlp Python module required by gallery-dl's
+# ytdl extractor (extractor.ytdl.module=yt_dlp). Installed from its PyPI dev-release to
+# pin the nightly build, e.g. 2026.08.20.234504 -> 2026.8.20.234504.dev0
+ARG YT_DLP_VERSION
+RUN YT_DLP_PYPI_VERSION=$(IFS=.; set -- ${YT_DLP_VERSION}; echo "$1.${2#0}.${3#0}.$4.dev0") && \
+  pip3 install --pre "yt-dlp[default]==${YT_DLP_PYPI_VERSION}" --no-cache-dir --break-system-packages \
+  && yt-dlp --version
 
-ARG GALLERY_DL_VERSION=1.32.3
+ARG GALLERY_DL_VERSION=1.32.9
 RUN pip3 install gallery-dl==${GALLERY_DL_VERSION} --no-cache-dir --break-system-packages \
   && gallery-dl --version
 

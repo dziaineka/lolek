@@ -121,6 +121,12 @@ in
       '';
     };
 
+    failureReactionsEnabled = mkOption {
+      type = types.bool;
+      default = true;
+      description = "Whether to react to media requests that fail during processing.";
+    };
+
     maxGalleryMedia = mkOption {
       type = types.ints.positive;
       default = 50;
@@ -503,6 +509,7 @@ in
         LOLEK_POST_SOURCE_CAPTION = if cfg.postSourceCaption then "true" else "false";
         LOLEK_POST_REQUESTER_CAPTION = if cfg.postRequesterCaption then "true" else "false";
         LOLEK_GALLERY_DOWNLOAD_ENABLED = if cfg.galleryDownloadEnabled then "true" else "false";
+        LOLEK_FAILURE_REACTIONS_ENABLED = if cfg.failureReactionsEnabled then "true" else "false";
         LOLEK_MAX_GALLERY_MEDIA = toString cfg.maxGalleryMedia;
         LOLEK_DOWNLOAD_DIR_PATH = toString cfg.downloadDir;
         LOLEK_MAX_DOWNLOAD_DIR_SIZE = toString cfg.maxDownloadDirSize;

@@ -44,9 +44,12 @@ defmodule Lolek.Handler do
         _context
       ) do
     with_fresh_message(message, fn ->
-      with_processing_deadline(message, fn ->
-        handle_text_message(text, chat_id, from, topic_message_thread_id(message))
-      end)
+      result =
+        with_processing_deadline(message, fn ->
+          handle_text_message(text, chat_id, from, topic_message_thread_id(message))
+        end)
+
+      maybe_react_to_failure(message, result)
     end)
   end
 
@@ -66,7 +69,7 @@ defmodule Lolek.Handler do
   def topic_message_thread_id(%ExGram.Model.Message{}), do: nil
 
   @spec handle_text_message(String.t(), integer(), ExGram.Model.User.t() | nil, integer() | nil) ::
-          :ok
+          :ok | {:failure, term()}
   defp handle_text_message(text, chat_id, from, message_thread_id) do
     case Lolek.Url.extract_url(text) do
       {:ok, url} ->
@@ -82,7 +85,7 @@ defmodule Lolek.Handler do
           {:error, :chat_rate_limited} ->
             Lolek.Metrics.record_message_result(:chat_rate_limited)
             Logger.warning("Dropping url from chat #{chat_id}: chat rate limit exceeded")
-            :ok
+            {:failure, :chat_rate_limited}
 
           {:error, reason} ->
             Lolek.Metrics.record_message_result({:error, reason})
@@ -91,7 +94,7 @@ defmodule Lolek.Handler do
               "Error when processing url: #{Lolek.Url.normalize_for_log(url)}; reason: #{inspect(reason)}"
             )
 
-            :ok
+            {:failure, reason}
         end
 
       {:error, :no_url} ->
@@ -99,6 +102,19 @@ defmodule Lolek.Handler do
         :ok
     end
   end
+
+  @spec maybe_react_to_failure(ExGram.Model.Message.t(), :ok | {:failure, term()}) :: :ok
+  defp maybe_react_to_failure(
+         %ExGram.Model.Message{
+           chat: %ExGram.Model.Chat{id: chat_id},
+           message_id: message_id
+         },
+         {:failure, reason}
+       ) do
+    Lolek.FailureReaction.react(chat_id, message_id, reason)
+  end
+
+  defp maybe_react_to_failure(%ExGram.Model.Message{}, :ok), do: :ok
 
   @spec process_admitted_url(
           integer(),
@@ -172,7 +188,7 @@ defmodule Lolek.Handler do
             "overall deadline exceeded; max_delay_seconds=#{max_delay_seconds}"
         )
 
-        :ok
+        {:failure, :processing_deadline_exceeded}
 
       result ->
         result

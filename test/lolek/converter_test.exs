@@ -189,7 +189,7 @@ defmodule Lolek.ConverterTest do
       System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
       {:ok, _apps} = Application.ensure_all_started(:erlexec)
 
-      assert {:error, :no_usable_media_files} =
+      assert {:error, :too_big_media} =
                Lolek.Converter.adapt_to_telegram({:downloaded_media, tmp_dir, [file_path]})
 
       assert File.exists?(file_path)
@@ -219,7 +219,7 @@ defmodule Lolek.ConverterTest do
       System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
       {:ok, _apps} = Application.ensure_all_started(:erlexec)
 
-      assert {:error, :no_usable_media_files} =
+      assert {:error, :too_big_media} =
                Lolek.Converter.adapt_to_telegram({:downloaded_media, tmp_dir, [file_path]})
 
       assert File.exists?(file_path)
@@ -336,7 +336,7 @@ defmodule Lolek.ConverterTest do
       System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
       {:ok, _apps} = Application.ensure_all_started(:erlexec)
 
-      assert {:error, :no_usable_media_files} =
+      assert {:error, :too_big_media} =
                Lolek.Converter.adapt_to_telegram({:downloaded_media, tmp_dir, [video]})
     end)
   end
@@ -511,7 +511,7 @@ defmodule Lolek.ConverterTest do
       System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
       {:ok, _apps} = Application.ensure_all_started(:erlexec)
 
-      assert {:error, :no_usable_media_files} =
+      assert {:error, :too_big_media} =
                Lolek.Converter.adapt_to_telegram({:downloaded_media, tmp_dir, [file_path]})
 
       assert File.exists?(file_path)

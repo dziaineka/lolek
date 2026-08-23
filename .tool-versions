@@ -1,3 +1,7 @@
-erlang 29.0.5
-elixir 1.20.3-otp-29
-rust 1.92.0
+erlang     29.0.5
+elixir     1.20.3-otp-29
+rust       1.92.0
+yt-dlp     2026.08.20.234504
+gallery-dl 1.32.9
+ffmpeg     9.0.1
+pipx       1.16.7

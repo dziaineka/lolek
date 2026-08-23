@@ -13,8 +13,8 @@ defmodule Lolek.Converter do
           {:ok, Lolek.File.file_state()} | {:error, term()}
   def adapt_to_telegram({:downloaded_media, cache_root, files}) do
     case prepare_media_files(cache_root, files) do
-      [] -> {:error, :no_usable_media_files}
-      prepared_files -> {:ok, {:prepared_media, cache_root, prepared_files}}
+      {[], errors} -> {:error, media_preparation_error(errors)}
+      {prepared_files, _errors} -> {:ok, {:prepared_media, cache_root, prepared_files}}
     end
   end
 
@@ -22,22 +22,35 @@ defmodule Lolek.Converter do
     {:ok, another_file_state}
   end
 
-  @spec prepare_media_files(String.t(), [String.t()]) :: [String.t()]
+  @spec prepare_media_files(String.t(), [String.t()]) :: {[String.t()], [term()]}
   defp prepare_media_files(cache_root, files) do
     files
-    |> Enum.reduce([], fn file_path, prepared_files ->
+    |> Enum.reduce({[], []}, fn file_path, {prepared_files, errors} ->
       case prepare_media_file(cache_root, file_path) do
         {:ok, prepared_path} ->
-          [prepared_path | prepared_files]
+          {[prepared_path | prepared_files], errors}
 
         {:error, reason} ->
           relative_path = Path.relative_to(file_path, cache_root)
           Logger.warning("Omitting media #{relative_path}: #{inspect(reason)}")
-          prepared_files
+          {prepared_files, [reason | errors]}
       end
     end)
-    |> Enum.reverse()
+    |> then(fn {prepared_files, errors} ->
+      {Enum.reverse(prepared_files), Enum.reverse(errors)}
+    end)
   end
+
+  @spec media_preparation_error([term()]) :: :too_big_media | :no_usable_media_files
+  defp media_preparation_error([_ | _] = errors) do
+    if Enum.all?(errors, &(&1 == :too_big_media)) do
+      :too_big_media
+    else
+      :no_usable_media_files
+    end
+  end
+
+  defp media_preparation_error([]), do: :no_usable_media_files
 
   @spec prepare_media_file(String.t(), String.t()) :: {:ok, String.t()} | {:error, term()}
   defp prepare_media_file(cache_root, file_path) do

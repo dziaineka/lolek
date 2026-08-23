@@ -9,7 +9,7 @@ This document provides guidance for AI coding agents working in the Lolek codeba
 - **Language**: Elixir (see version in `.tool-versions`)
 - **Framework**: OTP Application with ExGram (Telegram bot framework)
 - **Build Tool**: Mix
-- **Version Manager**: asdf (see `.tool-versions`)
+- **Version Manager**: mise (see `.tool-versions`)
 
 ## Build, Test & Quality Commands
 
@@ -169,7 +169,7 @@ Key environment variables:
 
 ## External Dependencies
 
-- **yt-dlp**: Video downloading (v2025.12.08)
+- **yt-dlp**: Video downloading (see `.tool-versions` for pinned version)
 - **ffmpeg/ffprobe**: Video processing and analysis; hardware encoding supports VAAPI and Intel QSV when the ffmpeg build and host render device support it
 - **Python3**: Required by yt-dlp
 

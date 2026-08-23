@@ -1,0 +1,2 @@
+[tool_alias]
+yt-dlp = "github:yt-dlp/yt-dlp-nightly-builds"

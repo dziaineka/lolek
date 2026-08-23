@@ -34,4 +34,9 @@ defmodule Lolek.ExGramTelegram do
   def edit_message_caption(chat_id, message_id, options) do
     ExGram.edit_message_caption(options ++ [chat_id: chat_id, message_id: message_id])
   end
+
+  @impl true
+  def set_message_reaction(chat_id, message_id, options) do
+    ExGram.set_message_reaction(chat_id, message_id, options)
+  end
 end

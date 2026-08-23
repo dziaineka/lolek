@@ -50,6 +50,12 @@ defmodule Lolek.SendFileTest do
       Application.fetch_env!(:lolek, :telegram_test_result)
     end
 
+    @impl true
+    def set_message_reaction(chat_id, message_id, options) do
+      record_call({:set_message_reaction, chat_id, message_id, options})
+      Application.fetch_env!(:lolek, :telegram_test_result)
+    end
+
     defp record_call(call) do
       if parent = Application.get_env(:lolek, :telegram_test_parent) do
         send(parent, call)

@@ -10,6 +10,8 @@ defmodule Lolek.Telegram do
   @callback send_media_group(integer(), [term()], keyword()) :: {:ok, term()} | {:error, term()}
   @callback edit_message_caption(integer(), integer(), keyword()) ::
               {:ok, term()} | {:error, term()}
+  @callback set_message_reaction(integer(), integer(), keyword()) ::
+              {:ok, term()} | {:error, term()}
 
   @doc "Sends a video to the given chat."
   @spec send_video(integer(), term(), keyword()) :: {:ok, term()} | {:error, term()}
@@ -45,6 +47,13 @@ defmodule Lolek.Telegram do
   @spec edit_message_caption(integer(), integer(), keyword()) :: {:ok, term()} | {:error, term()}
   def edit_message_caption(chat_id, message_id, options) do
     client().edit_message_caption(chat_id, message_id, options)
+  end
+
+  @doc "Sets the bot's reaction on a message."
+  @spec set_message_reaction(integer(), integer(), keyword()) ::
+          {:ok, term()} | {:error, term()}
+  def set_message_reaction(chat_id, message_id, options) do
+    client().set_message_reaction(chat_id, message_id, options)
   end
 
   @spec client() :: module()

@@ -3,7 +3,7 @@
 ARG YT_DLP_VERSION=2026.08.20.234504
 
 #### Builder
-FROM hexpm/elixir:1.20.2-erlang-29.0.2-debian-trixie-20260623-slim AS buildcontainer
+FROM hexpm/elixir:1.20.3-erlang-29.0.5-debian-trixie-20260803-slim AS buildcontainer
 
 # install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \

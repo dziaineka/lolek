@@ -34,11 +34,11 @@
                 packages = prev.beam.packages // {
                   erlang_29 = prev.beam.packages.erlang_29 // {
                     elixir_1_20 = prev.beam.packages.erlang_29.elixir_1_20.overrideAttrs (_: {
-                      version = "1.20.2";
+                      version = "1.20.3";
                       src = prev.fetchFromGitHub {
                         owner = "elixir-lang";
                         repo = "elixir";
-                        rev = "v1.20.2";
+                        rev = "v1.20.3";
                         hash = "sha256-KSRsXQhh3PX7SUNhuw/POg74XfjkPiZDsv9wdNwFrwA=";
                       };
                     });

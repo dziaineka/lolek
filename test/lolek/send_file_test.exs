@@ -1053,6 +1053,11 @@ defmodule Lolek.SendFileTest.RaisingTelegramClient do
   def edit_message_caption(_chat_id, _message_id, _options) do
     raise Application.fetch_env!(:lolek, :telegram_test_error)
   end
+
+  @impl true
+  def set_message_reaction(_chat_id, _message_id, _options) do
+    raise Application.fetch_env!(:lolek, :telegram_test_error)
+  end
 end
 
 defmodule Lolek.SendFileTest.FloodWaitTelegramClient do
@@ -1090,6 +1095,11 @@ defmodule Lolek.SendFileTest.FloodWaitTelegramClient do
   @impl true
   def edit_message_caption(chat_id, message_id, options) do
     respond({:edit_message_caption, chat_id, message_id, options})
+  end
+
+  @impl true
+  def set_message_reaction(chat_id, message_id, options) do
+    respond({:set_message_reaction, chat_id, message_id, options})
   end
 
   defp respond(call) do
@@ -1130,6 +1140,9 @@ defmodule Lolek.SendFileTest.GalleryTailFailsClient do
 
   @impl true
   def edit_message_caption(_chat_id, _message_id, _options), do: rejected()
+
+  @impl true
+  def set_message_reaction(_chat_id, _message_id, _options), do: rejected()
 
   @impl true
   def send_media_group(chat_id, media, options) do

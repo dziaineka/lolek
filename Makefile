@@ -17,5 +17,8 @@ push:
 check:
 	mix check
 
+nix-check:
+	nix flake check
+
 format:
 	mix format

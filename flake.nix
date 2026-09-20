@@ -39,7 +39,7 @@
                         owner = "elixir-lang";
                         repo = "elixir";
                         rev = "v1.20.3";
-                        hash = "sha256-KSRsXQhh3PX7SUNhuw/POg74XfjkPiZDsv9wdNwFrwA=";
+                        hash = "sha256-60DlK+yocWcKnxcOtUOkRO69scaY35AADoKFCCF6QfQ=";
                       };
                     });
                   };

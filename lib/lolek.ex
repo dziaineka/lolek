@@ -8,6 +8,7 @@ defmodule Lolek do
   @caption_ellipsis "..."
   @max_upload_file_name_bytes 180
   @max_media_group_size 10
+  @max_rich_media 50
   @flood_wait_attempts 2
   @max_flood_wait_ms 60_000
   @gif_extensions ~w(.gif)
@@ -15,6 +16,12 @@ defmodule Lolek do
 
   @typep media_source :: {:file_path, String.t()} | {:file_id, String.t()}
   @typep media_item :: {media_source(), String.t()}
+  @typep caption :: {String.t(), [ExGram.Model.MessageEntity.t()]}
+  @typep requester_caption :: %{
+           text: String.t(),
+           name: String.t(),
+           user: ExGram.Model.User.t() | nil
+         }
 
   require Logger
 
@@ -54,12 +61,137 @@ defmodule Lolek do
           {:ok, [{String.t(), String.t()}]} | {:error, term()}
   defp send_media_collection(_chat_id, [], _context), do: {:error, :no_usable_media_files}
 
-  defp send_media_collection(chat_id, [item], context) do
+  # A rich message takes at most 50 media; a larger gallery would be rejected
+  # and then uploaded twice.
+  defp send_media_collection(chat_id, items, context) do
+    kinded_items = Enum.map(items, fn {_source, ext} = item -> {rich_media_kind(ext), item} end)
+
+    if length(items) <= @max_rich_media and Enum.all?(kinded_items, &elem(&1, 0)) do
+      send_rich_post(chat_id, kinded_items, context)
+    else
+      send_classic_collection(chat_id, items, context)
+    end
+  end
+
+  @spec send_classic_collection(integer(), [media_item()], keyword()) ::
+          {:ok, [{String.t(), String.t()}]} | {:error, term()}
+  defp send_classic_collection(chat_id, [item], context) do
     send_single_media_item(chat_id, item, context)
   end
 
-  defp send_media_collection(chat_id, items, context) do
+  defp send_classic_collection(chat_id, items, context) do
     send_media_group_items(chat_id, items, context)
+  end
+
+  @spec rich_media_kind(String.t()) :: Lolek.RichPost.media_kind() | nil
+  defp rich_media_kind(ext) do
+    cond do
+      ext in @gif_extensions -> :animation
+      video_ext?(ext) -> :video
+      ext in @photo_extensions -> :photo
+      true -> nil
+    end
+  end
+
+  @spec video_ext?(String.t()) :: boolean()
+  defp video_ext?(ext), do: Lolek.GalleryDownloader.video_file?("x#{ext}")
+
+  @spec silent_if_video(boolean()) :: keyword()
+  defp silent_if_video(true), do: [disable_notification: true]
+  defp silent_if_video(false), do: []
+
+  # A 400 means Telegram refused the post as a rich message, so the same media
+  # go out the classic way. Any other failure (a flood limit, the deadline, a
+  # dropped connection) may come after the post already landed, and resending
+  # it would duplicate the post.
+  @spec send_rich_post(
+          integer(),
+          [{Lolek.RichPost.media_kind(), media_item()}],
+          keyword()
+        ) :: {:ok, [{String.t(), String.t()}]} | {:error, term()}
+  defp send_rich_post(chat_id, kinded_items, context) do
+    kinded_items = Lolek.RichPost.arrange(kinded_items)
+
+    case send_rich_items(chat_id, kinded_items, context) do
+      {:error, {:telegram_api, %ExGram.Error{code: 400} = error}} ->
+        Logger.warning(
+          "Telegram rejected the rich post, sending it the classic way. Reason: #{inspect(error)}"
+        )
+
+        send_classic_collection(chat_id, Enum.map(kinded_items, &elem(&1, 1)), context)
+
+      result ->
+        result
+    end
+  end
+
+  @spec send_rich_items(
+          integer(),
+          [{Lolek.RichPost.media_kind(), media_item()}],
+          keyword()
+        ) :: {:ok, [{String.t(), String.t()}]} | {:error, term()}
+  defp send_rich_items(chat_id, kinded_items, context) do
+    sources = Enum.map(kinded_items, fn {_kind, {source, _ext}} -> source end)
+
+    result =
+      with_media_sources(sources, context, fn prepared_sources ->
+        media =
+          kinded_items
+          |> Enum.zip(prepared_sources)
+          |> Enum.map(fn {{kind, {source, _ext}}, prepared_source} ->
+            {kind, prepared_source, rich_media_attrs(kind, source)}
+          end)
+
+        rich_message =
+          Lolek.RichPost.build(media,
+            description: source_caption(context),
+            mention: Lolek.PostOptions.requester_mention(context)
+          )
+
+        options = rich_post_options(kinded_items, context)
+        call_telegram(fn -> Lolek.Telegram.send_rich_message(chat_id, rich_message, options) end)
+      end)
+
+    with {:ok, message} <- result do
+      {:ok, rich_entries(kinded_items, message)}
+    end
+  end
+
+  @spec rich_media_attrs(Lolek.RichPost.media_kind(), media_source()) :: keyword()
+  defp rich_media_attrs(:video, {:file_path, file_path}),
+    do: file_path |> get_options() |> Keyword.take([:width, :height, :duration])
+
+  defp rich_media_attrs(_kind, _source), do: []
+
+  @spec rich_post_options([{Lolek.RichPost.media_kind(), media_item()}], keyword()) :: keyword()
+  defp rich_post_options(kinded_items, context) do
+    kinded_items
+    |> Enum.any?(&match?({:video, _item}, &1))
+    |> silent_if_video()
+    |> add_message_thread_id(context)
+    |> Lolek.PostOptions.add_reply(context)
+    |> Lolek.PostOptions.add_source_button(context)
+  end
+
+  # The post is already in the chat, so a response that cannot be matched to
+  # the media only skips the cache instead of failing the request.
+  @spec rich_entries([{Lolek.RichPost.media_kind(), media_item()}], term()) ::
+          [{String.t(), String.t()}]
+  defp rich_entries(kinded_items, message) do
+    file_ids = Lolek.RichPost.file_ids(message)
+
+    if length(file_ids) == length(kinded_items) do
+      kinded_items
+      |> Enum.zip(file_ids)
+      |> Enum.map(fn {{_kind, {_source, ext}}, file_id} -> {ext, file_id} end)
+    else
+      Logger.warning(
+        "Rich post was sent, but #{length(file_ids)} file ids came back for " <>
+          "#{length(kinded_items)} media; the media will not be cached"
+      )
+
+      []
+    end
   end
 
   @spec send_single_media_item(integer(), media_item(), keyword()) ::
@@ -73,7 +205,6 @@ defmodule Lolek do
       {:ok, response} ->
         case extract_single_file_id(response) do
           {:ok, file_id} ->
-            update_caption_after_send(chat_id, response, context)
             {:ok, [{ext, file_id}]}
 
           :error ->
@@ -87,7 +218,7 @@ defmodule Lolek do
 
   @spec single_media_options(media_source(), String.t(), keyword()) :: keyword()
   defp single_media_options({:file_path, file_path}, ext, context) do
-    if Lolek.GalleryDownloader.video_file?("x#{ext}") do
+    if video_ext?(ext) do
       file_path |> get_options() |> add_send_context(context)
     else
       add_send_context([], context)
@@ -95,12 +226,7 @@ defmodule Lolek do
   end
 
   defp single_media_options({:file_id, _file_id}, ext, context) do
-    options =
-      if Lolek.GalleryDownloader.video_file?("x#{ext}"),
-        do: [disable_notification: true],
-        else: []
-
-    add_send_context(options, context)
+    ext |> video_ext?() |> silent_if_video() |> add_send_context(context)
   end
 
   @spec send_single_media(integer(), String.t(), term(), keyword()) ::
@@ -111,7 +237,7 @@ defmodule Lolek do
 
   defp send_single_media(chat_id, ext, source, options) do
     cond do
-      Lolek.GalleryDownloader.video_file?("x#{ext}") ->
+      video_ext?(ext) ->
         call_telegram(fn -> Lolek.Telegram.send_video(chat_id, source, options) end)
 
       ext in @photo_extensions ->
@@ -134,7 +260,7 @@ defmodule Lolek do
       result =
         with_media_sources(Enum.map(batch, &elem(&1, 0)), context, fn sources ->
           media = build_media_group(batch, sources, idx, context)
-          send_media_group_batch(chat_id, media, context)
+          send_media_group_batch(chat_id, media, idx, context)
         end)
 
       case result do
@@ -143,31 +269,53 @@ defmodule Lolek do
           {:cont, {:ok, acc_entries ++ entries}}
 
         {:ok, other} ->
-          halt_media_group(acc_entries, {:error, {:unexpected_telegram_response, other}}, idx)
+          halt_media_group(
+            acc_entries,
+            {:error, {:unexpected_telegram_response, other}},
+            idx,
+            context
+          )
 
         {:error, _} = error ->
-          halt_media_group(acc_entries, error, idx)
+          halt_media_group(acc_entries, error, idx, context)
       end
     end)
   end
 
-  @spec halt_media_group([{String.t(), String.t()}], {:error, term()}, non_neg_integer()) ::
-          {:halt, {:ok, [{String.t(), String.t()}]} | {:error, term()}}
-  defp halt_media_group([], error, _idx), do: {:halt, error}
+  # The delete mode removes the request only after a complete post, so there a
+  # partly sent album is a failure and the request stays.
+  @spec halt_media_group(
+          [{String.t(), String.t()}],
+          {:error, term()},
+          non_neg_integer(),
+          keyword()
+        ) :: {:halt, {:ok, [{String.t(), String.t()}]} | {:error, term()}}
+  defp halt_media_group([], error, _idx, _context), do: {:halt, error}
 
-  defp halt_media_group(acc_entries, {:error, reason}, idx) do
-    Logger.warning(
-      "Media group batch #{idx} failed after #{length(acc_entries)} items were sent; " <>
-        "keeping what reached the chat. Reason: #{inspect(reason)}"
-    )
+  defp halt_media_group(acc_entries, {:error, reason} = error, idx, context) do
+    if Keyword.get(context, :source_message_mode) == :delete do
+      Logger.warning(
+        "Media group batch #{idx} failed after #{length(acc_entries)} items were sent; " <>
+          "keeping the request message. Reason: #{inspect(reason)}"
+      )
 
-    {:halt, {:ok, acc_entries}}
+      {:halt, error}
+    else
+      Logger.warning(
+        "Media group batch #{idx} failed after #{length(acc_entries)} items were sent; " <>
+          "keeping what reached the chat. Reason: #{inspect(reason)}"
+      )
+
+      {:halt, {:ok, acc_entries}}
+    end
   end
 
-  @spec send_media_group_batch(integer(), [term()], keyword()) ::
+  # Albums take no inline keyboard, so the source button is left out here.
+  @spec send_media_group_batch(integer(), [term()], non_neg_integer(), keyword()) ::
           {:ok, term()} | {:error, term()}
-  defp send_media_group_batch(chat_id, media, context) do
+  defp send_media_group_batch(chat_id, media, batch_idx, context) do
     options = add_message_thread_id([], context)
+    options = if batch_idx == 0, do: Lolek.PostOptions.add_reply(options, context), else: options
     call_telegram(fn -> Lolek.Telegram.send_media_group(chat_id, media, options) end)
   end
 
@@ -190,20 +338,27 @@ defmodule Lolek do
     Application.fetch_env!(:lolek, :max_gallery_media)
   end
 
-  @spec media_to_input_media(term(), String.t(), String.t() | nil) :: term()
+  @spec media_to_input_media(term(), String.t(), caption() | nil) :: term()
   defp media_to_input_media(source, ext, caption) do
-    cond do
-      ext in @gif_extensions ->
-        %ExGram.Model.InputMediaDocument{type: "document", media: source, caption: caption}
+    media =
+      cond do
+        ext in @gif_extensions ->
+          %ExGram.Model.InputMediaDocument{type: "document", media: source}
 
-      Lolek.GalleryDownloader.video_file?("x#{ext}") ->
-        %ExGram.Model.InputMediaVideo{type: "video", media: source, caption: caption}
+        video_ext?(ext) ->
+          %ExGram.Model.InputMediaVideo{type: "video", media: source}
 
-      ext in @photo_extensions ->
-        %ExGram.Model.InputMediaPhoto{type: "photo", media: source, caption: caption}
+        ext in @photo_extensions ->
+          %ExGram.Model.InputMediaPhoto{type: "photo", media: source}
 
-      true ->
-        %ExGram.Model.InputMediaDocument{type: "document", media: source, caption: caption}
+        true ->
+          %ExGram.Model.InputMediaDocument{type: "document", media: source}
+      end
+
+    case caption do
+      nil -> media
+      {text, []} -> %{media | caption: text}
+      {text, entities} -> %{media | caption: text, caption_entities: entities}
     end
   end
 
@@ -482,8 +637,14 @@ defmodule Lolek do
   @spec add_caption(keyword(), keyword()) :: keyword()
   defp add_caption(options, context) do
     case caption(context) do
-      nil -> options
-      caption -> Keyword.put(options, :caption, caption)
+      nil ->
+        options
+
+      {text, []} ->
+        Keyword.put(options, :caption, text)
+
+      {text, entities} ->
+        options |> Keyword.put(:caption, text) |> Keyword.put(:caption_entities, entities)
     end
   end
 
@@ -492,6 +653,8 @@ defmodule Lolek do
     options
     |> add_caption(context)
     |> add_message_thread_id(context)
+    |> Lolek.PostOptions.add_reply(context)
+    |> Lolek.PostOptions.add_source_button(context)
   end
 
   @spec add_message_thread_id(keyword(), keyword()) :: keyword()
@@ -505,29 +668,41 @@ defmodule Lolek do
     end
   end
 
-  @spec update_caption_after_send(integer(), term(), keyword()) :: :ok
-  defp update_caption_after_send(chat_id, %ExGram.Model.Message{message_id: message_id}, context)
-       when is_integer(message_id) and message_id > 0 do
-    with caption when is_binary(caption) <- caption(context),
-         {:error, reason} <-
-           call_telegram(fn ->
-             Lolek.Telegram.edit_message_caption(chat_id, message_id, caption: caption)
-           end) do
-      Logger.warning("Could not update Telegram message caption; reason: #{inspect(reason)}")
-    end
-
-    :ok
-  end
-
-  defp update_caption_after_send(_chat_id, _message, _context), do: :ok
-
-  @spec caption(keyword()) :: String.t() | nil
+  @spec caption(keyword()) :: caption() | nil
   defp caption(context) do
-    source_caption = source_caption(context)
-    requester_caption = requester_caption(context)
+    requester = requester_caption(context)
+    requester_text = if requester, do: requester.text
 
-    build_caption(source_caption, requester_caption)
+    case build_caption(source_caption(context), requester_text) do
+      nil -> nil
+      text -> {text, caption_entities(text, requester)}
+    end
   end
+
+  # The mention is dropped when truncation cut into it: an entity must cover
+  # exactly the text it marks.
+  @spec caption_entities(String.t(), requester_caption() | nil) ::
+          [ExGram.Model.MessageEntity.t()]
+  defp caption_entities(text, %{
+         text: requester_text,
+         name: name,
+         user: %ExGram.Model.User{} = user
+       }) do
+    if String.ends_with?(text, requester_text) do
+      [
+        %ExGram.Model.MessageEntity{
+          type: "text_mention",
+          offset: utf16_code_units(text) - utf16_code_units(name),
+          length: utf16_code_units(name),
+          user: user
+        }
+      ]
+    else
+      []
+    end
+  end
+
+  defp caption_entities(_text, _requester), do: []
 
   @spec source_caption(keyword()) :: String.t() | nil
   defp source_caption(context) do
@@ -540,14 +715,17 @@ defmodule Lolek do
     end
   end
 
-  @spec requester_caption(keyword()) :: String.t() | nil
+  @spec requester_caption(keyword()) :: requester_caption() | nil
   defp requester_caption(context) do
-    with true <- Application.fetch_env!(:lolek, :post_requester_caption),
-         requester when is_binary(requester) <- Keyword.get(context, :requester_name),
-         started_at when is_integer(started_at) <- Keyword.get(context, :started_at) do
-      "#{requester} requested, processed in #{elapsed_seconds(started_at)}s"
-    else
-      _ -> nil
+    case Lolek.PostOptions.requester_mention(context) do
+      nil ->
+        nil
+
+      %ExGram.Model.RichTextTextMention{text: name, user: user} ->
+        %{text: "requested by " <> name, name: name, user: user}
+
+      name ->
+        %{text: "requested by " <> name, name: name, user: nil}
     end
   end
 
@@ -619,16 +797,6 @@ defmodule Lolek do
     |> :unicode.characters_to_binary(:utf8, {:utf16, :little})
     |> byte_size()
     |> div(2)
-  end
-
-  @spec elapsed_seconds(integer()) :: String.t()
-  defp elapsed_seconds(started_at) do
-    System.monotonic_time()
-    |> Kernel.-(started_at)
-    |> System.convert_time_unit(:native, :microsecond)
-    |> Kernel./(1_000_000)
-    |> then(&:io_lib.format("~.1f", [&1]))
-    |> IO.iodata_to_binary()
   end
 
   @spec call_telegram((-> {:ok, term()} | {:error, term()})) :: {:ok, term()} | {:error, term()}

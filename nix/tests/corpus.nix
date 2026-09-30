@@ -155,6 +155,7 @@ pkgs.testers.nixosTest {
 
   testScript = ''
     ${builtins.readFile ./corpus_test_common.py}
+    ${builtins.readFile ./telegym_messages.py}
 
     import collections
     import shlex
@@ -195,15 +196,20 @@ pkgs.testers.nixosTest {
             chat_id,
         )
 
-    def wait_for_messages(chat_id, expected_count):
+    def wait_for_media(chat_id, expected_count):
         url = messages_url(chat_id)
         machine.wait_until_succeeds(
-            "curl -fsS %s | jq -e '.count == %d' >/dev/null"
-            % (shell_quote(url), expected_count),
+            "curl -fsS %s | jq -e '%s == %d' >/dev/null"
+            % (shell_quote(url), MEDIA_COUNT_JQ, expected_count),
             timeout=60,
         )
-        return json.loads(machine.succeed("curl -fsS %s" % shell_quote(url)))[
+        messages = json.loads(machine.succeed("curl -fsS %s" % shell_quote(url)))[
             "messages"
+        ]
+        return [
+            (kind, media["file_id"])
+            for message in messages
+            for kind, media in message_media(message)
         ]
 
     def wait_for_idle():
@@ -211,20 +217,6 @@ pkgs.testers.nixosTest {
             "curl -fsS %s | grep -F 'lolek_processing_active 0' >/dev/null"
             % metrics_url
         )
-
-    def message_kind(message):
-        if message.get("video"):
-            return "video"
-        if message.get("photo"):
-            return "photo"
-        raise AssertionError("unexpected corpus message: %r" % message)
-
-    def message_file_id(message):
-        if message.get("video"):
-            return message["video"]["file_id"]
-        if message.get("photo"):
-            return message["photo"][-1]["file_id"]
-        raise AssertionError("message has no media file ID: %r" % message)
 
     def file_sha256(path):
         return machine.succeed("sha256sum %s" % shell_quote(path)).split()[0]
@@ -270,7 +262,7 @@ pkgs.testers.nixosTest {
         % (telegym_base_url, shell_quote(fake_token))
     )
 
-    first_case_messages = []
+    first_case_media = []
     first_case = accepted_cases[0]
 
     for index, case in enumerate(accepted_cases, start=1):
@@ -279,22 +271,22 @@ pkgs.testers.nixosTest {
             fixtures = case_scenario["fixtures"]
             chat_id = 20000 + index
             inject(case, chat_id)
-            messages = wait_for_messages(chat_id, len(fixtures))
+            media = wait_for_media(chat_id, len(fixtures))
             wait_for_idle()
 
             expected_kinds = sorted(
                 fixture_kind(fixture) for fixture in fixtures
             )
-            assert sorted(message_kind(message) for message in messages) == expected_kinds
+            assert sorted(kind for kind, _file_id in media) == expected_kinds
 
             expected_hashes = sorted(file_sha256(fixture_paths[name]) for name in fixtures)
             uploaded_hashes = sorted(
-                uploaded_sha256(message_file_id(message)) for message in messages
+                uploaded_sha256(file_id) for _kind, file_id in media
             )
             assert uploaded_hashes == expected_hashes
 
             if case == first_case:
-                first_case_messages = messages
+                first_case_media = media
 
     with subtest("reject excluded corpus URLs"):
         for index, case in enumerate(rejected_cases, start=1):
@@ -351,13 +343,13 @@ pkgs.testers.nixosTest {
         events_before_cache_hit = len(events)
         cache_chat_id = 50000
         inject(first_case, cache_chat_id)
-        cached_messages = wait_for_messages(
+        cached_media = wait_for_media(
             cache_chat_id,
             len(scenario(first_case)["fixtures"]),
         )
         wait_for_idle()
-        assert sorted(message_file_id(message) for message in cached_messages) == sorted(
-            message_file_id(message) for message in first_case_messages
+        assert sorted(file_id for _kind, file_id in cached_media) == sorted(
+            file_id for _kind, file_id in first_case_media
         )
         events_after_cache_hit = json.loads(
             machine.succeed("curl -fsS %s/debug/events" % origin_base_url)

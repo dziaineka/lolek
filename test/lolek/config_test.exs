@@ -30,6 +30,42 @@ defmodule Lolek.ConfigTest do
     assert resolve_bot_token() == "env-token"
   end
 
+  describe "LOLEK_SOURCE_MESSAGE_MODE" do
+    setup do
+      mode = System.get_env("LOLEK_SOURCE_MESSAGE_MODE")
+      on_exit(fn -> restore_env("LOLEK_SOURCE_MESSAGE_MODE", mode) end)
+    end
+
+    test "defaults to raw" do
+      System.delete_env("LOLEK_SOURCE_MESSAGE_MODE")
+
+      assert runtime_config(:source_message_mode) == :raw
+    end
+
+    test "parses reply and delete" do
+      System.put_env("LOLEK_SOURCE_MESSAGE_MODE", "reply")
+      assert runtime_config(:source_message_mode) == :reply
+
+      System.put_env("LOLEK_SOURCE_MESSAGE_MODE", "delete")
+      assert runtime_config(:source_message_mode) == :delete
+    end
+
+    test "rejects unknown modes" do
+      System.put_env("LOLEK_SOURCE_MESSAGE_MODE", "forward")
+
+      assert_raise RuntimeError, ~r/LOLEK_SOURCE_MESSAGE_MODE must be one of/, fn ->
+        runtime_config(:source_message_mode)
+      end
+    end
+  end
+
+  defp runtime_config(key) do
+    "config/runtime.exs"
+    |> Config.Reader.read!(env: :test)
+    |> Keyword.fetch!(:lolek)
+    |> Keyword.fetch!(key)
+  end
+
   defp resolve_bot_token do
     case System.get_env("LOLEK_BOT_TOKEN_FILE") do
       path when path in [nil, ""] -> System.fetch_env!("LOLEK_BOT_TOKEN")

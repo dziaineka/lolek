@@ -20,6 +20,21 @@ defmodule Lolek.Requester do
 
   def display_name(_user), do: @unknown_requester
 
+  @doc """
+  Mentions the sender by id, so it works without a username and notifies them.
+  An unknown sender (e.g. a message sent on behalf of a channel) stays plain text.
+  """
+  @spec mention(term()) :: ExGram.Model.RichTextTextMention.t() | String.t()
+  def mention(%ExGram.Model.User{} = user) do
+    %ExGram.Model.RichTextTextMention{
+      type: "text_mention",
+      text: display_name(user),
+      user: user
+    }
+  end
+
+  def mention(_user), do: @unknown_requester
+
   @spec sanitize_display_name(String.t()) :: String.t()
   defp sanitize_display_name(name) do
     name

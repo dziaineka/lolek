@@ -107,7 +107,24 @@ in
       type = types.bool;
       default = false;
       description = ''
-        Whether to include the requester's name in Telegram media captions.
+        Whether to mention the requester in posts when sourceMessageMode is
+        "raw". "reply" never mentions them and "delete" always does.
+      '';
+    };
+
+    sourceMessageMode = mkOption {
+      type = types.enum [
+        "raw"
+        "reply"
+        "delete"
+      ];
+      default = "raw";
+      description = ''
+        What to do with the message that carried the link: "raw" leaves it
+        alone, "reply" sends the post as a reply to it, "delete" removes it
+        after the post is sent. A message with text besides the link is
+        replied to instead of deleted. Deleting in groups needs the bot to be
+        an admin allowed to delete messages.
       '';
     };
 
@@ -508,6 +525,7 @@ in
         LOLEK_METRICS_PORT = toString cfg.metrics.port;
         LOLEK_POST_SOURCE_CAPTION = if cfg.postSourceCaption then "true" else "false";
         LOLEK_POST_REQUESTER_CAPTION = if cfg.postRequesterCaption then "true" else "false";
+        LOLEK_SOURCE_MESSAGE_MODE = cfg.sourceMessageMode;
         LOLEK_GALLERY_DOWNLOAD_ENABLED = if cfg.galleryDownloadEnabled then "true" else "false";
         LOLEK_FAILURE_REACTIONS_ENABLED = if cfg.failureReactionsEnabled then "true" else "false";
         LOLEK_MAX_GALLERY_MEDIA = toString cfg.maxGalleryMedia;

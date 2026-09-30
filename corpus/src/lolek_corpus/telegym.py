@@ -41,32 +41,68 @@ class DownloadedFile:
     sha256: str
 
 
-def message_media(message: JsonObject) -> MediaReference:
-    """Return the Telegram media kind and file ID from a Telegym message."""
+def message_media(message: JsonObject) -> tuple[MediaReference, ...]:
+    """Return every Telegram media kind and file ID from a Telegym message.
+
+    A classic message carries one media object; a rich message carries its
+    media in blocks, collages included, in the order they are shown.
+    """
+    if message.get("rich_message") is not None:
+        rich_message = require_json_object(
+            message["rich_message"], "Telegym rich message"
+        )
+        blocks = require_json_object_list(
+            rich_message.get("blocks", []), "Telegym rich message blocks"
+        )
+        media = tuple(
+            reference for block in blocks for reference in _block_media(block)
+        )
+        if not media:
+            raise CaseMismatch(f"rich Telegym message without media: {message!r}")
+        return media
+    media = _media_object(message, "Telegym message")
+    if media is None:
+        raise CaseMismatch(f"unexpected non-media Telegym message: {message!r}")
+    return (media,)
+
+
+def _block_media(block: JsonObject) -> tuple[MediaReference, ...]:
+    """Return the media of one rich block, descending into collages."""
+    if block.get("type") == "collage":
+        nested = require_json_object_list(
+            block.get("blocks", []), "Telegym rich collage blocks"
+        )
+        return tuple(reference for item in nested for reference in _block_media(item))
+    media = _media_object(block, "Telegym rich block")
+    return () if media is None else (media,)
+
+
+def _media_object(holder: JsonObject, label: str) -> MediaReference | None:
+    """Return the media stored on a message or a rich media block, if any."""
     for field, kind in (
         ("video", TelegramMediaKind.VIDEO),
         ("animation", TelegramMediaKind.ANIMATION),
         ("document", TelegramMediaKind.DOCUMENT),
     ):
-        if field in message and message[field] is not None:
-            media = require_json_object(message[field], f"Telegym message {field}")
+        if field in holder and holder[field] is not None:
+            media = require_json_object(holder[field], f"{label} {field}")
             return MediaReference(
                 kind,
                 require_non_empty_string(
-                    media.get("file_id"), f"Telegym message {field}.file_id"
+                    media.get("file_id"), f"{label} {field}.file_id"
                 ),
             )
-    if "photo" in message and message["photo"] is not None:
-        photos = require_json_object_list(message["photo"], "Telegym message photo")
+    if "photo" in holder and holder["photo"] is not None:
+        photos = require_json_object_list(holder["photo"], f"{label} photo")
         if not photos:
-            raise HarnessError("Telegym message photo must not be empty")
+            raise HarnessError(f"{label} photo must not be empty")
         return MediaReference(
             TelegramMediaKind.PHOTO,
             require_non_empty_string(
-                photos[-1].get("file_id"), "Telegym message photo file_id"
+                photos[-1].get("file_id"), f"{label} photo file_id"
             ),
         )
-    raise CaseMismatch(f"unexpected non-media Telegym message: {message!r}")
+    return None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -126,7 +162,9 @@ class Telegym:
         messages = require_json_object_list(
             response.get("messages", []), "Telegym messages"
         )
-        return tuple(message_media(message) for message in messages)
+        return tuple(
+            reference for message in messages for reference in message_media(message)
+        )
 
     def file_store_stats(self) -> FileStoreStats:
         """Return the retained multipart file count and total size."""

@@ -167,6 +167,8 @@ pkgs.testers.nixosTest {
     };
 
   testScript = ''
+    ${builtins.readFile ./telegym_messages.py}
+
     import base64
     import json
     import shlex
@@ -214,17 +216,17 @@ pkgs.testers.nixosTest {
     compressed_cache_dir = "%s/%s" % (download_dir, compressed_folder_name)
     cleanup_test_dir = "${stateDir}/cleanup-test"
 
-    def inject(url):
-        payload = json.dumps(
-            {
-                "token": fake_token,
-                "chat_id": 1234,
-                "username": "test_user",
-                "first_name": "Test User",
-                "text": url,
-            },
-            separators=(",", ":"),
-        )
+    def inject(url, message_id=None):
+        update = {
+            "token": fake_token,
+            "chat_id": 1234,
+            "username": "test_user",
+            "first_name": "Test User",
+            "text": url,
+        }
+        if message_id is not None:
+            update["message_id"] = message_id
+        payload = json.dumps(update, separators=(",", ":"))
         machine.succeed(
             "curl -fsS -H 'Content-Type: application/json' --data %s "
             "%s/debug/inject/update | "
@@ -236,13 +238,12 @@ pkgs.testers.nixosTest {
         response = json.loads(
             machine.succeed("curl -fsS %s" % shell_quote(messages_url))
         )
-        return [message for message in response["messages"] if message.get("video")]
+        return [message for message in response["messages"] if message_video(message)]
 
     def wait_for_video_count(expected):
         machine.wait_until_succeeds(
-            "curl -fsS %s | "
-            "jq -e '[.messages[] | select(.video != null)] | length == %d' "
-            ">/dev/null" % (shell_quote(messages_url), expected)
+            "curl -fsS %s | jq -e '%s == %d' >/dev/null"
+            % (shell_quote(messages_url), MEDIA_COUNT_JQ, expected)
         )
         messages = video_messages()
         assert len(messages) == expected, messages
@@ -323,10 +324,19 @@ pkgs.testers.nixosTest {
         inject(passthrough_media_url)
         messages = wait_for_video_count(1)
         passthrough_message = messages[0]
-        passthrough_video = passthrough_message["video"]
+        assert passthrough_message.get("rich_message"), passthrough_message
+        passthrough_video = message_video(passthrough_message)
         passthrough_video_file_id = passthrough_video["file_id"]
         assert passthrough_video["file_name"] == "%s.mp4" % passthrough_source_title
-        assert passthrough_source_caption in passthrough_message["caption"]
+        passthrough_text = message_text(passthrough_message)
+        assert passthrough_source_caption in passthrough_text, passthrough_message
+        assert passthrough_text.endswith("requested by test_user"), passthrough_message
+        footer = passthrough_message["rich_message"]["blocks"][-1]
+        assert footer["text"][1]["type"] == "text_mention", footer
+        assert footer["text"][1]["user"]["username"] == "test_user", footer
+        assert passthrough_message["reply_markup"]["inline_keyboard"] == [
+            [{"text": "Original", "url": passthrough_media_url}]
+        ], passthrough_message
         machine.succeed(
             "curl -fsS %s/debug/files/%s -o %s"
             % (
@@ -346,7 +356,7 @@ pkgs.testers.nixosTest {
     with subtest("reuse a cached Telegram file ID"):
         inject(passthrough_media_url)
         messages = wait_for_video_count(2)
-        assert messages[0]["video"]["file_id"] == passthrough_video_file_id, messages[0]
+        assert message_video(messages[0])["file_id"] == passthrough_video_file_id, messages[0]
         machine.succeed(
             "curl -fsS %s/debug/files | jq -e '.count == 1' >/dev/null"
             % telegym_base_url
@@ -356,7 +366,7 @@ pkgs.testers.nixosTest {
     with subtest("reuse a pre-manifest cache entry"):
         inject(legacy_media_url)
         messages = wait_for_video_count(3)
-        assert messages[0]["video"]["file_id"] == legacy_video_file_id, messages[0]
+        assert message_video(messages[0])["file_id"] == legacy_video_file_id, messages[0]
         wait_for_idle()
         machine.succeed(
             "journalctl -u ${serviceUnit} --no-pager | "
@@ -372,7 +382,7 @@ pkgs.testers.nixosTest {
     with subtest("compress media above the Telegram size limit"):
         inject(compressed_media_url)
         messages = wait_for_video_count(4)
-        compressed_video_file_id = messages[0]["video"]["file_id"]
+        compressed_video_file_id = message_video(messages[0])["file_id"]
         machine.succeed(
             "curl -fsS %s/debug/files/%s -o %s"
             % (
@@ -514,6 +524,40 @@ pkgs.testers.nixosTest {
         machine.succeed("${package}/bin/lolek rpc 'Lolek.FileCleaner.cleanup_now()'")
         machine.succeed("test ! -e %s" % passthrough_cache_dir)
         machine.succeed("test ! -e %s" % compressed_cache_dir)
+
+    def set_source_message_mode(mode):
+        drop_in_dir = "/run/systemd/system/${serviceUnit}.d"
+        machine.succeed("mkdir -p %s" % drop_in_dir)
+        machine.succeed(
+            "printf '[Service]\\nEnvironment=LOLEK_SOURCE_MESSAGE_MODE=%s\\n' > %s/source-message-mode.conf"
+            % (mode, drop_in_dir)
+        )
+        machine.succeed("systemctl daemon-reload")
+        machine.succeed("systemctl restart ${serviceUnit}")
+        machine.wait_for_unit("${serviceUnit}")
+        machine.wait_until_succeeds("curl -fsS %s >/dev/null" % metrics_url)
+
+    with subtest("reply to the request without mentioning the requester"):
+        set_source_message_mode("reply")
+        inject(passthrough_media_url, message_id=910001)
+        messages = wait_for_video_count(5)
+        assert messages[0]["reply_to_message"]["message_id"] == 910001, messages[0]
+        assert "requested by" not in message_text(messages[0]), messages[0]
+        wait_for_idle()
+
+    with subtest("delete the request and mention the requester"):
+        set_source_message_mode("delete")
+        inject(passthrough_media_url, message_id=910002)
+        messages = wait_for_video_count(6)
+        assert messages[0].get("reply_to_message") is None, messages[0]
+        assert message_text(messages[0]).endswith("requested by test_user"), messages[0]
+        machine.wait_until_succeeds(
+            "curl -fsS %s | jq -e '[.requests[] | select((.parameters.message_id | tostring) == \"910002\")] | length == 1' >/dev/null"
+            % shell_quote(
+                "%s/debug/requests/%s?method=deleteMessage" % (telegym_base_url, fake_token)
+            )
+        )
+        wait_for_idle()
 
     machine.succeed("systemctl is-active --quiet ${serviceUnit}")
   '';

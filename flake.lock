@@ -29,16 +29,16 @@
         ]
       },
       "locked": {
-        "lastModified": 1787266455,
-        "narHash": "sha256-1FlDPWbKeVwEsKbUJKE+NLEBA7OIO6fWgx7p7q+QCk4=",
-        "owner": "booxter",
+        "lastModified": 1790787788,
+        "narHash": "sha256-cHQWzPWIkFejXuJ6H507/vOXongjZV/6VQrC7CbeCXQ=",
+        "owner": "FrostBy",
         "repo": "telegym",
-        "rev": "5cbd75aef9b393bb97ff7e86f18d1d200a6af627",
+        "rev": "5e6d6875af2a2971992f581a53c87aebbfbfadc4",
         "type": "github"
       },
       "original": {
-        "owner": "booxter",
-        "ref": "lolek-missing-features",
+        "owner": "FrostBy",
+        "ref": "rich-messages",
         "repo": "telegym",
         "type": "github"
       }

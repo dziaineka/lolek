@@ -165,6 +165,7 @@ Key environment variables:
 - `LOLEK_DOWNLOAD_DIR_PATH` - Download directory (default: `./downloads`)
 - `LOLEK_HW_ACCELERATION` - H.264 encoder backend (`none`, `vaapi`, or `qsv`; default: `none`)
 - `LOLEK_HW_DEVICE` - Render device for hardware acceleration (default: `/dev/dri/renderD128`)
+- `LOLEK_SOURCE_MESSAGE_MODE` - What to do with the message carrying the link (`raw`, `reply`, or `delete`; default: `raw`)
 - Various size/duration limits for compression logic
 
 ## External Dependencies

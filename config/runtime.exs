@@ -56,6 +56,9 @@ telegram_local_file_uploads = parse_bool.("LOLEK_TELEGRAM_LOCAL_FILE_UPLOADS", "
 metrics_enabled = parse_bool.("LOLEK_METRICS_ENABLED", "false")
 post_source_caption = parse_bool.("LOLEK_POST_SOURCE_CAPTION", "false")
 post_requester_caption = parse_bool.("LOLEK_POST_REQUESTER_CAPTION", "false")
+
+source_message_modes = %{"raw" => :raw, "reply" => :reply, "delete" => :delete}
+source_message_mode = System.get_env("LOLEK_SOURCE_MESSAGE_MODE", "raw")
 gallery_download_enabled = parse_bool.("LOLEK_GALLERY_DOWNLOAD_ENABLED", "false")
 failure_reactions_enabled = parse_bool.("LOLEK_FAILURE_REACTIONS_ENABLED", "true")
 max_gallery_media = parse_pos_int.("LOLEK_MAX_GALLERY_MEDIA", "50")
@@ -108,6 +111,10 @@ unless hw_acceleration in ["none", "vaapi", "qsv"] do
   raise "Config LOLEK_HW_ACCELERATION must be one of \"none\", \"vaapi\", \"qsv\", got: #{inspect(hw_acceleration)}"
 end
 
+unless Map.has_key?(source_message_modes, source_message_mode) do
+  raise "Config LOLEK_SOURCE_MESSAGE_MODE must be one of \"raw\", \"reply\", \"delete\", got: #{inspect(source_message_mode)}"
+end
+
 unless start_download_pause <= max_download_pause do
   raise "Config LOLEK_START_DOWNLOAD_PAUSE (#{start_download_pause}) must be <= LOLEK_MAX_DOWNLOAD_PAUSE (#{max_download_pause})"
 end
@@ -130,6 +137,7 @@ config :lolek, :metrics_listen_address, metrics_listen_address
 config :lolek, :metrics_port, metrics_port
 config :lolek, :post_source_caption, post_source_caption
 config :lolek, :post_requester_caption, post_requester_caption
+config :lolek, :source_message_mode, Map.fetch!(source_message_modes, source_message_mode)
 config :lolek, :gallery_download_enabled, gallery_download_enabled
 config :lolek, :failure_reactions_enabled, failure_reactions_enabled
 config :lolek, :max_gallery_media, max_gallery_media

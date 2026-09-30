@@ -38,4 +38,15 @@ defmodule Lolek.RequesterTest do
   test "does not expose user ids as fallback names" do
     assert Lolek.Requester.display_name(nil) == "Someone"
   end
+
+  test "mentions users without a username by id" do
+    user = %ExGram.Model.User{id: 7, is_bot: false, first_name: "Alice"}
+
+    assert %ExGram.Model.RichTextTextMention{type: "text_mention", text: "Alice", user: ^user} =
+             Lolek.Requester.mention(user)
+  end
+
+  test "mentions unknown senders as plain text" do
+    assert Lolek.Requester.mention(nil) == "Someone"
+  end
 end

@@ -197,6 +197,8 @@ pkgs.testers.nixosTest {
     };
 
   testScript = ''
+    ${builtins.readFile ./telegym_messages.py}
+
     import base64
     import json
     import shlex
@@ -257,15 +259,14 @@ pkgs.testers.nixosTest {
             fake_token,
         )
         machine.wait_until_succeeds(
-            "curl -fsS %s | "
-            "jq -e '[.messages[] | select(.video != null)] | length == 1' >/dev/null"
-            % shell_quote(messages_url)
+            "curl -fsS %s | jq -e '%s == 1' >/dev/null"
+            % (shell_quote(messages_url), MEDIA_COUNT_JQ)
         )
 
         messages = json.loads(machine.succeed("curl -fsS %s" % shell_quote(messages_url)))
-        video_messages = [message for message in messages["messages"] if message.get("video")]
+        video_messages = [message for message in messages["messages"] if message_video(message)]
         assert len(video_messages) == 1, video_messages
-        video = video_messages[0]["video"]
+        video = message_video(video_messages[0])
         video_file_id = video["file_id"]
         assert video.get("file_name", "").endswith(".mp4"), video
 

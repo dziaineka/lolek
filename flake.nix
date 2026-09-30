@@ -4,7 +4,8 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/release-26.05";
     telegym = {
-      url = "github:booxter/telegym/lolek-missing-features";
+      # Until booxter/telegym#2 (sendRichMessage) is merged into lolek-missing-features.
+      url = "github:FrostBy/telegym/rich-messages";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };

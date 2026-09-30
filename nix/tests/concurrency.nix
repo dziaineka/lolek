@@ -119,6 +119,8 @@ pkgs.testers.nixosTest {
     };
 
   testScript = ''
+    ${builtins.readFile ./telegym_messages.py}
+
     import json
     import shlex
 
@@ -181,9 +183,8 @@ pkgs.testers.nixosTest {
 
     def wait_for_video_count(expected):
         machine.wait_until_succeeds(
-            "curl -fsS %s | "
-            "jq -e '[.messages[] | select(.video != null)] | length == %d' "
-            ">/dev/null" % (shell_quote(messages_url), expected)
+            "curl -fsS %s | jq -e '%s == %d' >/dev/null"
+            % (shell_quote(messages_url), MEDIA_COUNT_JQ, expected)
         )
 
     machine.wait_until_succeeds(

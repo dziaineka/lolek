@@ -8,10 +8,11 @@ defmodule Lolek.Telegram do
   @callback send_photo(integer(), term(), keyword()) :: {:ok, term()} | {:error, term()}
   @callback send_animation(integer(), term(), keyword()) :: {:ok, term()} | {:error, term()}
   @callback send_media_group(integer(), [term()], keyword()) :: {:ok, term()} | {:error, term()}
-  @callback edit_message_caption(integer(), integer(), keyword()) ::
-              {:ok, term()} | {:error, term()}
   @callback set_message_reaction(integer(), integer(), keyword()) ::
               {:ok, term()} | {:error, term()}
+  @callback send_rich_message(integer(), ExGram.Model.InputRichMessage.t(), keyword()) ::
+              {:ok, term()} | {:error, term()}
+  @callback delete_message(integer(), integer()) :: {:ok, term()} | {:error, term()}
 
   @doc "Sends a video to the given chat."
   @spec send_video(integer(), term(), keyword()) :: {:ok, term()} | {:error, term()}
@@ -43,17 +44,24 @@ defmodule Lolek.Telegram do
     client().send_media_group(chat_id, media, options)
   end
 
-  @doc "Edits the caption of a previously sent message."
-  @spec edit_message_caption(integer(), integer(), keyword()) :: {:ok, term()} | {:error, term()}
-  def edit_message_caption(chat_id, message_id, options) do
-    client().edit_message_caption(chat_id, message_id, options)
-  end
-
   @doc "Sets the bot's reaction on a message."
   @spec set_message_reaction(integer(), integer(), keyword()) ::
           {:ok, term()} | {:error, term()}
   def set_message_reaction(chat_id, message_id, options) do
     client().set_message_reaction(chat_id, message_id, options)
+  end
+
+  @doc "Sends a rich message built from blocks to the given chat."
+  @spec send_rich_message(integer(), ExGram.Model.InputRichMessage.t(), keyword()) ::
+          {:ok, term()} | {:error, term()}
+  def send_rich_message(chat_id, rich_message, options) do
+    client().send_rich_message(chat_id, rich_message, options)
+  end
+
+  @doc "Deletes a message from the given chat."
+  @spec delete_message(integer(), integer()) :: {:ok, term()} | {:error, term()}
+  def delete_message(chat_id, message_id) do
+    client().delete_message(chat_id, message_id)
   end
 
   @spec client() :: module()

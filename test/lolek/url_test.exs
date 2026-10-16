@@ -131,6 +131,32 @@ defmodule Lolek.UrlTest do
     end
   end
 
+  test "configured allowlist accepts Bluesky posts", context do
+    Application.put_env(:lolek, :allowed_urls_regex, context.configured_allowed_urls_regex)
+
+    for url <- [
+          "https://bsky.app/profile/wesleymorgan.bsky.social/post/3mxpuyr44xs2v",
+          "https://bsky.app/profile/wesleymorgan.bsky.social/post/3mxpuyr44xs2v/?ref=share",
+          "https://bsky.app/profile/did:plc:example/post/3mxpuyr44xs2v"
+        ] do
+      assert {:ok, ^url} = Lolek.Url.extract_url(url)
+    end
+  end
+
+  test "configured allowlist rejects Bluesky profiles and non-post urls", context do
+    Application.put_env(:lolek, :allowed_urls_regex, context.configured_allowed_urls_regex)
+
+    for url <- [
+          "https://bsky.app/profile/wesleymorgan.bsky.social",
+          "https://bsky.app/profile/wesleymorgan.bsky.social/post/",
+          "https://bsky.app/profile/wesleymorgan.bsky.social/feed/example",
+          "https://evilbsky.app/profile/wesleymorgan.bsky.social/post/3mxpuyr44xs2v",
+          "https://bsky.app.example.com/profile/wesleymorgan.bsky.social/post/3mxpuyr44xs2v"
+        ] do
+      assert {:error, :no_url} = Lolek.Url.extract_url(url)
+    end
+  end
+
   test "threads storage key ignores media path and query string" do
     canonical =
       Lolek.Url.to_folder_name("https://www.threads.com/@slothconservation/post/DXu0QIympQM")

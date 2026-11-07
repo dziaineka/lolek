@@ -3,57 +3,24 @@ defmodule Lolek.Telegram do
   Wraps Telegram API calls so sending can be tested without a real Telegram server.
   """
 
-  @callback send_message(integer(), String.t(), keyword()) :: {:ok, term()} | {:error, term()}
-  @callback send_video(integer(), term(), keyword()) :: {:ok, term()} | {:error, term()}
-  @callback send_document(integer(), term(), keyword()) :: {:ok, term()} | {:error, term()}
-  @callback send_photo(integer(), term(), keyword()) :: {:ok, term()} | {:error, term()}
-  @callback send_animation(integer(), term(), keyword()) :: {:ok, term()} | {:error, term()}
-  @callback send_media_group(integer(), [term()], keyword()) :: {:ok, term()} | {:error, term()}
-  @callback edit_message_caption(integer(), integer(), keyword()) ::
+  @callback send_rich_message(integer(), ExGram.Model.InputRichMessage.t(), keyword()) ::
+              {:ok, term()} | {:error, term()}
+  @callback edit_message_text(integer(), integer(), keyword()) ::
               {:ok, term()} | {:error, term()}
   @callback set_message_reaction(integer(), integer(), keyword()) ::
               {:ok, term()} | {:error, term()}
 
-  @doc "Sends a text message to the given chat."
-  @spec send_message(integer(), String.t(), keyword()) :: {:ok, term()} | {:error, term()}
-  def send_message(chat_id, text, options) do
-    client().send_message(chat_id, text, options)
+  @doc "Sends a rich message to the given chat."
+  @spec send_rich_message(integer(), ExGram.Model.InputRichMessage.t(), keyword()) ::
+          {:ok, term()} | {:error, term()}
+  def send_rich_message(chat_id, rich_message, options) do
+    client().send_rich_message(chat_id, rich_message, options)
   end
 
-  @doc "Sends a video to the given chat."
-  @spec send_video(integer(), term(), keyword()) :: {:ok, term()} | {:error, term()}
-  def send_video(chat_id, video, options) do
-    client().send_video(chat_id, video, options)
-  end
-
-  @doc "Sends a document to the given chat."
-  @spec send_document(integer(), term(), keyword()) :: {:ok, term()} | {:error, term()}
-  def send_document(chat_id, document, options) do
-    client().send_document(chat_id, document, options)
-  end
-
-  @doc "Sends a photo to the given chat."
-  @spec send_photo(integer(), term(), keyword()) :: {:ok, term()} | {:error, term()}
-  def send_photo(chat_id, photo, options) do
-    client().send_photo(chat_id, photo, options)
-  end
-
-  @doc "Sends an animation (GIF) to the given chat."
-  @spec send_animation(integer(), term(), keyword()) :: {:ok, term()} | {:error, term()}
-  def send_animation(chat_id, animation, options) do
-    client().send_animation(chat_id, animation, options)
-  end
-
-  @doc "Sends a media group (album) to the given chat."
-  @spec send_media_group(integer(), [term()], keyword()) :: {:ok, term()} | {:error, term()}
-  def send_media_group(chat_id, media, options) do
-    client().send_media_group(chat_id, media, options)
-  end
-
-  @doc "Edits the caption of a previously sent message."
-  @spec edit_message_caption(integer(), integer(), keyword()) :: {:ok, term()} | {:error, term()}
-  def edit_message_caption(chat_id, message_id, options) do
-    client().edit_message_caption(chat_id, message_id, options)
+  @doc "Edits the text or the rich content of a previously sent message."
+  @spec edit_message_text(integer(), integer(), keyword()) :: {:ok, term()} | {:error, term()}
+  def edit_message_text(chat_id, message_id, options) do
+    client().edit_message_text(chat_id, message_id, options)
   end
 
   @doc "Sets the bot's reaction on a message."

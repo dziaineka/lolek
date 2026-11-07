@@ -1,0 +1,62 @@
+[
+ [
+  2,
+  {
+   "$type": "app.bsky.feed.post",
+   "author": {
+    "avatar": "https://cdn.bsky.app/img/avatar/plain/did:plc:z72i7hdynmk6r22z27h6tvur/bafkreihwihm6kpd6zuwhhlro75p5qks5qtrcu55jp3gddbfjsieiv7wuka",
+    "createdAt": "2023-04-12T04:53:57.057Z",
+    "did": "did:plc:z72i7hdynmk6r22z27h6tvur",
+    "displayName": "Bluesky",
+    "handle": "bsky.app",
+    "instance": "bsky.app",
+    "labels": [],
+    "verification": {
+     "trustedVerifierStatus": "valid",
+     "verifications": [],
+     "verifiedStatus": "none"
+    }
+   },
+   "bookmarkCount": 197,
+   "category": "bluesky",
+   "cid": "bafyreigd4pqhxjxcva43jxo3lleri67woip44kr65hc45qze5fzhpc4z4a",
+   "count": 0,
+   "createdAt": "2026-11-03T16:00:00.226Z",
+   "date": "2026-11-03 16:00:00",
+   "embed": {
+    "$type": "app.bsky.embed.record",
+    "record": {
+     "cid": "bafyreiam3t3xzfyhpctoz3hsvca6xybasugtkrasycq7mnzomgvgkqj6w4",
+     "uri": "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.graph.starterpack/3mzdvli2fkq23"
+    }
+   },
+   "indexedAt": "2026-11-03T16:00:00.478Z",
+   "instance": "bsky.app",
+   "labels": [],
+   "langs": [
+    "en"
+   ],
+   "likeCount": 1856,
+   "post_id": "3mzg7hgxgqk26",
+   "quoteCount": 42,
+   "replyCount": 73,
+   "repostCount": 422,
+   "subcategory": "post",
+   "text": "Bluesky’s Election Day feed features 700+ local reporters and newsrooms covering all 50 states and DC, many of them independent or nonprofit.\n\nWant to keep up with their reporting today and year-round? Follow this battleground Starter Pack or any of the regional packs in the thread below. 🧵",
+   "threadgate": {
+    "cid": "bafyreicdz2m5y7xbr5zvribqoefnzyubhxqleapltj47l6kcfyivv7ly7a",
+    "lists": [],
+    "record": {
+     "$type": "app.bsky.feed.threadgate",
+     "createdAt": "2026-11-03T16:02:15.300Z",
+     "hiddenReplies": [
+      "at://did:plc:yygnzp5deljnyrdmuftbpoii/app.bsky.feed.post/3mzg7k62gdk2b"
+     ],
+     "post": "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.post/3mzg7hgxgqk26"
+    },
+    "uri": "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.threadgate/3mzg7hgxgqk26"
+   },
+   "uri": "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.post/3mzg7hgxgqk26"
+  }
+ ]
+]

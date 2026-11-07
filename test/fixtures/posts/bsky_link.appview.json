@@ -1,0 +1,139 @@
+{
+ "thread": {
+  "post": {
+   "uri": "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.post/3myd52wqlwc2b",
+   "cid": "bafyreid7iohvjvgxtwfmi3fd3474tpivqfbzhjx3p466eesuv6wkl3yizu",
+   "author": {
+    "did": "did:plc:z72i7hdynmk6r22z27h6tvur",
+    "handle": "bsky.app",
+    "displayName": "Bluesky",
+    "avatar": "https://cdn.bsky.app/img/avatar/plain/did:plc:z72i7hdynmk6r22z27h6tvur/bafkreihwihm6kpd6zuwhhlro75p5qks5qtrcu55jp3gddbfjsieiv7wuka",
+    "associated": {
+     "chat": {
+      "allowIncoming": "none"
+     },
+     "activitySubscription": {
+      "allowSubscriptions": "followers"
+     }
+    },
+    "labels": [],
+    "createdAt": "2023-04-12T04:53:57.057Z",
+    "verification": {
+     "verifications": [],
+     "verifiedStatus": "none",
+     "trustedVerifierStatus": "valid"
+    },
+    "status": {
+     "uri": "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.actor.status/self",
+     "cid": "bafyreihkojqw7p22odgjcbzjh5sh4vrntow24sd4nvntpqnddrd5pqma44",
+     "record": {
+      "$type": "app.bsky.actor.status",
+      "createdAt": "2026-10-20T16:00:37.680Z",
+      "durationMinutes": 60,
+      "embed": {
+       "$type": "app.bsky.embed.external",
+       "external": {
+        "$type": "app.bsky.embed.external#external",
+        "description": "Elon Take The Wheel Livestream: Alex Gibney, Director of \"MUSK\"",
+        "thumb": {
+         "$type": "blob",
+         "ref": {
+          "$link": "bafkreifbiu2m3dnnhmzq4dk6u4227p3xuq3zzqhhzvibhuojnz6unengny"
+         },
+         "mimeType": "image/jpeg",
+         "size": 195438
+        },
+        "title": "e.w. niedermeyer is live on Streamplace",
+        "uri": "https://stream.place/niedermeyer.online"
+       }
+      },
+      "status": "app.bsky.actor.status#live"
+     },
+     "status": "app.bsky.actor.status#live",
+     "embed": {
+      "external": {
+       "uri": "https://stream.place/niedermeyer.online",
+       "title": "e.w. niedermeyer is live on Streamplace",
+       "description": "Elon Take The Wheel Livestream: Alex Gibney, Director of \"MUSK\"",
+       "thumb": "https://cdn.bsky.app/img/feed_thumbnail/plain/did:plc:z72i7hdynmk6r22z27h6tvur/bafkreifbiu2m3dnnhmzq4dk6u4227p3xuq3zzqhhzvibhuojnz6unengny"
+      },
+      "$type": "app.bsky.embed.external#view"
+     },
+     "labels": [],
+     "expiresAt": "2026-10-20T17:00:37.680Z",
+     "isActive": false
+    }
+   },
+   "record": {
+    "$type": "app.bsky.feed.post",
+    "createdAt": "2026-10-20T17:14:02.246Z",
+    "embed": {
+     "$type": "app.bsky.embed.external",
+     "external": {
+      "description": "",
+      "thumb": {
+       "$type": "blob",
+       "ref": {
+        "$link": "bafkreiasupbhcwhistorocxjujvg72it4mskajtg2chw7to6432vfqje6e"
+       },
+       "mimeType": "image/jpeg",
+       "size": 117906
+      },
+      "title": "Musk (film) - Wikipedia",
+      "uri": "https://en.wikipedia.org/wiki/Musk_(film)"
+     }
+    },
+    "facets": [
+     {
+      "features": [
+       {
+        "$type": "app.bsky.richtext.facet#link",
+        "uri": "https://en.wikipedia.org/wiki/Musk_(film)"
+       }
+      ],
+      "index": {
+       "byteEnd": 87,
+       "byteStart": 55
+      }
+     }
+    ],
+    "langs": [
+     "en"
+    ],
+    "reply": {
+     "parent": {
+      "cid": "bafyreidomdv2i5wr5u3owshmgrdrbhpwhp37im5s2fjt6pmcjfebtp67xa",
+      "uri": "at://did:plc:ujmxqcpmdr2u53qnlc4aofgv/app.bsky.feed.post/3myd4noepbs2x"
+     },
+     "root": {
+      "cid": "bafyreidomdv2i5wr5u3owshmgrdrbhpwhp37im5s2fjt6pmcjfebtp67xa",
+      "uri": "at://did:plc:ujmxqcpmdr2u53qnlc4aofgv/app.bsky.feed.post/3myd4noepbs2x"
+     }
+    },
+    "text": "yes. here's what the film we were discussing is about: en.wikipedia.org/wiki/Musk_(f..."
+   },
+   "embed": {
+    "external": {
+     "uri": "https://en.wikipedia.org/wiki/Musk_(film)",
+     "title": "Musk (film) - Wikipedia",
+     "description": "",
+     "thumb": "https://cdn.bsky.app/img/feed_thumbnail/plain/did:plc:z72i7hdynmk6r22z27h6tvur/bafkreiasupbhcwhistorocxjujvg72it4mskajtg2chw7to6432vfqje6e"
+    },
+    "$type": "app.bsky.embed.external#view"
+   },
+   "bookmarkCount": 0,
+   "replyCount": 1,
+   "repostCount": 5,
+   "likeCount": 93,
+   "quoteCount": 0,
+   "indexedAt": "2026-10-20T17:14:06.156Z",
+   "labels": []
+  },
+  "parent": {
+   "uri": "at://did:plc:ujmxqcpmdr2u53qnlc4aofgv/app.bsky.feed.post/3myd4noepbs2x",
+   "notFound": true,
+   "$type": "app.bsky.feed.defs#notFoundPost"
+  },
+  "$type": "app.bsky.feed.defs#threadViewPost"
+ }
+}

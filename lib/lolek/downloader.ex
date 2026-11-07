@@ -116,7 +116,8 @@ defmodule Lolek.Downloader do
           {:ok, Lolek.File.file_state()} | {:error, term()}
   defp try_text_post(url, output_path) do
     with :yt_dlp <- downloader_module(url),
-         {:ok, text} <- Lolek.GalleryDownloader.fetch_text_post(url) do
+         info_json_path = Path.join([output_path, @gallery_subdir, "info.json"]),
+         {:ok, text} <- Lolek.GalleryDownloader.fetch_text_post(url, info_json_path) do
       Logger.info("Found a text-only post for url: #{Lolek.Url.normalize_for_log(url)}")
       {:ok, {:text_post, output_path, text}}
     else

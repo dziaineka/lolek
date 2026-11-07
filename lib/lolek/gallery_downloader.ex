@@ -61,35 +61,98 @@ defmodule Lolek.GalleryDownloader do
   Reads the text of a post without media, like a text-only tweet or Bluesky post.
 
   Returns an error when gallery-dl reports media for the post, so that other
-  downloaders can still try to get the media.
+  downloaders can still try to get the media. When `info_json_path` is given, the
+  post metadata is written to this file for `Lolek.Post.GalleryDl`.
   """
-  @spec fetch_text_post(String.t()) :: {:ok, String.t()} | {:error, term()}
-  def fetch_text_post(url) do
-    with_cookies_fallback(
-      &fetch_text_post(url, &1),
-      &(&1 not in [:post_has_media, :no_text_post])
-    )
+  @spec fetch_text_post(String.t(), String.t() | nil) :: {:ok, String.t()} | {:error, term()}
+  def fetch_text_post(url, info_json_path \\ nil) do
+    case with_cookies_fallback(
+           &text_post_with_metadata(url, &1),
+           &(&1 not in [:post_has_media, :no_text_post])
+         ) do
+      {:ok, {text, metadata}} ->
+        _ = write_info_json(metadata, info_json_path)
+        {:ok, text}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
   end
 
-  @spec fetch_text_post(String.t(), [String.t()]) :: {:ok, String.t()} | {:error, term()}
-  defp fetch_text_post(url, cookies_args) do
-    result =
-      Lolek.Command.run(
-        "gallery-dl",
-        ["--dump-json", "-o", "extractor.twitter.text-tweets=true"] ++
-          cookies_args ++ config_args() ++ [url],
-        timeout: command_timeout()
-      )
-
-    case result do
+  @spec text_post_with_metadata(String.t(), [String.t()]) ::
+          {:ok, {String.t(), map() | nil}} | {:error, term()}
+  defp text_post_with_metadata(url, cookies_args) do
+    case dump_json(url, cookies_args) do
       {:ok, output} ->
-        output
-        |> Keyword.get(:stdout, [])
-        |> IO.iodata_to_binary()
-        |> parse_text_post()
+        with {:ok, text} <- parse_text_post(output) do
+          {:ok, {text, directory_metadata(output)}}
+        end
 
       {:error, reason} ->
         {:error, {:gallery_dl_text_post, reason}}
+    end
+  end
+
+  @spec directory_metadata(String.t()) :: map() | nil
+  defp directory_metadata(output) do
+    case Jason.decode(output) do
+      {:ok, messages} when is_list(messages) ->
+        Enum.find_value(messages, fn
+          [2, %{} = metadata] -> metadata
+          _ -> nil
+        end)
+
+      _ ->
+        nil
+    end
+  end
+
+  @spec write_info_json(map() | nil, String.t() | nil) :: :ok | {:error, term()}
+  defp write_info_json(nil, _info_json_path), do: :ok
+  defp write_info_json(_metadata, nil), do: :ok
+
+  defp write_info_json(metadata, info_json_path) do
+    with :ok <- File.mkdir_p(Path.dirname(info_json_path)) do
+      File.write(info_json_path, Jason.encode!(metadata))
+    end
+  end
+
+  @doc """
+  Reads the metadata messages of a post (`gallery-dl --dump-json`) without a download.
+  `options` are more gallery-dl `-o` options, like `"extractor.twitter.quoted=true"`.
+  """
+  @spec fetch_metadata(String.t(), [String.t()]) :: {:ok, list()} | {:error, term()}
+  def fetch_metadata(url, options \\ []) do
+    option_args = Enum.flat_map(options, &["-o", &1])
+
+    with_cookies_fallback(
+      fn cookies_args ->
+        # gallery-dl reports some failures as an error message with exit status 0.
+        with {:ok, output} <- dump_json(url, option_args ++ cookies_args),
+             {:ok, messages} when is_list(messages) <- Jason.decode(output),
+             nil <- Enum.find_value(messages, &error_message/1) do
+          {:ok, messages}
+        else
+          {:gallery_dl_error, error} -> {:error, {:gallery_dl_error, error}}
+          {:ok, _other} -> {:error, :invalid_gallery_dl_output}
+          {:error, %Jason.DecodeError{}} -> {:error, :invalid_gallery_dl_output}
+          {:error, reason} -> {:error, {:gallery_dl_metadata, reason}}
+        end
+      end,
+      fn _reason -> true end
+    )
+  end
+
+  @spec dump_json(String.t(), [String.t()]) :: {:ok, String.t()} | {:error, term()}
+  defp dump_json(url, cookies_args) do
+    case Lolek.Command.run(
+           "gallery-dl",
+           ["--dump-json", "-o", "extractor.twitter.text-tweets=true"] ++
+             cookies_args ++ config_args() ++ [url],
+           timeout: command_timeout()
+         ) do
+      {:ok, output} -> {:ok, output |> Keyword.get(:stdout, []) |> IO.iodata_to_binary()}
+      {:error, reason} -> {:error, reason}
     end
   end
 

@@ -5,7 +5,8 @@ defmodule Lolek.GalleryDownloaderTest do
     :max_file_size_to_send_to_telegram,
     :max_gallery_media,
     :download_command_timeout_seconds,
-    :gallery_dl_cookies_file
+    :gallery_dl_cookies_file,
+    :gallery_download_enabled
   ]
 
   describe "download/2" do
@@ -163,6 +164,130 @@ defmodule Lolek.GalleryDownloaderTest do
 
         assert {:ok, "guest text"} =
                  Lolek.GalleryDownloader.fetch_text_post("https://x.com/user/status/1")
+      end)
+    end
+  end
+
+  describe "post metadata" do
+    @tag :tmp_dir
+    test "writes the metadata of text posts to the info file", %{tmp_dir: tmp_dir} do
+      preserve_env(fn ->
+        bin_dir = mkdir_bin(tmp_dir)
+
+        write_script(bin_dir, "gallery-dl", """
+        #!/bin/sh
+        printf '%s' '[[2, {"category": "twitter", "content": "post text", "tweet_id": 20}]]'
+        """)
+
+        set_env(bin_dir)
+        Application.put_env(:lolek, :gallery_dl_cookies_file, nil)
+        info_json_path = Path.join([tmp_dir, "gallery", "info.json"])
+
+        assert {:ok, "post text"} =
+                 Lolek.GalleryDownloader.fetch_text_post(
+                   "https://x.com/user/status/20",
+                   info_json_path
+                 )
+
+        assert %{"category" => "twitter", "content" => "post text"} =
+                 info_json_path |> File.read!() |> Jason.decode!()
+      end)
+    end
+
+    @tag :tmp_dir
+    test "reads metadata again without cookies when gallery-dl reports an error with them", %{
+      tmp_dir: tmp_dir
+    } do
+      preserve_env(fn ->
+        bin_dir = mkdir_bin(tmp_dir)
+
+        # Logged-in X requests can fail in the client transaction step. gallery-dl then
+        # prints an error message and exits with status 0.
+        write_script(bin_dir, "gallery-dl", """
+        #!/bin/sh
+        case "$*" in
+          *--cookies*) printf '%s' '[[-1, {"error": "AbortExtraction", "message": "key"}]]' ;;
+          *) printf '%s' '[[2, {"category": "twitter", "content": "guest", "tweet_id": 1}]]' ;;
+        esac
+        """)
+
+        set_env(bin_dir)
+        Application.put_env(:lolek, :gallery_dl_cookies_file, Path.join(tmp_dir, "cookies.txt"))
+
+        assert {:ok, [[2, %{"content" => "guest"}]]} =
+                 Lolek.GalleryDownloader.fetch_metadata("https://x.com/i/status/1")
+      end)
+    end
+
+    @tag :tmp_dir
+    test "returns gallery-dl error messages", %{tmp_dir: tmp_dir} do
+      preserve_env(fn ->
+        bin_dir = mkdir_bin(tmp_dir)
+
+        write_script(bin_dir, "gallery-dl", """
+        #!/bin/sh
+        printf '%s' '[[-1, {"error": "NotFoundError"}]]'
+        """)
+
+        set_env(bin_dir)
+        Application.put_env(:lolek, :gallery_dl_cookies_file, nil)
+
+        assert {:error, {:gallery_dl_error, %{"error" => "NotFoundError"}}} =
+                 Lolek.GalleryDownloader.fetch_metadata("https://x.com/i/status/1")
+      end)
+    end
+
+    @tag :tmp_dir
+    test "fetches the quoted tweet and the parent tweet", %{tmp_dir: tmp_dir} do
+      preserve_env(fn ->
+        bin_dir = mkdir_bin(tmp_dir)
+
+        write_script(bin_dir, "gallery-dl", """
+        #!/bin/sh
+        printf '%s\\n' "$*" >> "#{tmp_dir}/calls"
+        for arg; do last=$arg; done
+        case "$last" in
+          */20) printf '%s' '[[2, {"category": "twitter", "content": "main", "tweet_id": 20, "quote_id": 0}], [2, {"category": "twitter", "content": "quoted", "tweet_id": 30, "quote_id": 20, "author": {"name": "q", "nick": "Q"}}], [3, "https://pbs.twimg.com/media/a.jpg", {"category": "twitter", "tweet_id": 30, "quote_id": 20, "extension": "jpg"}]]' ;;
+          */10) printf '%s' '[[2, {"category": "twitter", "content": "parent", "tweet_id": 10, "author": {"name": "p"}}]]' ;;
+          *) exit 1 ;;
+        esac
+        """)
+
+        set_env(bin_dir)
+        Application.put_env(:lolek, :gallery_dl_cookies_file, nil)
+        Application.put_env(:lolek, :gallery_download_enabled, true)
+
+        post =
+          Lolek.Post.GalleryDl.parse(%{
+            "category" => "twitter",
+            "content" => "@p main",
+            "tweet_id" => 20,
+            "reply_id" => 10,
+            "reply_to" => "p",
+            "author" => %{"name" => "me"}
+          })
+
+        enriched = Lolek.Post.Enricher.enrich(post)
+
+        assert %Lolek.Post{text: "quoted", author: %{name: "Q", handle: "q"}} = enriched.quoted
+        assert [%{type: :photo, url: "https://pbs.twimg.com/media/a.jpg"}] = enriched.quoted.media
+        assert %Lolek.Post{text: "parent", author: %{handle: "p"}} = enriched.reply_to
+        assert enriched.text == "main"
+        assert enriched.extra.linked_posts == "fetched"
+
+        assert File.read!(Path.join(tmp_dir, "calls")) =~
+                 "-o extractor.twitter.quoted=true"
+
+        # The linked posts are fetched one time.
+        assert Lolek.Post.Enricher.enrich(enriched) == enriched
+
+        # A failed fetch does not mark the post, so the next request tries again.
+        failed = Lolek.Post.Enricher.enrich(%{post | url: "https://x.com/me/status/99"})
+        assert failed.quoted == nil
+        refute Map.has_key?(failed.extra, :linked_posts)
+
+        Application.put_env(:lolek, :gallery_download_enabled, false)
+        assert Lolek.Post.Enricher.enrich(post) == post
       end)
     end
   end

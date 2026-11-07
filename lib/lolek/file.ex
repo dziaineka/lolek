@@ -10,6 +10,7 @@ defmodule Lolek.File do
   @gallery_subdir "gallery"
   @media_manifest "media_manifest.json"
   @legacy_gallery_manifest "gallery_manifest.json"
+  @text_post_manifest "text_post.json"
 
   @type ready_media_entry :: {tg_file_id :: String.t(), ext :: String.t()}
   @type sent_media_entry :: {ext :: String.t(), tg_file_id :: String.t()}
@@ -20,6 +21,7 @@ defmodule Lolek.File do
           | {:prepared_media, cache_root :: String.t(), files :: [String.t()]}
           | {:new_file, String.t()}
           | {:sent_media, cache_root :: String.t(), [sent_media_entry()]}
+          | {:text_post, cache_root :: String.t(), text :: String.t()}
 
   @spec get_video_width_and_height(String.t()) :: :error | {:ok, {integer(), integer()}}
   def get_video_width_and_height(file_path) do
@@ -187,11 +189,22 @@ defmodule Lolek.File do
     end
   end
 
+  def move_to_ready_to_telegram({:text_post, cache_root, text}) do
+    ready_path = Path.join(cache_root, @ready_to_telegram)
+    manifest_path = Path.join(ready_path, @text_post_manifest)
+
+    with :ok <- File.mkdir_p(ready_path),
+         :ok <- persist_media_manifest(ready_path, manifest_path, %{"text" => text}) do
+      remove_cached_media(cache_root)
+    end
+  end
+
   def move_to_ready_to_telegram(_another_file_state) do
     :ok
   end
 
-  @spec persist_media_manifest(String.t(), String.t(), [map()]) :: :ok | {:error, term()}
+  @spec persist_media_manifest(String.t(), String.t(), [map()] | map()) ::
+          :ok | {:error, term()}
   defp persist_media_manifest(ready_path, manifest_path, manifest) do
     temporary_path = manifest_path <> ".tmp"
 
@@ -205,7 +218,7 @@ defmodule Lolek.File do
     end
   end
 
-  @spec write_synced_manifest(String.t(), [map()]) :: :ok | {:error, term()}
+  @spec write_synced_manifest(String.t(), [map()] | map()) :: :ok | {:error, term()}
   defp write_synced_manifest(path, manifest) do
     case File.write(path, Jason.encode!(manifest), [:sync]) do
       :ok -> :ok
@@ -293,9 +306,24 @@ defmodule Lolek.File do
       Path.join(ready_to_telegram_path, @legacy_gallery_manifest)
     ]
 
-    case read_media_manifests(manifest_paths) do
+    with {:error, _reason} <- read_media_manifests(manifest_paths),
+         {:error, _reason} <- read_text_post_manifest(folder_path, ready_to_telegram_path) do
+      check_single_file_cache(ready_to_telegram_path)
+    else
       {:ok, [_ | _] = entries} -> {:exists, {:ready_media, entries}}
-      _ -> check_single_file_cache(ready_to_telegram_path)
+      {:ok, {:text_post, _cache_root, _text} = text_post} -> {:exists, text_post}
+    end
+  end
+
+  @spec read_text_post_manifest(String.t(), String.t()) ::
+          {:ok, file_state()} | {:error, term()}
+  defp read_text_post_manifest(folder_path, ready_to_telegram_path) do
+    with {:ok, content} <- File.read(Path.join(ready_to_telegram_path, @text_post_manifest)),
+         {:ok, %{"text" => text}} when is_binary(text) and text != "" <- Jason.decode(content) do
+      {:ok, {:text_post, folder_path, text}}
+    else
+      {:error, reason} -> {:error, reason}
+      _ -> {:error, :invalid_text_post_manifest}
     end
   end
 
@@ -354,7 +382,11 @@ defmodule Lolek.File do
 
   @spec check_cache_file(String.t()) :: {:exists, file_state()} | false
   defp check_cache_file(file_path) do
-    if Path.basename(file_path) in [@media_manifest, @legacy_gallery_manifest] do
+    if Path.basename(file_path) in [
+         @media_manifest,
+         @legacy_gallery_manifest,
+         @text_post_manifest
+       ] do
       false
     else
       check_single_cache_media(file_path)

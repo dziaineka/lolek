@@ -226,6 +226,35 @@ defmodule Lolek.GalleryDownloaderTest do
     end
   end
 
+  describe "parse_text_post/1" do
+    test "reads Twitter post text from the content field" do
+      output = Jason.encode!([[2, %{"content" => "  hello\r\nworld  "}]])
+      assert {:ok, "hello\nworld"} = Lolek.GalleryDownloader.parse_text_post(output)
+    end
+
+    test "reads Bluesky post text from the text field" do
+      output = Jason.encode!([[2, %{"text" => "bluesky post"}]])
+      assert {:ok, "bluesky post"} = Lolek.GalleryDownloader.parse_text_post(output)
+    end
+
+    test "rejects posts with media URLs" do
+      output = Jason.encode!([[2, %{"content" => "text"}], [3, "https://x.test/a.jpg", %{}]])
+      assert {:error, :post_has_media} = Lolek.GalleryDownloader.parse_text_post(output)
+    end
+
+    test "rejects posts without text" do
+      assert {:error, :no_text_post} =
+               Lolek.GalleryDownloader.parse_text_post(Jason.encode!([[2, %{"content" => " "}]]))
+
+      assert {:error, :no_text_post} = Lolek.GalleryDownloader.parse_text_post("[]")
+    end
+
+    test "rejects invalid output" do
+      assert {:error, _reason} = Lolek.GalleryDownloader.parse_text_post("not json")
+      assert {:error, :invalid_gallery_dl_output} = Lolek.GalleryDownloader.parse_text_post("{}")
+    end
+  end
+
   describe "read_caption/1" do
     @tag :tmp_dir
     test "reads caption from content field", %{tmp_dir: tmp_dir} do

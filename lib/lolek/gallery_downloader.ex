@@ -5,6 +5,8 @@ defmodule Lolek.GalleryDownloader do
 
   @image_extensions ~w(.jpg .jpeg .png .gif .webp .avif .heic .heif)
   @video_extensions ~w(.mp4 .mkv .webm .mov .m4v)
+  # Twitter/X keeps the post text in "content", Bluesky in "text".
+  @text_post_fields ~w(content text description)
 
   @spec download(String.t(), String.t()) :: {:ok, [String.t()]} | {:error, term()}
   def download(url, output_dir) do
@@ -44,6 +46,67 @@ defmodule Lolek.GalleryDownloader do
       {:error, reason} -> {:error, {:gallery_dl, reason}}
     end
   end
+
+  @doc """
+  Reads the text of a post without media, like a text-only tweet or Bluesky post.
+
+  Returns an error when gallery-dl reports media for the post, so that other
+  downloaders can still try to get the media.
+  """
+  @spec fetch_text_post(String.t()) :: {:ok, String.t()} | {:error, term()}
+  def fetch_text_post(url) do
+    result =
+      Lolek.Command.run(
+        "gallery-dl",
+        ["--dump-json", "-o", "extractor.twitter.text-tweets=true"] ++ extra_args() ++ [url],
+        timeout: command_timeout()
+      )
+
+    case result do
+      {:ok, output} ->
+        output
+        |> Keyword.get(:stdout, [])
+        |> IO.iodata_to_binary()
+        |> parse_text_post()
+
+      {:error, reason} ->
+        {:error, {:gallery_dl_text_post, reason}}
+    end
+  end
+
+  @spec parse_text_post(String.t()) :: {:ok, String.t()} | {:error, term()}
+  def parse_text_post(output) do
+    with {:ok, messages} when is_list(messages) <- Jason.decode(output),
+         false <- Enum.any?(messages, &media_message?/1),
+         {:ok, text} <- Enum.find_value(messages, {:error, :no_text_post}, &message_text/1) do
+      {:ok, text}
+    else
+      true -> {:error, :post_has_media}
+      {:error, reason} -> {:error, reason}
+      _ -> {:error, :invalid_gallery_dl_output}
+    end
+  end
+
+  # gallery-dl message types: 2 is a post directory, 3 is a media URL,
+  # 6 is a URL for another extractor.
+  @spec media_message?(term()) :: boolean()
+  defp media_message?([type | _]) when type in [3, 6], do: true
+  defp media_message?(_message), do: false
+
+  @spec message_text(term()) :: {:ok, String.t()} | nil
+  defp message_text([2, %{} = metadata]) do
+    with {:ok, text} <- Enum.find_value(@text_post_fields, &extract_text_field(metadata, &1)) do
+      text
+      |> String.replace(["\r\n", "\r"], "\n")
+      |> String.trim()
+      |> case do
+        "" -> nil
+        text -> {:ok, text}
+      end
+    end
+  end
+
+  defp message_text(_message), do: nil
 
   @spec repaired_media_files(String.t()) :: {:ok, [String.t()]} | {:error, term()}
   defp repaired_media_files(output_dir) do

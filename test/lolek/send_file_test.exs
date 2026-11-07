@@ -7,6 +7,12 @@ defmodule Lolek.SendFileTest do
     @behaviour Lolek.Telegram
 
     @impl true
+    def send_message(chat_id, text, options) do
+      record_call({:send_message, chat_id, text, options})
+      Application.fetch_env!(:lolek, :telegram_test_result)
+    end
+
+    @impl true
     def send_video(chat_id, video, options) do
       record_call({:send_video, chat_id, video, options})
       Application.fetch_env!(:lolek, :telegram_test_result)
@@ -759,6 +765,56 @@ defmodule Lolek.SendFileTest do
     end)
   end
 
+  test "sends text posts as text messages with the requester line" do
+    preserve_telegram_env(fn ->
+      Application.put_env(:lolek, :telegram_client, TelegramClient)
+      Application.put_env(:lolek, :telegram_test_result, {:ok, %ExGram.Model.Message{}})
+      Application.put_env(:lolek, :telegram_test_parent, self())
+      Application.put_env(:lolek, :post_requester_caption, true)
+      Application.put_env(:lolek, :post_source_caption, false)
+
+      context = [
+        requester_name: "alice",
+        started_at: System.monotonic_time(),
+        message_thread_id: 456
+      ]
+
+      file_state = {:text_post, "/tmp/cache", "post text"}
+      assert {:ok, ^file_state} = Lolek.send_file(123, file_state, context)
+
+      assert_receive {:send_message, 123, text, options}
+      assert text =~ ~r/^post text\n\nalice requested, processed in \d+\.\ds$/
+      assert options[:message_thread_id] == 456
+    end)
+  end
+
+  test "truncates long text posts by Telegram's message limit" do
+    preserve_telegram_env(fn ->
+      Application.put_env(:lolek, :telegram_client, TelegramClient)
+      Application.put_env(:lolek, :telegram_test_result, {:ok, %ExGram.Model.Message{}})
+      Application.put_env(:lolek, :telegram_test_parent, self())
+      Application.put_env(:lolek, :post_requester_caption, false)
+
+      file_state = {:text_post, "/tmp/cache", String.duplicate("a", 5000)}
+      assert {:ok, ^file_state} = Lolek.send_file(123, file_state)
+
+      assert_receive {:send_message, 123, text, _options}
+      assert utf16_code_units(text) == 4096
+      assert String.ends_with?(text, "...")
+    end)
+  end
+
+  test "returns Telegram errors for text posts" do
+    preserve_telegram_env(fn ->
+      error = %ExGram.Error{code: 400, message: "Bad Request"}
+      Application.put_env(:lolek, :telegram_client, TelegramClient)
+      Application.put_env(:lolek, :telegram_test_result, {:error, error})
+
+      assert {:error, {:telegram_api, %ExGram.Error{code: 400}}} =
+               Lolek.send_file(123, {:text_post, "/tmp/cache", "post text"})
+    end)
+  end
+
   test "adds requester and elapsed time to uploaded video captions" do
     preserve_telegram_env(fn ->
       file_path = tmp_file("downloaded.mp4", "media")
@@ -1025,6 +1081,9 @@ defmodule Lolek.SendFileTest.RaisingTelegramClient do
   @behaviour Lolek.Telegram
 
   @impl true
+  def send_message(_chat_id, _text, _options), do: {:error, :unexpected_send_message}
+
+  @impl true
   def send_video(_chat_id, _video, _options) do
     raise Application.fetch_env!(:lolek, :telegram_test_error)
   end
@@ -1066,6 +1125,9 @@ defmodule Lolek.SendFileTest.FloodWaitTelegramClient do
   """
 
   @behaviour Lolek.Telegram
+
+  @impl true
+  def send_message(_chat_id, _text, _options), do: {:error, :unexpected_send_message}
 
   @impl true
   def send_video(chat_id, video, options) do
@@ -1125,6 +1187,9 @@ defmodule Lolek.SendFileTest.GalleryTailFailsClient do
   """
 
   @behaviour Lolek.Telegram
+
+  @impl true
+  def send_message(_chat_id, _text, _options), do: {:error, :unexpected_send_message}
 
   @impl true
   def send_video(_chat_id, _video, _options), do: rejected()

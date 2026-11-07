@@ -6,6 +6,11 @@ defmodule Lolek.ExGramTelegram do
   @behaviour Lolek.Telegram
 
   @impl true
+  def send_message(chat_id, text, options) do
+    ExGram.send_message(chat_id, text, options)
+  end
+
+  @impl true
   def send_video(chat_id, video, options) do
     ExGram.send_video(chat_id, video, options)
   end

@@ -43,6 +43,17 @@ defmodule Lolek.FileTest do
   end
 
   @tag :tmp_dir
+  test "caches sent text posts", %{tmp_dir: tmp_dir} do
+    gallery_dir = Path.join(tmp_dir, "gallery")
+    File.mkdir_p!(gallery_dir)
+
+    assert :ok = Lolek.File.move_to_ready_to_telegram({:text_post, tmp_dir, "hello"})
+
+    assert {:ok, {:text_post, ^tmp_dir, "hello"}} = Lolek.File.get_file_state(tmp_dir)
+    refute File.exists?(gallery_dir)
+  end
+
+  @tag :tmp_dir
   test "cleans media after persisting sent media", %{tmp_dir: tmp_dir} do
     downloaded_path = Path.join(tmp_dir, "downloaded.mp4")
     compressed_path = Path.join(tmp_dir, "compressed.mp4")

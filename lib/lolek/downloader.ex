@@ -98,7 +98,7 @@ defmodule Lolek.Downloader do
 
         {:ok, []} ->
           Logger.info("Gallery download found no files for url: #{log_url}")
-          {:error, :no_gallery_files}
+          try_text_post(url, output_path)
 
         {:error, reason} ->
           Logger.warning(
@@ -109,6 +109,18 @@ defmodule Lolek.Downloader do
       end
     else
       {:error, :gallery_disabled}
+    end
+  end
+
+  @spec try_text_post(String.t(), String.t()) ::
+          {:ok, Lolek.File.file_state()} | {:error, term()}
+  defp try_text_post(url, output_path) do
+    with :yt_dlp <- downloader_module(url),
+         {:ok, text} <- Lolek.GalleryDownloader.fetch_text_post(url) do
+      Logger.info("Found a text-only post for url: #{Lolek.Url.normalize_for_log(url)}")
+      {:ok, {:text_post, output_path, text}}
+    else
+      _ -> {:error, :no_gallery_files}
     end
   end
 

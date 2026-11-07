@@ -140,6 +140,16 @@ File processing uses tagged tuples for state transitions:
 :new_file → :downloaded → :compressed → :sent_to_telegram_at_first → :ready_to_telegram
 ```
 
+### Rich Message Posts
+
+Lolek sends each post as one Telegram rich message (`sendRichMessage`, Bot API 10.1+). The message looks like the source post.
+
+- `Lolek.Post` is the source post: author, text with link facets, date, counters, quoted post, parent post, link card. `Lolek.SourceMetadata` caches it in `post.json` in the URL cache folder.
+- Metadata sources, highest priority first: the public Bluesky API (`Lolek.Post.Bluesky`), gallery-dl JSON (`Lolek.Post.GalleryDl`), page parsers (Threads, YouTube posts), yt-dlp JSON (`Lolek.Post.YtDlp`). `Lolek.Post.merge/2` combines them.
+- `Lolek.Post.Enricher` fetches the quoted tweet and the parent tweet with gallery-dl.
+- `Lolek.RichPost` builds the rich message HTML. The layout changes per platform (collage for X, Bluesky, Threads, and Facebook; slideshow for Instagram and TikTok). Media files are referenced as `tg://photo?id=mN` and uploaded in the `media` list.
+- After the send, Lolek reads the file_ids from the `rich_message` blocks of the response for the cache.
+
 ### Supervised Processes
 
 Application structure (see `lib/lolek/application.ex`):
@@ -165,6 +175,9 @@ Key environment variables:
 - `LOLEK_DOWNLOAD_DIR_PATH` - Download directory (default: `./downloads`)
 - `LOLEK_HW_ACCELERATION` - H.264 encoder backend (`none`, `vaapi`, or `qsv`; default: `none`)
 - `LOLEK_HW_DEVICE` - Render device for hardware acceleration (default: `/dev/dri/renderD128`)
+- `LOLEK_POST_SOURCE_CAPTION` - Show the source post details in the rich message (default: `true`)
+- `LOLEK_POST_REQUESTER_CAPTION` - Show the requester and processing time line (default: `false`)
+- `LOLEK_MAX_GALLERY_MEDIA` - Maximum media files in one post, 1 to 50 (default: `50`)
 - Various size/duration limits for compression logic
 
 ## External Dependencies

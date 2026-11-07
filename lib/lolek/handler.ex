@@ -223,13 +223,12 @@ defmodule Lolek.Handler do
           {:ok, Lolek.File.file_state()} | {:error, term()}
   defp do_process_url(chat_id, url, log_url, requester_name, message_thread_id, started_at) do
     with {:ok, folder_path} <- Lolek.File.get_folder_path(url),
-         source_metadata <- source_metadata(url, folder_path, log_url),
+         post <- source_post(url, folder_path, log_url),
          send_context = [
            requester_name: requester_name,
            message_thread_id: message_thread_id,
            started_at: started_at,
-           source_caption: source_metadata.caption,
-           source_title: source_metadata.title
+           post: post
          ],
          {:ok, file_state} <-
            timed_step("cache lookup", log_url, fn -> Lolek.File.get_file_state(folder_path) end),
@@ -252,36 +251,36 @@ defmodule Lolek.Handler do
     end
   end
 
+  # gallery-dl writes the post metadata next to the downloaded files.
   @spec enrich_gallery_context(keyword(), Lolek.File.file_state()) :: keyword()
-  defp enrich_gallery_context(context, {:downloaded_media, cache_root, _files}) do
+  defp enrich_gallery_context(context, {state, cache_root, _files_or_text})
+       when state in [:downloaded_media, :text_post] do
     gallery_dir = Path.join(cache_root, "gallery")
+    post = Keyword.get(context, :post) || Lolek.Post.empty()
 
-    with nil <- Keyword.get(context, :source_caption),
-         {:ok, caption} <- Lolek.GalleryDownloader.read_caption(gallery_dir) do
-      folder_path = Path.dirname(gallery_dir)
-      Lolek.SourceMetadata.cache_gallery_caption(folder_path, caption)
-      Keyword.put(context, :source_caption, caption)
-    else
-      _ -> context
-    end
+    Keyword.put(
+      context,
+      :post,
+      Lolek.SourceMetadata.merge_gallery_metadata(post, cache_root, gallery_dir)
+    )
   end
 
   defp enrich_gallery_context(context, _file_state), do: context
 
-  @spec source_metadata(String.t(), String.t(), String.t()) :: Lolek.SourceMetadata.t()
-  defp source_metadata(url, folder_path, log_url) do
+  @spec source_post(String.t(), String.t(), String.t()) :: Lolek.Post.t()
+  defp source_post(url, folder_path, log_url) do
     case timed_step("metadata", log_url, fn ->
            Lolek.SourceMetadata.get_or_fetch(url, folder_path)
          end) do
-      {:ok, metadata} ->
-        metadata
+      {:ok, post} ->
+        post
 
       {:error, reason} ->
         Logger.warning(
           "Error when fetching source metadata for url: #{log_url}; reason: #{inspect(reason)}"
         )
 
-        Lolek.SourceMetadata.empty()
+        Lolek.Post.empty(url)
     end
   end
 
@@ -316,8 +315,9 @@ defmodule Lolek.Handler do
   end
 
   @spec format_step_result(term()) :: String.t()
-  defp format_step_result({:ok, %{caption: caption, title: title}}) do
-    "ok:source_metadata:caption=#{present?(caption)}:title=#{present?(title)}"
+  defp format_step_result({:ok, %Lolek.Post{} = post}) do
+    "ok:post:platform=#{post.platform}:author=#{not is_nil(post.author)}:" <>
+      "text=#{present?(post.text)}:quoted=#{not is_nil(post.quoted)}"
   end
 
   defp format_step_result({:ok, file_state}), do: "ok:#{format_file_state(file_state)}"

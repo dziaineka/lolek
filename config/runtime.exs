@@ -54,11 +54,18 @@ download_path = System.get_env("LOLEK_DOWNLOAD_DIR_PATH", "./downloads")
 
 telegram_local_file_uploads = parse_bool.("LOLEK_TELEGRAM_LOCAL_FILE_UPLOADS", "false")
 metrics_enabled = parse_bool.("LOLEK_METRICS_ENABLED", "false")
-post_source_caption = parse_bool.("LOLEK_POST_SOURCE_CAPTION", "false")
+# When true, the rich message shows the source post details (author, text, linked
+# posts, date, and counters). When false, it shows only the media.
+post_source_caption = parse_bool.("LOLEK_POST_SOURCE_CAPTION", "true")
 post_requester_caption = parse_bool.("LOLEK_POST_REQUESTER_CAPTION", "false")
 gallery_download_enabled = parse_bool.("LOLEK_GALLERY_DOWNLOAD_ENABLED", "false")
 failure_reactions_enabled = parse_bool.("LOLEK_FAILURE_REACTIONS_ENABLED", "true")
 max_gallery_media = parse_pos_int.("LOLEK_MAX_GALLERY_MEDIA", "50")
+
+# A Telegram rich message holds up to 50 media files.
+if max_gallery_media > 50 do
+  raise "Config LOLEK_MAX_GALLERY_MEDIA (#{max_gallery_media}) must be <= 50, the media limit of a Telegram rich message"
+end
 
 # Optional: path to a Netscape-format cookies.txt file for gallery-dl (e.g. exported via
 # the "Get cookies.txt LOCALLY" browser extension). Required for Instagram and other sites

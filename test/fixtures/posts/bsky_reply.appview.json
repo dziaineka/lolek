@@ -1,0 +1,708 @@
+{
+ "thread": {
+  "post": {
+   "uri": "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.post/3mzg7ufzqwc2u",
+   "cid": "bafyreicacao2wdhkghhgs4bm2zoo5garlg73g62suidy3gp4fihjvu3oiy",
+   "author": {
+    "did": "did:plc:z72i7hdynmk6r22z27h6tvur",
+    "handle": "bsky.app",
+    "displayName": "Bluesky",
+    "avatar": "https://cdn.bsky.app/img/avatar/plain/did:plc:z72i7hdynmk6r22z27h6tvur/bafkreihwihm6kpd6zuwhhlro75p5qks5qtrcu55jp3gddbfjsieiv7wuka",
+    "associated": {
+     "chat": {
+      "allowIncoming": "none"
+     },
+     "activitySubscription": {
+      "allowSubscriptions": "followers"
+     }
+    },
+    "labels": [],
+    "createdAt": "2023-04-12T04:53:57.057Z",
+    "verification": {
+     "verifications": [],
+     "verifiedStatus": "none",
+     "trustedVerifierStatus": "valid"
+    },
+    "status": {
+     "uri": "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.actor.status/self",
+     "cid": "bafyreihkojqw7p22odgjcbzjh5sh4vrntow24sd4nvntpqnddrd5pqma44",
+     "record": {
+      "$type": "app.bsky.actor.status",
+      "createdAt": "2026-10-20T16:00:37.680Z",
+      "durationMinutes": 60,
+      "embed": {
+       "$type": "app.bsky.embed.external",
+       "external": {
+        "$type": "app.bsky.embed.external#external",
+        "description": "Elon Take The Wheel Livestream: Alex Gibney, Director of \"MUSK\"",
+        "thumb": {
+         "$type": "blob",
+         "ref": {
+          "$link": "bafkreifbiu2m3dnnhmzq4dk6u4227p3xuq3zzqhhzvibhuojnz6unengny"
+         },
+         "mimeType": "image/jpeg",
+         "size": 195438
+        },
+        "title": "e.w. niedermeyer is live on Streamplace",
+        "uri": "https://stream.place/niedermeyer.online"
+       }
+      },
+      "status": "app.bsky.actor.status#live"
+     },
+     "status": "app.bsky.actor.status#live",
+     "embed": {
+      "external": {
+       "uri": "https://stream.place/niedermeyer.online",
+       "title": "e.w. niedermeyer is live on Streamplace",
+       "description": "Elon Take The Wheel Livestream: Alex Gibney, Director of \"MUSK\"",
+       "thumb": "https://cdn.bsky.app/img/feed_thumbnail/plain/did:plc:z72i7hdynmk6r22z27h6tvur/bafkreifbiu2m3dnnhmzq4dk6u4227p3xuq3zzqhhzvibhuojnz6unengny"
+      },
+      "$type": "app.bsky.embed.external#view"
+     },
+     "labels": [],
+     "expiresAt": "2026-10-20T17:00:37.680Z",
+     "isActive": false
+    }
+   },
+   "record": {
+    "$type": "app.bsky.feed.post",
+    "createdAt": "2026-11-03T16:07:15.462Z",
+    "embed": {
+     "$type": "app.bsky.embed.record",
+     "record": {
+      "cid": "bafyreibpie64iihbee27wxobl2s64bxgw6ol52mwsfywaghlbxzjzu5p7i",
+      "uri": "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.graph.starterpack/3mzdvlg4n5s2x"
+     }
+    },
+    "facets": [
+     {
+      "$type": "app.bsky.richtext.facet",
+      "features": [
+       {
+        "$type": "app.bsky.richtext.facet#mention",
+        "did": "did:plc:ivdi2bkorynmqxsfctxowtd4"
+       }
+      ],
+      "index": {
+       "byteEnd": 111,
+       "byteStart": 96
+      }
+     },
+     {
+      "$type": "app.bsky.richtext.facet",
+      "features": [
+       {
+        "$type": "app.bsky.richtext.facet#mention",
+        "did": "did:plc:w4zfycmbhyk6ey2q64zm6dl3"
+       }
+      ],
+      "index": {
+       "byteEnd": 130,
+       "byteStart": 113
+      }
+     },
+     {
+      "$type": "app.bsky.richtext.facet",
+      "features": [
+       {
+        "$type": "app.bsky.richtext.facet#mention",
+        "did": "did:plc:3qqoasoyamvrk7azqz6hesyu"
+       }
+      ],
+      "index": {
+       "byteEnd": 140,
+       "byteStart": 132
+      }
+     },
+     {
+      "$type": "app.bsky.richtext.facet",
+      "features": [
+       {
+        "$type": "app.bsky.richtext.facet#mention",
+        "did": "did:plc:2xqepxu7fppn2plwwkq4tf4h"
+       }
+      ],
+      "index": {
+       "byteEnd": 168,
+       "byteStart": 146
+      }
+     }
+    ],
+    "langs": [
+     "en"
+    ],
+    "reply": {
+     "parent": {
+      "cid": "bafyreicn7kb4l66iyb3ptmxcprfih622v7ueeyg3bviegyjabzm2s64x6m",
+      "uri": "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.post/3mzg7tfv2xc2u"
+     },
+     "root": {
+      "cid": "bafyreigd4pqhxjxcva43jxo3lleri67woip44kr65hc45qze5fzhpc4z4a",
+      "uri": "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.post/3mzg7hgxgqk26"
+     }
+    },
+    "text": "Pacific: Reporters and newsrooms covering races from California to Alaska and Hawaii, including @calmatters.org, @alaskabeacon.com, @opb.org, and @civilbeat.bsky.social."
+   },
+   "embed": {
+    "record": {
+     "uri": "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.graph.starterpack/3mzdvlg4n5s2x",
+     "cid": "bafyreibpie64iihbee27wxobl2s64bxgw6ol52mwsfywaghlbxzjzu5p7i",
+     "record": {
+      "$type": "app.bsky.graph.starterpack",
+      "createdAt": "2026-11-02T17:57:56.503Z",
+      "feeds": [
+       {
+        "acceptsInteractions": true,
+        "cid": "bafyreibc2mkiyw2fla4kutgpfvm4zispobw6ff5bu3kuhzw3gdp6sfia7e",
+        "creator": {
+         "associated": {
+          "activitySubscription": {
+           "allowSubscriptions": "followers"
+          },
+          "chat": {
+           "allowIncoming": "following"
+          },
+          "germ": {
+           "messageMeUrl": "https://landing.ger.mx/newUser",
+           "showButtonTo": "usersIFollow"
+          }
+         },
+         "avatar": "https://cdn.bsky.app/img/avatar/plain/did:plc:qrllvid7s54k4hnwtqxwetrf/bafkreihknkschqffbspk4lk7qtf2y2bgx36sirxw3ygztyqe3te2vlhjla",
+         "createdAt": "2023-04-27T14:31:59.735Z",
+         "description": "Welcoming media and government (and everyone else!) to Bluesky. \n\n\"A nice gentleman\" —Eric Idle",
+         "did": "did:plc:qrllvid7s54k4hnwtqxwetrf",
+         "displayName": "Joshua J. Friedman",
+         "handle": "joshuajfriedman.com",
+         "indexedAt": "2026-10-23T01:27:47.772Z",
+         "labels": [],
+         "verification": {
+          "trustedVerifierStatus": "none",
+          "verifications": [
+           {
+            "createdAt": "2025-04-21T10:49:35.926Z",
+            "isValid": true,
+            "issuer": "did:plc:z72i7hdynmk6r22z27h6tvur",
+            "issuerDisplayName": "Bluesky",
+            "issuerHandle": "bsky.app",
+            "uri": "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.graph.verification/3lndpywo5do2z"
+           }
+          ],
+          "verifiedStatus": "valid"
+         },
+         "viewer": {
+          "blockedBy": false,
+          "followedBy": "at://did:plc:qrllvid7s54k4hnwtqxwetrf/app.bsky.graph.follow/3jufl6deya42p",
+          "muted": false,
+          "mutedOnlyQuoteposts": false,
+          "mutedOnlyReposts": false
+         }
+        },
+        "description": "Local reporters and newsrooms covering races throughout the Pacific on Election Day 2026.",
+        "did": "did:web:attie.ai",
+        "displayName": "Election: Pacific",
+        "indexedAt": "2026-11-02T22:27:59.464Z",
+        "labels": [],
+        "likeCount": 0,
+        "uri": "at://did:plc:qrllvid7s54k4hnwtqxwetrf/app.bsky.feed.generator/pacific",
+        "viewer": {}
+       },
+       {
+        "acceptsInteractions": true,
+        "cid": "bafyreifrrgs2hdvnuvwdrkiqsumoockfce4ocfluq47edquiuyjqwoplxi",
+        "creator": {
+         "associated": {
+          "activitySubscription": {
+           "allowSubscriptions": "followers"
+          },
+          "chat": {
+           "allowIncoming": "following"
+          },
+          "germ": {
+           "messageMeUrl": "https://landing.ger.mx/newUser",
+           "showButtonTo": "usersIFollow"
+          }
+         },
+         "avatar": "https://cdn.bsky.app/img/avatar/plain/did:plc:qrllvid7s54k4hnwtqxwetrf/bafkreihknkschqffbspk4lk7qtf2y2bgx36sirxw3ygztyqe3te2vlhjla",
+         "createdAt": "2023-04-27T14:31:59.735Z",
+         "description": "Welcoming media and government (and everyone else!) to Bluesky. \n\n\"A nice gentleman\" —Eric Idle",
+         "did": "did:plc:qrllvid7s54k4hnwtqxwetrf",
+         "displayName": "Joshua J. Friedman",
+         "handle": "joshuajfriedman.com",
+         "indexedAt": "2026-10-23T01:27:47.772Z",
+         "labels": [],
+         "verification": {
+          "trustedVerifierStatus": "none",
+          "verifications": [
+           {
+            "createdAt": "2025-04-21T10:49:35.926Z",
+            "isValid": true,
+            "issuer": "did:plc:z72i7hdynmk6r22z27h6tvur",
+            "issuerDisplayName": "Bluesky",
+            "issuerHandle": "bsky.app",
+            "uri": "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.graph.verification/3lndpywo5do2z"
+           }
+          ],
+          "verifiedStatus": "valid"
+         },
+         "viewer": {
+          "blockedBy": false,
+          "followedBy": "at://did:plc:qrllvid7s54k4hnwtqxwetrf/app.bsky.graph.follow/3jufl6deya42p",
+          "muted": false,
+          "mutedOnlyQuoteposts": false,
+          "mutedOnlyReposts": false
+         }
+        },
+        "description": "Bluesky's Midterms 2026 feed, including hundreds of local reporters and independent newsrooms from across the US, plus a selection of national reporters and analysts.",
+        "did": "did:web:attie.ai",
+        "displayName": "Midterms 2026",
+        "indexedAt": "2026-11-02T16:28:54.068Z",
+        "labels": [],
+        "likeCount": 17,
+        "uri": "at://did:plc:qrllvid7s54k4hnwtqxwetrf/app.bsky.feed.generator/midterms2026",
+        "viewer": {}
+       }
+      ],
+      "list": "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.graph.list/3mzdvlfmrzo2g",
+      "name": "Midterms 2026: Pacific",
+      "updatedAt": "2026-11-03T00:21:13.544Z"
+     },
+     "creator": {
+      "did": "did:plc:z72i7hdynmk6r22z27h6tvur",
+      "handle": "bsky.app",
+      "displayName": "Bluesky",
+      "avatar": "https://cdn.bsky.app/img/avatar/plain/did:plc:z72i7hdynmk6r22z27h6tvur/bafkreihwihm6kpd6zuwhhlro75p5qks5qtrcu55jp3gddbfjsieiv7wuka",
+      "associated": {
+       "chat": {
+        "allowIncoming": "none"
+       },
+       "activitySubscription": {
+        "allowSubscriptions": "followers"
+       }
+      },
+      "labels": [],
+      "createdAt": "2023-04-12T04:53:57.057Z",
+      "verification": {
+       "verifications": [],
+       "verifiedStatus": "none",
+       "trustedVerifierStatus": "valid"
+      },
+      "status": {
+       "uri": "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.actor.status/self",
+       "cid": "bafyreihkojqw7p22odgjcbzjh5sh4vrntow24sd4nvntpqnddrd5pqma44",
+       "record": {
+        "$type": "app.bsky.actor.status",
+        "createdAt": "2026-10-20T16:00:37.680Z",
+        "durationMinutes": 60,
+        "embed": {
+         "$type": "app.bsky.embed.external",
+         "external": {
+          "$type": "app.bsky.embed.external#external",
+          "description": "Elon Take The Wheel Livestream: Alex Gibney, Director of \"MUSK\"",
+          "thumb": {
+           "$type": "blob",
+           "ref": {
+            "$link": "bafkreifbiu2m3dnnhmzq4dk6u4227p3xuq3zzqhhzvibhuojnz6unengny"
+           },
+           "mimeType": "image/jpeg",
+           "size": 195438
+          },
+          "title": "e.w. niedermeyer is live on Streamplace",
+          "uri": "https://stream.place/niedermeyer.online"
+         }
+        },
+        "status": "app.bsky.actor.status#live"
+       },
+       "status": "app.bsky.actor.status#live",
+       "embed": {
+        "external": {
+         "uri": "https://stream.place/niedermeyer.online",
+         "title": "e.w. niedermeyer is live on Streamplace",
+         "description": "Elon Take The Wheel Livestream: Alex Gibney, Director of \"MUSK\"",
+         "thumb": "https://cdn.bsky.app/img/feed_thumbnail/plain/did:plc:z72i7hdynmk6r22z27h6tvur/bafkreifbiu2m3dnnhmzq4dk6u4227p3xuq3zzqhhzvibhuojnz6unengny"
+        },
+        "$type": "app.bsky.embed.external#view"
+       },
+       "labels": [],
+       "expiresAt": "2026-10-20T17:00:37.680Z",
+       "isActive": false
+      }
+     },
+     "joinedAllTimeCount": 0,
+     "joinedWeekCount": 0,
+     "labels": [],
+     "indexedAt": "2026-11-03T00:21:13.679Z",
+     "$type": "app.bsky.graph.defs#starterPackViewBasic"
+    },
+    "$type": "app.bsky.embed.record#view"
+   },
+   "bookmarkCount": 12,
+   "replyCount": 2,
+   "repostCount": 24,
+   "likeCount": 304,
+   "quoteCount": 1,
+   "indexedAt": "2026-11-03T16:07:15.780Z",
+   "labels": []
+  },
+  "parent": {
+   "post": {
+    "uri": "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.post/3mzg7tfv2xc2u",
+    "cid": "bafyreicn7kb4l66iyb3ptmxcprfih622v7ueeyg3bviegyjabzm2s64x6m",
+    "author": {
+     "did": "did:plc:z72i7hdynmk6r22z27h6tvur",
+     "handle": "bsky.app",
+     "displayName": "Bluesky",
+     "avatar": "https://cdn.bsky.app/img/avatar/plain/did:plc:z72i7hdynmk6r22z27h6tvur/bafkreihwihm6kpd6zuwhhlro75p5qks5qtrcu55jp3gddbfjsieiv7wuka",
+     "associated": {
+      "chat": {
+       "allowIncoming": "none"
+      },
+      "activitySubscription": {
+       "allowSubscriptions": "followers"
+      }
+     },
+     "labels": [],
+     "createdAt": "2023-04-12T04:53:57.057Z",
+     "verification": {
+      "verifications": [],
+      "verifiedStatus": "none",
+      "trustedVerifierStatus": "valid"
+     },
+     "status": {
+      "uri": "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.actor.status/self",
+      "cid": "bafyreihkojqw7p22odgjcbzjh5sh4vrntow24sd4nvntpqnddrd5pqma44",
+      "record": {
+       "$type": "app.bsky.actor.status",
+       "createdAt": "2026-10-20T16:00:37.680Z",
+       "durationMinutes": 60,
+       "embed": {
+        "$type": "app.bsky.embed.external",
+        "external": {
+         "$type": "app.bsky.embed.external#external",
+         "description": "Elon Take The Wheel Livestream: Alex Gibney, Director of \"MUSK\"",
+         "thumb": {
+          "$type": "blob",
+          "ref": {
+           "$link": "bafkreifbiu2m3dnnhmzq4dk6u4227p3xuq3zzqhhzvibhuojnz6unengny"
+          },
+          "mimeType": "image/jpeg",
+          "size": 195438
+         },
+         "title": "e.w. niedermeyer is live on Streamplace",
+         "uri": "https://stream.place/niedermeyer.online"
+        }
+       },
+       "status": "app.bsky.actor.status#live"
+      },
+      "status": "app.bsky.actor.status#live",
+      "embed": {
+       "external": {
+        "uri": "https://stream.place/niedermeyer.online",
+        "title": "e.w. niedermeyer is live on Streamplace",
+        "description": "Elon Take The Wheel Livestream: Alex Gibney, Director of \"MUSK\"",
+        "thumb": "https://cdn.bsky.app/img/feed_thumbnail/plain/did:plc:z72i7hdynmk6r22z27h6tvur/bafkreifbiu2m3dnnhmzq4dk6u4227p3xuq3zzqhhzvibhuojnz6unengny"
+       },
+       "$type": "app.bsky.embed.external#view"
+      },
+      "labels": [],
+      "expiresAt": "2026-10-20T17:00:37.680Z",
+      "isActive": false
+     }
+    },
+    "record": {
+     "$type": "app.bsky.feed.post",
+     "createdAt": "2026-11-03T16:06:41.753Z",
+     "embed": {
+      "$type": "app.bsky.embed.record",
+      "record": {
+       "cid": "bafyreifdtroxgxgm3n2v6qzuyhcsxze53hhsvjfbbv2uxe7esb5ew3q7q4",
+       "uri": "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.graph.starterpack/3mzdvleaj2d2i"
+      }
+     },
+     "facets": [
+      {
+       "$type": "app.bsky.richtext.facet",
+       "features": [
+        {
+         "$type": "app.bsky.richtext.facet#mention",
+         "did": "did:plc:iwlynwlkj7eiiy25mpxuqyrj"
+        }
+       ],
+       "index": {
+        "byteEnd": 106,
+        "byteStart": 90
+       }
+      },
+      {
+       "$type": "app.bsky.richtext.facet",
+       "features": [
+        {
+         "$type": "app.bsky.richtext.facet#mention",
+         "did": "did:plc:ank6pz6hhgvrtmwg7rmmw4fo"
+        }
+       ],
+       "index": {
+        "byteEnd": 119,
+        "byteStart": 108
+       }
+      },
+      {
+       "$type": "app.bsky.richtext.facet",
+       "features": [
+        {
+         "$type": "app.bsky.richtext.facet#mention",
+         "did": "did:plc:6wd6s3q5kkmdviqfyfqcodeb"
+        }
+       ],
+       "index": {
+        "byteEnd": 142,
+        "byteStart": 121
+       }
+      },
+      {
+       "$type": "app.bsky.richtext.facet",
+       "features": [
+        {
+         "$type": "app.bsky.richtext.facet#mention",
+         "did": "did:plc:ff6rvyq5bob7idb4dkxki22l"
+        }
+       ],
+       "index": {
+        "byteEnd": 168,
+        "byteStart": 148
+       }
+      }
+     ],
+     "langs": [
+      "en"
+     ],
+     "reply": {
+      "parent": {
+       "cid": "bafyreidtxnecsdbgcbs2fs5c54prwqp6kh5pyahupphltwkplct3qxcfk4",
+       "uri": "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.post/3mzg7rytd7k2u"
+      },
+      "root": {
+       "cid": "bafyreigd4pqhxjxcva43jxo3lleri67woip44kr65hc45qze5fzhpc4z4a",
+       "uri": "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.post/3mzg7hgxgqk26"
+      }
+     },
+     "text": "Mountain West: Reporters and newsrooms covering races from Montana to Colorado, including @coloradosun.com, @sltrib.com, @montanafreepress.org, and @idahocapitalsun.com."
+    },
+    "embed": {
+     "record": {
+      "uri": "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.graph.starterpack/3mzdvleaj2d2i",
+      "cid": "bafyreifdtroxgxgm3n2v6qzuyhcsxze53hhsvjfbbv2uxe7esb5ew3q7q4",
+      "record": {
+       "$type": "app.bsky.graph.starterpack",
+       "createdAt": "2026-11-02T17:57:54.537Z",
+       "feeds": [
+        {
+         "acceptsInteractions": true,
+         "cid": "bafyreievweppklp6e7n6t6an265zuzfejw5kowtnkrdmnj5byqyspfsprq",
+         "creator": {
+          "associated": {
+           "activitySubscription": {
+            "allowSubscriptions": "followers"
+           },
+           "chat": {
+            "allowIncoming": "following"
+           },
+           "germ": {
+            "messageMeUrl": "https://landing.ger.mx/newUser",
+            "showButtonTo": "usersIFollow"
+           }
+          },
+          "avatar": "https://cdn.bsky.app/img/avatar/plain/did:plc:qrllvid7s54k4hnwtqxwetrf/bafkreihknkschqffbspk4lk7qtf2y2bgx36sirxw3ygztyqe3te2vlhjla",
+          "createdAt": "2023-04-27T14:31:59.735Z",
+          "description": "Welcoming media and government (and everyone else!) to Bluesky. \n\n\"A nice gentleman\" —Eric Idle",
+          "did": "did:plc:qrllvid7s54k4hnwtqxwetrf",
+          "displayName": "Joshua J. Friedman",
+          "handle": "joshuajfriedman.com",
+          "indexedAt": "2026-10-23T01:27:47.772Z",
+          "labels": [],
+          "verification": {
+           "trustedVerifierStatus": "none",
+           "verifications": [
+            {
+             "createdAt": "2025-04-21T10:49:35.926Z",
+             "isValid": true,
+             "issuer": "did:plc:z72i7hdynmk6r22z27h6tvur",
+             "issuerDisplayName": "Bluesky",
+             "issuerHandle": "bsky.app",
+             "uri": "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.graph.verification/3lndpywo5do2z"
+            }
+           ],
+           "verifiedStatus": "valid"
+          },
+          "viewer": {
+           "blockedBy": false,
+           "followedBy": "at://did:plc:qrllvid7s54k4hnwtqxwetrf/app.bsky.graph.follow/3jufl6deya42p",
+           "muted": false,
+           "mutedOnlyQuoteposts": false,
+           "mutedOnlyReposts": false
+          }
+         },
+         "description": "Local reporters and newsrooms covering races throughout the Mountain West on Election Day 2026.",
+         "did": "did:web:attie.ai",
+         "displayName": "Election: Mountain West",
+         "indexedAt": "2026-11-02T22:27:55.969Z",
+         "labels": [],
+         "likeCount": 0,
+         "uri": "at://did:plc:qrllvid7s54k4hnwtqxwetrf/app.bsky.feed.generator/mountainwest",
+         "viewer": {}
+        },
+        {
+         "acceptsInteractions": true,
+         "cid": "bafyreifrrgs2hdvnuvwdrkiqsumoockfce4ocfluq47edquiuyjqwoplxi",
+         "creator": {
+          "associated": {
+           "activitySubscription": {
+            "allowSubscriptions": "followers"
+           },
+           "chat": {
+            "allowIncoming": "following"
+           },
+           "germ": {
+            "messageMeUrl": "https://landing.ger.mx/newUser",
+            "showButtonTo": "usersIFollow"
+           }
+          },
+          "avatar": "https://cdn.bsky.app/img/avatar/plain/did:plc:qrllvid7s54k4hnwtqxwetrf/bafkreihknkschqffbspk4lk7qtf2y2bgx36sirxw3ygztyqe3te2vlhjla",
+          "createdAt": "2023-04-27T14:31:59.735Z",
+          "description": "Welcoming media and government (and everyone else!) to Bluesky. \n\n\"A nice gentleman\" —Eric Idle",
+          "did": "did:plc:qrllvid7s54k4hnwtqxwetrf",
+          "displayName": "Joshua J. Friedman",
+          "handle": "joshuajfriedman.com",
+          "indexedAt": "2026-10-23T01:27:47.772Z",
+          "labels": [],
+          "verification": {
+           "trustedVerifierStatus": "none",
+           "verifications": [
+            {
+             "createdAt": "2025-04-21T10:49:35.926Z",
+             "isValid": true,
+             "issuer": "did:plc:z72i7hdynmk6r22z27h6tvur",
+             "issuerDisplayName": "Bluesky",
+             "issuerHandle": "bsky.app",
+             "uri": "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.graph.verification/3lndpywo5do2z"
+            }
+           ],
+           "verifiedStatus": "valid"
+          },
+          "viewer": {
+           "blockedBy": false,
+           "followedBy": "at://did:plc:qrllvid7s54k4hnwtqxwetrf/app.bsky.graph.follow/3jufl6deya42p",
+           "muted": false,
+           "mutedOnlyQuoteposts": false,
+           "mutedOnlyReposts": false
+          }
+         },
+         "description": "Bluesky's Midterms 2026 feed, including hundreds of local reporters and independent newsrooms from across the US, plus a selection of national reporters and analysts.",
+         "did": "did:web:attie.ai",
+         "displayName": "Midterms 2026",
+         "indexedAt": "2026-11-02T16:28:54.068Z",
+         "labels": [],
+         "likeCount": 17,
+         "uri": "at://did:plc:qrllvid7s54k4hnwtqxwetrf/app.bsky.feed.generator/midterms2026",
+         "viewer": {}
+        }
+       ],
+       "list": "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.graph.list/3mzdvldrz4f22",
+       "name": "Midterms 2026: Mountain West",
+       "updatedAt": "2026-11-03T00:21:35.793Z"
+      },
+      "creator": {
+       "did": "did:plc:z72i7hdynmk6r22z27h6tvur",
+       "handle": "bsky.app",
+       "displayName": "Bluesky",
+       "avatar": "https://cdn.bsky.app/img/avatar/plain/did:plc:z72i7hdynmk6r22z27h6tvur/bafkreihwihm6kpd6zuwhhlro75p5qks5qtrcu55jp3gddbfjsieiv7wuka",
+       "associated": {
+        "chat": {
+         "allowIncoming": "none"
+        },
+        "activitySubscription": {
+         "allowSubscriptions": "followers"
+        }
+       },
+       "labels": [],
+       "createdAt": "2023-04-12T04:53:57.057Z",
+       "verification": {
+        "verifications": [],
+        "verifiedStatus": "none",
+        "trustedVerifierStatus": "valid"
+       },
+       "status": {
+        "uri": "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.actor.status/self",
+        "cid": "bafyreihkojqw7p22odgjcbzjh5sh4vrntow24sd4nvntpqnddrd5pqma44",
+        "record": {
+         "$type": "app.bsky.actor.status",
+         "createdAt": "2026-10-20T16:00:37.680Z",
+         "durationMinutes": 60,
+         "embed": {
+          "$type": "app.bsky.embed.external",
+          "external": {
+           "$type": "app.bsky.embed.external#external",
+           "description": "Elon Take The Wheel Livestream: Alex Gibney, Director of \"MUSK\"",
+           "thumb": {
+            "$type": "blob",
+            "ref": {
+             "$link": "bafkreifbiu2m3dnnhmzq4dk6u4227p3xuq3zzqhhzvibhuojnz6unengny"
+            },
+            "mimeType": "image/jpeg",
+            "size": 195438
+           },
+           "title": "e.w. niedermeyer is live on Streamplace",
+           "uri": "https://stream.place/niedermeyer.online"
+          }
+         },
+         "status": "app.bsky.actor.status#live"
+        },
+        "status": "app.bsky.actor.status#live",
+        "embed": {
+         "external": {
+          "uri": "https://stream.place/niedermeyer.online",
+          "title": "e.w. niedermeyer is live on Streamplace",
+          "description": "Elon Take The Wheel Livestream: Alex Gibney, Director of \"MUSK\"",
+          "thumb": "https://cdn.bsky.app/img/feed_thumbnail/plain/did:plc:z72i7hdynmk6r22z27h6tvur/bafkreifbiu2m3dnnhmzq4dk6u4227p3xuq3zzqhhzvibhuojnz6unengny"
+         },
+         "$type": "app.bsky.embed.external#view"
+        },
+        "labels": [],
+        "expiresAt": "2026-10-20T17:00:37.680Z",
+        "isActive": false
+       }
+      },
+      "joinedAllTimeCount": 0,
+      "joinedWeekCount": 0,
+      "labels": [],
+      "indexedAt": "2026-11-03T00:21:35.972Z",
+      "$type": "app.bsky.graph.defs#starterPackViewBasic"
+     },
+     "$type": "app.bsky.embed.record#view"
+    },
+    "bookmarkCount": 8,
+    "replyCount": 3,
+    "repostCount": 24,
+    "likeCount": 307,
+    "quoteCount": 0,
+    "indexedAt": "2026-11-03T16:06:42.083Z",
+    "labels": []
+   },
+   "threadContext": {},
+   "$type": "app.bsky.feed.defs#threadViewPost"
+  },
+  "$type": "app.bsky.feed.defs#threadViewPost"
+ },
+ "threadgate": {
+  "uri": "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.threadgate/3mzg7hgxgqk26",
+  "cid": "bafyreicdz2m5y7xbr5zvribqoefnzyubhxqleapltj47l6kcfyivv7ly7a",
+  "record": {
+   "$type": "app.bsky.feed.threadgate",
+   "createdAt": "2026-11-03T16:02:15.300Z",
+   "hiddenReplies": [
+    "at://did:plc:yygnzp5deljnyrdmuftbpoii/app.bsky.feed.post/3mzg7k62gdk2b"
+   ],
+   "post": "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.post/3mzg7hgxgqk26"
+  },
+  "lists": []
+ }
+}

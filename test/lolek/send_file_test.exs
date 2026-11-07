@@ -2,98 +2,121 @@ defmodule Lolek.SendFileTest do
   use ExUnit.Case
 
   defmodule TelegramClient do
+    @moduledoc """
+    Records each call and answers with the result of the configured responder.
+    """
+
+    @behaviour Lolek.Telegram
+
+    @impl true
+    def send_rich_message(chat_id, rich_message, options),
+      do: respond({:send_rich_message, chat_id, rich_message, options})
+
+    @impl true
+    def edit_message_text(chat_id, message_id, options),
+      do: respond({:edit_message_text, chat_id, message_id, options})
+
+    @impl true
+    def set_message_reaction(chat_id, message_id, options),
+      do: respond({:set_message_reaction, chat_id, message_id, options})
+
+    defp respond(call) do
+      parent = Application.get_env(:lolek, :telegram_test_parent)
+
+      if parent do
+        send(parent, call)
+        send(parent, {:local_files_exist, local_files_exist(call)})
+      end
+
+      counter = Application.fetch_env!(:lolek, :telegram_test_attempts)
+      attempt = :atomics.add_get(counter, 1, 1)
+      Application.fetch_env!(:lolek, :telegram_test_responder).(call, attempt)
+    end
+
+    defp local_files_exist({:send_rich_message, _chat_id, %{media: [_ | _] = media}, _options}) do
+      Enum.map(media, fn
+        %{media: %{media: "file://" <> encoded_path}} ->
+          encoded_path |> URI.decode() |> File.exists?()
+
+        _ ->
+          :not_local
+      end)
+    end
+
+    defp local_files_exist(_call), do: []
+  end
+
+  defmodule RaisingTelegramClient do
     @moduledoc false
 
     @behaviour Lolek.Telegram
 
     @impl true
-    def send_message(chat_id, text, options) do
-      record_call({:send_message, chat_id, text, options})
-      Application.fetch_env!(:lolek, :telegram_test_result)
-    end
+    def send_rich_message(_chat_id, _rich_message, _options),
+      do: raise(Application.fetch_env!(:lolek, :telegram_test_error))
 
     @impl true
-    def send_video(chat_id, video, options) do
-      record_call({:send_video, chat_id, video, options})
-      Application.fetch_env!(:lolek, :telegram_test_result)
-    end
+    def edit_message_text(_chat_id, _message_id, _options),
+      do: raise(Application.fetch_env!(:lolek, :telegram_test_error))
 
     @impl true
-    def send_document(chat_id, document, options) do
-      record_call({:send_document, chat_id, document, options})
-      Application.fetch_env!(:lolek, :telegram_test_result)
-    end
-
-    @impl true
-    def send_photo(chat_id, photo, options) do
-      record_call({:send_photo, chat_id, photo, options})
-      Application.fetch_env!(:lolek, :telegram_test_result)
-    end
-
-    @impl true
-    def send_animation(chat_id, animation, options) do
-      record_call({:send_animation, chat_id, animation, options})
-      Application.fetch_env!(:lolek, :telegram_test_result)
-    end
-
-    @impl true
-    def send_media_group(chat_id, media, options) do
-      record_call({:send_media_group, chat_id, media, options})
-
-      local_files_exist =
-        Enum.map(media, fn
-          %{media: "file://" <> encoded_path} -> encoded_path |> URI.decode() |> File.exists?()
-          _ -> :not_local
-        end)
-
-      record_call({:send_media_group_local_files_exist, local_files_exist})
-      Application.fetch_env!(:lolek, :telegram_test_result)
-    end
-
-    @impl true
-    def edit_message_caption(chat_id, message_id, options) do
-      record_call({:edit_message_caption, chat_id, message_id, options})
-      Application.fetch_env!(:lolek, :telegram_test_result)
-    end
-
-    @impl true
-    def set_message_reaction(chat_id, message_id, options) do
-      record_call({:set_message_reaction, chat_id, message_id, options})
-      Application.fetch_env!(:lolek, :telegram_test_result)
-    end
-
-    defp record_call(call) do
-      if parent = Application.get_env(:lolek, :telegram_test_parent) do
-        send(parent, call)
-      end
-    end
+    def set_message_reaction(_chat_id, _message_id, _options),
+      do: raise(Application.fetch_env!(:lolek, :telegram_test_error))
   end
 
-  test "returns an error when Telegram rejects a ready file" do
-    preserve_telegram_env(fn ->
-      error = %ExGram.Error{code: 400, message: "Bad Request"}
+  setup do
+    # Video uploads read the video size with ffprobe.
+    {:ok, _apps} = Application.ensure_all_started(:erlexec)
 
-      Application.put_env(:lolek, :telegram_client, TelegramClient)
-      Application.put_env(:lolek, :telegram_test_result, {:error, error})
+    keys = [
+      :telegram_client,
+      :telegram_test_responder,
+      :telegram_test_attempts,
+      :telegram_test_error,
+      :telegram_test_parent,
+      :telegram_local_file_uploads,
+      :post_source_caption,
+      :post_requester_caption,
+      :max_gallery_media
+    ]
 
-      assert {:error, {:telegram_api, %ExGram.Error{code: 400, message: "Bad Request"}}} =
-               Lolek.send_file(123, {:ready_media, [{"file-id", ".mp4"}]})
+    saved = Map.new(keys, &{&1, Application.fetch_env(:lolek, &1)})
+
+    on_exit(fn ->
+      Enum.each(saved, fn
+        {key, {:ok, value}} -> Application.put_env(:lolek, key, value)
+        {key, :error} -> Application.delete_env(:lolek, key)
+      end)
     end)
+
+    Application.put_env(:lolek, :telegram_client, TelegramClient)
+    Application.put_env(:lolek, :telegram_test_parent, self())
+    Application.put_env(:lolek, :telegram_test_attempts, :atomics.new(1, []))
+    Application.put_env(:lolek, :post_source_caption, false)
+    Application.put_env(:lolek, :post_requester_caption, false)
+    :ok
   end
 
-  test "does not start a Telegram request after the processing deadline" do
-    preserve_telegram_env(fn ->
-      test_pid = self()
+  describe "errors and retries" do
+    test "returns an error when Telegram rejects the message" do
+      respond_with(fn _call, _attempt -> {:error, bad_request()} end)
 
-      Application.put_env(:lolek, :telegram_client, TelegramClient)
-      Application.put_env(:lolek, :telegram_test_result, {:ok, %ExGram.Model.Message{}})
-      Application.put_env(:lolek, :telegram_test_parent, test_pid)
+      assert {:error, {:telegram_api, %ExGram.Error{code: 400}}} =
+               Lolek.send_file(123, {:ready_media, [{"file-id", ".mp4"}]})
+
+      assert_receive {:send_rich_message, 123, _rich_message, _options}
+      refute_receive {:send_rich_message, _, _, _}
+    end
+
+    test "does not start a Telegram request after the processing deadline" do
+      respond_with(fn _call, _attempt -> {:ok, rich_response([video_block("x")])} end)
+      test_pid = self()
 
       assert {:error, :processing_deadline_exceeded} =
                Lolek.ProcessingDeadline.run(
                  fn ->
-                   # Model a command being cooperatively cancelled by the deadline. This lets the
-                   # worker unwind far enough to attempt the upload after its deadline has elapsed.
+                   # Model a command being cooperatively cancelled by the deadline. This lets
+                   # the worker unwind far enough to attempt the upload after its deadline.
                    Lolek.ProcessingDeadline.with_command(0, fn ->
                      cancel_message = Lolek.ProcessingDeadline.cancellation_message()
                      send(test_pid, :waiting_for_deadline)
@@ -111,39 +134,33 @@ defmodule Lolek.SendFileTest do
 
       assert_receive :waiting_for_deadline
       assert_receive {:send_after_deadline, {:error, :processing_deadline_exceeded}}
-      refute_receive {:send_video, _, _, _}
-    end)
-  end
+      refute_receive {:send_rich_message, _, _, _}
+    end
 
-  test "waits out a flood limit and sends the media on the retry" do
-    preserve_telegram_env(fn ->
-      flood_wait_env(retry_after: 0)
+    test "waits out a flood limit and sends the message on the retry" do
+      flood_then_ok(retry_after: 0, failures: 1)
 
       assert {:ok, {:ready_media, [{"file-id", ".mp4"}]}} =
                Lolek.send_file(123, {:ready_media, [{"file-id", ".mp4"}]})
 
-      assert_receive {:send_video, 123, "file-id", _}
-      assert_receive {:send_video, 123, "file-id", _}
-      refute_receive {:send_video, _, _, _}
-    end)
-  end
+      assert_receive {:send_rich_message, 123, _, _}
+      assert_receive {:send_rich_message, 123, _, _}
+      refute_receive {:send_rich_message, _, _, _}
+    end
 
-  test "gives up on a flood limit that repeats" do
-    preserve_telegram_env(fn ->
-      flood_wait_env(retry_after: 0, failures: 2)
+    test "gives up on a flood limit that repeats" do
+      flood_then_ok(retry_after: 0, failures: 2)
 
       assert {:error, {:telegram_api, %ExGram.Error{code: 429}}} =
                Lolek.send_file(123, {:ready_media, [{"file-id", ".mp4"}]})
 
-      assert_receive {:send_video, 123, "file-id", _}
-      assert_receive {:send_video, 123, "file-id", _}
-      refute_receive {:send_video, _, _, _}
-    end)
-  end
+      assert_receive {:send_rich_message, 123, _, _}
+      assert_receive {:send_rich_message, 123, _, _}
+      refute_receive {:send_rich_message, _, _, _}
+    end
 
-  test "does not wait for a flood limit longer than the processing deadline" do
-    preserve_telegram_env(fn ->
-      flood_wait_env(retry_after: 59)
+    test "does not wait for a flood limit longer than the processing deadline" do
+      flood_then_ok(retry_after: 59, failures: 1)
       test_pid = self()
 
       Lolek.ProcessingDeadline.run(
@@ -155,623 +172,332 @@ defmodule Lolek.SendFileTest do
       )
 
       assert_receive {:flood_result, {:error, {:telegram_api, %ExGram.Error{code: 429}}}}
-      assert_receive {:send_video, 123, "file-id", _}
-      refute_receive {:send_video, _, _, _}
-    end)
-  end
+      assert_receive {:send_rich_message, 123, _, _}
+      refute_receive {:send_rich_message, _, _, _}
+    end
 
-  test "a rejection that is not a flood limit is returned at once" do
-    preserve_telegram_env(fn ->
-      flood_wait_env(retry_after: 0)
-
-      Application.put_env(:lolek, :telegram_test_error, %ExGram.Error{
-        code: 400,
-        message: "Bad Request"
-      })
-
-      assert {:error, {:telegram_api, %ExGram.Error{code: 400}}} =
-               Lolek.send_file(123, {:ready_media, [{"file-id", ".mp4"}]})
-
-      assert_receive {:send_video, 123, "file-id", _}
-      refute_receive {:send_video, _, _, _}
-    end)
-  end
-
-  test "a flood limit without the retry hint is not waited out" do
-    preserve_telegram_env(fn ->
-      flood_wait_env(retry_after: nil)
+    test "a flood limit without the retry hint is not waited out" do
+      flood_then_ok(retry_after: nil, failures: 1)
 
       assert {:error, {:telegram_api, %ExGram.Error{code: 429}}} =
                Lolek.send_file(123, {:ready_media, [{"file-id", ".mp4"}]})
 
-      assert_receive {:send_video, 123, "file-id", _}
-      refute_receive {:send_video, _, _, _}
-    end)
-  end
+      assert_receive {:send_rich_message, 123, _, _}
+      refute_receive {:send_rich_message, _, _, _}
+    end
 
-  test "returns an error when Telegram raises while sending" do
-    preserve_telegram_env(fn ->
-      error = %ExGram.Error{code: 500, message: "Internal Error"}
+    test "returns an error when Telegram raises while sending" do
+      Application.put_env(:lolek, :telegram_client, RaisingTelegramClient)
 
-      Application.put_env(:lolek, :telegram_client, Lolek.SendFileTest.RaisingTelegramClient)
-      Application.put_env(:lolek, :telegram_test_error, error)
+      Application.put_env(:lolek, :telegram_test_error, %ExGram.Error{
+        code: 500,
+        message: "Internal Error"
+      })
 
       assert {:error, {:telegram_api, %ExGram.Error{code: 500, message: "Internal Error"}}} =
                Lolek.send_file(123, {:ready_media, [{"file-id", ".mp4"}]})
-    end)
-  end
+    end
 
-  test "returns an error for unexpected Telegram upload responses" do
-    preserve_telegram_env(fn ->
-      response = %ExGram.Model.Message{}
+    test "returns an error for an unexpected Telegram response" do
+      respond_with(fn _call, _attempt -> {:ok, true} end)
 
-      Application.put_env(:lolek, :telegram_client, TelegramClient)
-      Application.put_env(:lolek, :telegram_test_result, {:ok, response})
+      assert {:error, {:unexpected_telegram_response, true}} =
+               Lolek.send_file(123, {:ready_media, [{"file-id", ".mp4"}]})
+    end
 
-      assert {:error, {:unexpected_telegram_response, ^response}} =
-               Lolek.send_file(123, {:prepared_media, "/tmp", ["/tmp/downloaded.txt"]})
-    end)
-  end
+    test "returns an error when there are no media files" do
+      assert {:error, :no_usable_media_files} =
+               Lolek.send_file(123, {:prepared_media, "/tmp", []})
+    end
 
-  test "returns sent file state with uploaded Telegram file id" do
-    preserve_telegram_env(fn ->
-      file_path = tmp_file("downloaded.txt", "media")
+    test "sends the post again without linked media when Telegram rejects it" do
+      respond_with(fn
+        _call, 1 -> {:error, bad_request()}
+        _call, _attempt -> {:ok, rich_response([photo_block("photo-id")])}
+      end)
 
-      response = %ExGram.Model.Message{
-        document: %ExGram.Model.Document{file_id: "telegram-file-id"}
+      Application.put_env(:lolek, :post_source_caption, true)
+      file_path = tmp_file("gallery-1.jpg", "media")
+
+      quoted = %Lolek.Post{
+        platform: :bluesky,
+        text: "quoted",
+        media: [%{type: :photo, url: "https://cdn.example/quoted.jpg"}]
       }
 
-      Application.put_env(:lolek, :telegram_client, TelegramClient)
-      Application.put_env(:lolek, :telegram_test_result, {:ok, response})
+      post = %Lolek.Post{platform: :bluesky, text: "main", quoted: quoted}
 
-      assert {:ok, {:sent_media, _, [{".txt", "telegram-file-id"}]}} =
-               Lolek.send_file(123, {:prepared_media, Path.dirname(file_path), [file_path]})
-    end)
-  end
-
-  test "sends uploaded media to the originating message thread" do
-    preserve_telegram_env(fn ->
-      file_path = tmp_file("downloaded.mp4", "media")
-
-      response = %ExGram.Model.Message{
-        video: %ExGram.Model.Video{file_id: "telegram-file-id"}
-      }
-
-      Application.put_env(:lolek, :telegram_client, TelegramClient)
-      Application.put_env(:lolek, :telegram_test_result, {:ok, response})
-      Application.put_env(:lolek, :telegram_test_parent, self())
-
-      context = [message_thread_id: 456]
-
-      assert {:ok, {:sent_media, _, [{".mp4", "telegram-file-id"}]}} =
+      assert {:ok, {:sent_media, _, [{".jpg", "photo-id"}]}} =
                Lolek.send_file(
                  123,
                  {:prepared_media, Path.dirname(file_path), [file_path]},
-                 context
+                 post: post
                )
 
-      assert_receive {:send_video, 123, _upload, options}
-      assert options[:message_thread_id] == 456
-    end)
+      assert_receive {:send_rich_message, 123, %ExGram.Model.InputRichMessage{html: first}, _}
+      assert first =~ ~s(<img src="https://cdn.example/quoted.jpg"/>)
+      assert_receive {:send_rich_message, 123, %ExGram.Model.InputRichMessage{html: second}, _}
+      refute second =~ "https://cdn.example/quoted.jpg"
+      assert second =~ "quoted"
+    end
+
+    test "does not send the post again when it has no linked media" do
+      respond_with(fn _call, _attempt -> {:error, bad_request()} end)
+      Application.put_env(:lolek, :post_source_caption, true)
+
+      assert {:error, {:telegram_api, %ExGram.Error{code: 400}}} =
+               Lolek.send_file(123, {:ready_media, [{"file-id", ".jpg"}]},
+                 post: %Lolek.Post{text: "main"}
+               )
+
+      assert_receive {:send_rich_message, _, _, _}
+      refute_receive {:send_rich_message, _, _, _}
+    end
   end
 
-  test "sends media groups to the originating message thread" do
-    preserve_telegram_env(fn ->
+  describe "media" do
+    test "uploads one video as a rich message and returns its file_id" do
+      respond_with(fn _call, _attempt -> {:ok, rich_response([video_block("video-id")])} end)
+      file_path = tmp_file("downloaded.mp4", "media")
+
+      assert {:ok, {:sent_media, _, [{".mp4", "video-id"}]}} =
+               Lolek.send_file(123, {:prepared_media, Path.dirname(file_path), [file_path]},
+                 message_thread_id: 456
+               )
+
+      assert_receive {:send_rich_message, 123,
+                      %ExGram.Model.InputRichMessage{
+                        html: html,
+                        media: [media],
+                        skip_entity_detection: true
+                      }, options}
+
+      assert html == ~s(<video src="tg://video?id=m0"></video>)
+
+      assert %ExGram.Model.InputRichMessageMedia{
+               id: "m0",
+               media: %ExGram.Model.InputMediaVideo{
+                 type: "video",
+                 supports_streaming: true,
+                 media: {:file_content, %File.Stream{} = stream, "downloaded.mp4"}
+               }
+             } = media
+
+      assert stream.path == file_path
+      assert stream.line_or_bytes == 64 * 1024
+      assert options[:message_thread_id] == 456
+      assert options[:disable_notification] == true
+    end
+
+    test "sends a gallery as a collage and keeps the order of the file_ids" do
+      respond_with(fn _call, _attempt ->
+        {:ok,
+         rich_response([
+           %ExGram.Model.RichBlockCollage{
+             type: "collage",
+             blocks: [photo_block("p1"), video_block("v2"), photo_block("p3")]
+           }
+         ])}
+      end)
+
+      files = [
+        tmp_file("gallery-1.jpg", "media"),
+        tmp_file("gallery-2.mp4", "media"),
+        tmp_file("gallery-3.png", "media")
+      ]
+
+      assert {:ok, {:sent_media, "/tmp", [{".jpg", "p1"}, {".mp4", "v2"}, {".png", "p3"}]}} =
+               Lolek.send_file(123, {:prepared_media, "/tmp", files})
+
+      assert_receive {:send_rich_message, 123,
+                      %ExGram.Model.InputRichMessage{html: html, media: media}, _}
+
+      assert html ==
+               ~s(<tg-collage><img src="tg://photo?id=m0"/><video src="tg://video?id=m1"></video>) <>
+                 ~s(<img src="tg://photo?id=m2"/></tg-collage>)
+
+      assert ["m0", "m1", "m2"] = Enum.map(media, & &1.id)
+    end
+
+    test "sends Instagram galleries as a slideshow" do
+      respond_with(fn _call, _attempt -> {:ok, rich_response([])} end)
       files = for index <- 1..2, do: tmp_file("gallery-#{index}.jpg", "media")
 
-      messages =
-        for index <- 1..2 do
-          %ExGram.Model.Message{
-            photo: [%ExGram.Model.PhotoSize{file_id: "gallery-file-#{index}"}]
-          }
-        end
+      Lolek.send_file(123, {:prepared_media, "/tmp", files},
+        post: %Lolek.Post{platform: :instagram}
+      )
 
-      Application.put_env(:lolek, :telegram_client, TelegramClient)
-      Application.put_env(:lolek, :telegram_test_result, {:ok, messages})
-      Application.put_env(:lolek, :telegram_test_parent, self())
+      assert_receive {:send_rich_message, 123, %ExGram.Model.InputRichMessage{html: html}, _}
+      assert html =~ "<tg-slideshow>"
+    end
 
-      context = [message_thread_id: 456]
+    test "does not cache file_ids that do not match the uploaded files" do
+      respond_with(fn _call, _attempt -> {:ok, rich_response([photo_block("p1")])} end)
+      files = for index <- 1..2, do: tmp_file("gallery-#{index}.jpg", "media")
+      file_state = {:prepared_media, "/tmp", files}
 
-      assert {:ok, {:sent_media, "/tmp", _entries}} =
-               Lolek.send_file(123, {:prepared_media, "/tmp", files}, context)
+      assert {:ok, ^file_state} = Lolek.send_file(123, file_state)
+    end
 
-      assert_receive {:send_media_group, 123, _media, options}
-      assert options[:message_thread_id] == 456
-    end)
-  end
-
-  test "limits a gallery to the configured maximum number of media files" do
-    preserve_telegram_env(fn ->
+    test "limits a gallery to the configured maximum number of media files" do
+      respond_with(fn _call, _attempt -> {:ok, rich_response([])} end)
+      Application.put_env(:lolek, :max_gallery_media, 2)
       files = for index <- 1..3, do: tmp_file("gallery-#{index}.jpg", "media")
 
-      messages =
-        for index <- 1..2 do
-          %ExGram.Model.Message{
-            photo: [%ExGram.Model.PhotoSize{file_id: "gallery-file-#{index}"}]
-          }
-        end
+      Lolek.send_file(123, {:prepared_media, "/tmp", files})
 
-      Application.put_env(:lolek, :telegram_client, TelegramClient)
-      Application.put_env(:lolek, :telegram_test_result, {:ok, messages})
-      Application.put_env(:lolek, :telegram_test_parent, self())
-      Application.put_env(:lolek, :max_gallery_media, 2)
-
-      assert {:ok, {:sent_media, "/tmp", entries}} =
-               Lolek.send_file(123, {:prepared_media, "/tmp", files})
-
-      assert length(entries) == 2
-      assert_receive {:send_media_group, 123, media, []}
+      assert_receive {:send_rich_message, 123, %ExGram.Model.InputRichMessage{media: media}, _}
       assert length(media) == 2
-      refute_receive {:send_media_group, 123, _, []}
-    end)
+    end
+
+    test "sends cached media by file_id and applies the gallery limit" do
+      respond_with(fn _call, _attempt -> {:ok, rich_response([])} end)
+      Application.put_env(:lolek, :max_gallery_media, 2)
+      entries = [{"id-1", ".jpg"}, {"id-2", ".gif"}, {"id-3", ".jpg"}]
+
+      assert {:ok, {:ready_media, [{"id-1", ".jpg"}, {"id-2", ".gif"}]}} =
+               Lolek.send_file(123, {:ready_media, entries})
+
+      assert_receive {:send_rich_message, 123,
+                      %ExGram.Model.InputRichMessage{html: html, media: media}, _}
+
+      assert html =~ ~s(<video src="tg://video?id=m1"></video>)
+
+      assert [
+               %ExGram.Model.InputRichMessageMedia{
+                 media: %ExGram.Model.InputMediaPhoto{media: "id-1"}
+               },
+               %ExGram.Model.InputRichMessageMedia{
+                 media: %ExGram.Model.InputMediaAnimation{media: "id-2"}
+               }
+             ] = media
+    end
+
+    test "sends other files as documents after the visual media" do
+      respond_with(fn _call, _attempt -> {:ok, rich_response([])} end)
+
+      Lolek.send_file(123, {:ready_media, [{"doc-id", ".txt"}, {"photo-id", ".jpg"}]})
+
+      assert_receive {:send_rich_message, 123,
+                      %ExGram.Model.InputRichMessage{html: html, media: media}, _}
+
+      assert html ==
+               ~s(<img src="tg://photo?id=m1"/><tg-document src="tg://document?id=m0"></tg-document>)
+
+      assert %ExGram.Model.InputMediaDocument{media: "doc-id"} = hd(media).media
+    end
   end
 
-  test "sends a gallery reduced to one video through the video endpoint" do
-    preserve_telegram_env(fn ->
-      files = for index <- 1..2, do: tmp_file("gallery-#{index}.mp4", "media")
-
-      response = %ExGram.Model.Message{
-        video: %ExGram.Model.Video{file_id: "gallery-video-file"}
-      }
-
-      Application.put_env(:lolek, :telegram_client, TelegramClient)
-      Application.put_env(:lolek, :telegram_test_result, {:ok, response})
-      Application.put_env(:lolek, :telegram_test_parent, self())
-      Application.put_env(:lolek, :max_gallery_media, 1)
-
-      assert {:ok, {:sent_media, "/tmp", [{".mp4", "gallery-video-file"}]}} =
-               Lolek.send_file(123, {:prepared_media, "/tmp", files})
-
-      assert_receive {:send_video, 123, {:file_content, %File.Stream{}, "gallery-1.mp4"},
-                      _options}
-
-      refute_receive {:send_media_group, 123, _, []}
-    end)
-  end
-
-  test "sends one-item galleries as local file uris" do
-    preserve_telegram_env(fn ->
-      file_path = tmp_file("gallery video.mp4", "media")
-
-      response = %ExGram.Model.Message{
-        video: %ExGram.Model.Video{file_id: "gallery-video-file"}
-      }
-
-      Application.put_env(:lolek, :telegram_client, TelegramClient)
-      Application.put_env(:lolek, :telegram_test_result, {:ok, response})
-      Application.put_env(:lolek, :telegram_test_parent, self())
+  describe "uploads" do
+    test "sends local file uris and cleans upload aliases" do
+      respond_with(fn _call, _attempt -> {:ok, rich_response([])} end)
       Application.put_env(:lolek, :telegram_local_file_uploads, true)
-
-      assert {:ok, {:sent_media, "/tmp", [{".mp4", "gallery-video-file"}]}} =
-               Lolek.send_file(123, {:prepared_media, "/tmp", [file_path]})
-
-      assert_receive {:send_video, 123, "file://" <> encoded_path, _options}
-      assert URI.decode(encoded_path) == file_path
-    end)
-  end
-
-  test "sends media groups as local file uris and cleans upload aliases" do
-    preserve_telegram_env(fn ->
       files = for index <- 1..2, do: tmp_file("gallery-#{index}.jpg", "media")
 
-      messages =
-        for index <- 1..2 do
-          %ExGram.Model.Message{
-            photo: [%ExGram.Model.PhotoSize{file_id: "gallery-file-#{index}"}]
-          }
-        end
+      Lolek.send_file(123, {:prepared_media, "/tmp", files}, post: post_titled("Gallery title"))
 
-      Application.put_env(:lolek, :telegram_client, TelegramClient)
-      Application.put_env(:lolek, :telegram_test_result, {:ok, messages})
-      Application.put_env(:lolek, :telegram_test_parent, self())
-      Application.put_env(:lolek, :telegram_local_file_uploads, true)
-
-      context = [source_title: "Gallery title"]
-
-      assert {:ok, {:sent_media, "/tmp", _entries}} =
-               Lolek.send_file(123, {:prepared_media, "/tmp", files}, context)
-
-      assert_receive {:send_media_group, 123, media, []}
-      assert Enum.all?(media, &String.starts_with?(&1.media, "file://"))
-      assert_receive {:send_media_group_local_files_exist, [true, true]}
+      assert_receive {:send_rich_message, 123, %ExGram.Model.InputRichMessage{media: media}, []}
+      assert Enum.all?(media, &String.starts_with?(&1.media.media, "file://"))
+      assert_receive {:local_files_exist, [true, true]}
 
       for file <- files do
         assert [] = Path.wildcard(Path.join(Path.dirname(file), ".telegram-upload-*"))
       end
-    end)
-  end
+    end
 
-  test "cleans prepared gallery uploads when a later item cannot be prepared" do
-    preserve_telegram_env(fn ->
+    test "sends the file path as a local file uri when the name does not change" do
+      respond_with(fn _call, _attempt -> {:ok, rich_response([])} end)
+      Application.put_env(:lolek, :telegram_local_file_uploads, true)
+      file_path = tmp_file("downloaded with spaces.mp4", "media")
+
+      Lolek.send_file(123, {:prepared_media, Path.dirname(file_path), [file_path]})
+
+      assert_receive {:send_rich_message, 123, %ExGram.Model.InputRichMessage{media: [media]}, _}
+      assert "file://" <> encoded_path = media.media.media
+      assert encoded_path == String.replace(file_path, " ", "%20")
+    end
+
+    test "cleans prepared uploads when a later item cannot be prepared" do
+      Application.put_env(:lolek, :telegram_local_file_uploads, true)
       file_path = tmp_file("gallery-1.jpg", "media")
       missing_path = Path.join(Path.dirname(file_path), "missing.jpg")
 
-      Application.put_env(:lolek, :telegram_client, TelegramClient)
-      Application.put_env(:lolek, :telegram_test_result, {:ok, []})
-      Application.put_env(:lolek, :telegram_test_parent, self())
-      Application.put_env(:lolek, :telegram_local_file_uploads, true)
-
-      context = [source_title: "Gallery title"]
-
       assert {:error, {:local_upload_alias, :enoent}} =
-               Lolek.send_file(
-                 123,
-                 {:prepared_media, "/tmp", [file_path, missing_path]},
-                 context
+               Lolek.send_file(123, {:prepared_media, "/tmp", [file_path, missing_path]},
+                 post: post_titled("Gallery title")
                )
 
       assert [] = Path.wildcard(Path.join(Path.dirname(file_path), ".telegram-upload-*"))
-      refute_receive {:send_media_group, _, _, _}
-    end)
-  end
+      refute_receive {:send_rich_message, _, _, _}
+    end
 
-  test "builds uploaded and cached gallery media through the same type mapping" do
-    preserve_telegram_env(fn ->
-      files = [
-        tmp_file("gallery.jpg", "photo"),
-        tmp_file("gallery.mp4", "video"),
-        tmp_file("gallery.gif", "animation")
-      ]
-
-      messages = [
-        %ExGram.Model.Message{photo: [%ExGram.Model.PhotoSize{file_id: "photo-id"}]},
-        %ExGram.Model.Message{video: %ExGram.Model.Video{file_id: "video-id"}},
-        %ExGram.Model.Message{document: %ExGram.Model.Document{file_id: "gif-id"}}
-      ]
-
-      Application.put_env(:lolek, :telegram_client, TelegramClient)
-      Application.put_env(:lolek, :telegram_test_result, {:ok, messages})
-      Application.put_env(:lolek, :telegram_test_parent, self())
-
-      assert {:ok,
-              {:sent_media, "/tmp",
-               [{".jpg", "photo-id"}, {".mp4", "video-id"}, {".gif", "gif-id"}]}} =
-               Lolek.send_file(123, {:prepared_media, "/tmp", files})
-
-      assert_receive {:send_media_group, 123, uploaded_media, []}
-
-      assert [
-               %ExGram.Model.InputMediaPhoto{media: {:file_content, _, "gallery.jpg"}},
-               %ExGram.Model.InputMediaVideo{media: {:file_content, _, "gallery.mp4"}},
-               %ExGram.Model.InputMediaDocument{media: {:file_content, _, "gallery.gif"}}
-             ] = uploaded_media
-
-      cached_entries = [{"photo-id", ".jpg"}, {"video-id", ".mp4"}, {"gif-id", ".gif"}]
-
-      assert {:ok, {:ready_media, ^cached_entries}} =
-               Lolek.send_file(123, {:ready_media, cached_entries})
-
-      assert_receive {:send_media_group, 123, cached_media, []}
-
-      assert [
-               %ExGram.Model.InputMediaPhoto{media: "photo-id"},
-               %ExGram.Model.InputMediaVideo{media: "video-id"},
-               %ExGram.Model.InputMediaDocument{media: "gif-id"}
-             ] = cached_media
-    end)
-  end
-
-  test "applies the gallery limit to cached media" do
-    preserve_telegram_env(fn ->
-      entries = for index <- 1..3, do: {"gallery-file-#{index}", ".jpg"}
-      response = %ExGram.Model.Message{photo: [%ExGram.Model.PhotoSize{file_id: "new-file-id"}]}
-
-      Application.put_env(:lolek, :telegram_client, TelegramClient)
-      Application.put_env(:lolek, :telegram_test_result, {:ok, response})
-      Application.put_env(:lolek, :telegram_test_parent, self())
-      Application.put_env(:lolek, :max_gallery_media, 1)
-
-      assert {:ok, {:ready_media, limited_entries}} =
-               Lolek.send_file(123, {:ready_media, entries})
-
-      assert length(limited_entries) == 1
-      assert_receive {:send_photo, 123, "gallery-file-1", []}
-      refute_receive {:send_media_group, 123, _, []}
-    end)
-  end
-
-  test "propagates Telegram errors when sending cached galleries" do
-    preserve_telegram_env(fn ->
-      error = %ExGram.Error{code: 400, message: "Bad Request"}
-      entries = [{"gallery-file-1", ".jpg"}, {"gallery-file-2", ".jpg"}]
-
-      Application.put_env(:lolek, :telegram_client, TelegramClient)
-      Application.put_env(:lolek, :telegram_test_result, {:error, error})
-      Application.put_env(:lolek, :telegram_test_parent, self())
-
-      assert {:error, {:telegram_api, %ExGram.Error{code: 400, message: "Bad Request"}}} =
-               Lolek.send_file(123, {:ready_media, entries})
-
-      assert_receive {:send_media_group, 123, _media, []}
-    end)
-  end
-
-  test "splits large collections without a one-item media group" do
-    preserve_telegram_env(fn ->
-      files = for index <- 1..11, do: tmp_file("gallery-#{index}.jpg", "media")
-
-      messages =
-        for index <- 1..9 do
-          %ExGram.Model.Message{
-            photo: [%ExGram.Model.PhotoSize{file_id: "gallery-file-#{index}"}]
-          }
-        end
-
-      Application.put_env(:lolek, :telegram_client, TelegramClient)
-      Application.put_env(:lolek, :telegram_test_result, {:ok, messages})
-      Application.put_env(:lolek, :telegram_test_parent, self())
-      Application.put_env(:lolek, :max_gallery_media, 11)
-
-      assert {:ok, {:sent_media, "/tmp", entries}} =
-               Lolek.send_file(123, {:prepared_media, "/tmp", files})
-
-      assert length(entries) == 11
-      assert_receive {:send_media_group, 123, first_batch, []}
-      assert_receive {:send_media_group, 123, second_batch, []}
-      assert length(first_batch) == 9
-      assert length(second_batch) == 2
-    end)
-  end
-
-  test "keeps a gallery half that already reached the chat" do
-    preserve_telegram_env(fn ->
-      files = for index <- 1..11, do: tmp_file("gallery-#{index}.jpg", "media")
-
-      messages =
-        for index <- 1..9 do
-          %ExGram.Model.Message{
-            photo: [%ExGram.Model.PhotoSize{file_id: "gallery-file-#{index}"}]
-          }
-        end
-
-      Application.put_env(:lolek, :telegram_client, Lolek.SendFileTest.GalleryTailFailsClient)
-      Application.put_env(:lolek, :telegram_test_parent, self())
-      Application.put_env(:lolek, :telegram_test_attempts, :atomics.new(1, []))
-      Application.put_env(:lolek, :telegram_test_result, {:ok, messages})
-      Application.put_env(:lolek, :max_gallery_media, 11)
-
-      assert {:ok, {:sent_media, "/tmp", entries}} =
-               Lolek.send_file(123, {:prepared_media, "/tmp", files})
-
-      assert length(entries) == 9
-      assert_receive {:send_media_group, 123, first_batch, []}
-      assert_receive {:send_media_group, 123, second_batch, []}
-      assert length(first_batch) == 9
-      assert length(second_batch) == 2
-    end)
-  end
-
-  test "reports an error when the first media group never lands" do
-    preserve_telegram_env(fn ->
-      files = for index <- 1..11, do: tmp_file("gallery-#{index}.jpg", "media")
-
-      Application.put_env(:lolek, :telegram_client, TelegramClient)
-      Application.put_env(:lolek, :max_gallery_media, 11)
-
-      Application.put_env(
-        :lolek,
-        :telegram_test_result,
-        {:error, %ExGram.Error{code: 400, message: "Bad Request"}}
-      )
-
-      assert {:error, {:telegram_api, %ExGram.Error{code: 400}}} =
-               Lolek.send_file(123, {:prepared_media, "/tmp", files})
-    end)
-  end
-
-  test "sends local file uris when local Telegram uploads are enabled" do
-    preserve_telegram_env(fn ->
-      file_path = tmp_file("downloaded with spaces.mp4", "media")
-
-      response = %ExGram.Model.Message{
-        video: %ExGram.Model.Video{file_id: "telegram-file-id"}
-      }
-
-      Application.put_env(:lolek, :telegram_client, TelegramClient)
-      Application.put_env(:lolek, :telegram_test_result, {:ok, response})
-      Application.put_env(:lolek, :telegram_test_parent, self())
-      Application.put_env(:lolek, :telegram_local_file_uploads, true)
-
-      assert {:ok, {:sent_media, _, [{".mp4", "telegram-file-id"}]}} =
-               Lolek.send_file(123, {:prepared_media, Path.dirname(file_path), [file_path]})
-
-      assert_receive {:send_video, 123, "file://" <> encoded_path, _options}
-      assert encoded_path == String.replace(file_path, " ", "%20")
-    end)
-  end
-
-  test "uses source titles as local upload file names" do
-    preserve_telegram_env(fn ->
+    test "uses sanitized post titles as upload file names" do
+      respond_with(fn _call, _attempt -> {:ok, rich_response([])} end)
       file_path = tmp_file("compressed.mp4", "media")
 
-      response = %ExGram.Model.Message{
-        video: %ExGram.Model.Video{file_id: "telegram-file-id"}
-      }
+      Lolek.send_file(123, {:prepared_media, Path.dirname(file_path), [file_path]},
+        post: post_titled("A / Video: https://example.com/watch Title?")
+      )
 
-      Application.put_env(:lolek, :telegram_client, TelegramClient)
-      Application.put_env(:lolek, :telegram_test_result, {:ok, response})
-      Application.put_env(:lolek, :telegram_test_parent, self())
+      assert_receive {:send_rich_message, 123, %ExGram.Model.InputRichMessage{media: [media]}, _}
+      assert {:file_content, %File.Stream{}, "A Video Title.mp4"} = media.media.media
+    end
+
+    test "uses post titles as local upload file names" do
+      respond_with(fn _call, _attempt -> {:ok, rich_response([])} end)
       Application.put_env(:lolek, :telegram_local_file_uploads, true)
+      file_path = tmp_file("compressed.mp4", "media")
 
-      context = [source_title: "A / Video: https://example.com/watch Title?"]
+      Lolek.send_file(123, {:prepared_media, Path.dirname(file_path), [file_path]},
+        post: post_titled("A / Video: https://example.com/watch Title?")
+      )
 
-      assert {:ok, {:sent_media, _, [{".mp4", "telegram-file-id"}]}} =
-               Lolek.send_file(
-                 123,
-                 {:prepared_media, Path.dirname(file_path), [file_path]},
-                 context
-               )
-
-      assert_receive {:send_video, 123, "file://" <> encoded_path, _options}
-
+      assert_receive {:send_rich_message, 123, %ExGram.Model.InputRichMessage{media: [media]}, _}
+      assert "file://" <> encoded_path = media.media.media
       assert encoded_path |> URI.decode() |> Path.basename() == "A Video Title.mp4"
       assert File.exists?(file_path)
       assert [] = Path.wildcard(Path.join(Path.dirname(file_path), ".telegram-upload-*"))
-    end)
+    end
+
+    for {name, title_char, measure} <- [
+          {"conservative and filesystem byte limits", "€", :raw},
+          {"byte limits after Unicode decomposition", "Ǖ", :nfd}
+        ] do
+      test "keeps local upload file names within #{name}" do
+        respond_with(fn _call, _attempt -> {:ok, rich_response([])} end)
+        Application.put_env(:lolek, :telegram_local_file_uploads, true)
+        file_path = tmp_file("compressed.mp4", "media")
+        max_bytes = min(180, name_max(Path.dirname(file_path)))
+        title = String.duplicate(unquote(title_char), 100)
+        assert byte_size(title <> ".mp4") > max_bytes
+
+        Lolek.send_file(123, {:prepared_media, Path.dirname(file_path), [file_path]},
+          post: post_titled(title)
+        )
+
+        assert_receive {:send_rich_message, 123, %ExGram.Model.InputRichMessage{media: [media]},
+                        _}
+
+        "file://" <> encoded_path = media.media.media
+        upload_file_name = encoded_path |> URI.decode() |> Path.basename()
+
+        measured =
+          if unquote(measure) == :nfd,
+            do: String.normalize(upload_file_name, :nfd),
+            else: upload_file_name
+
+        assert byte_size(measured) <= max_bytes
+        assert String.valid?(upload_file_name)
+        assert String.ends_with?(upload_file_name, ".mp4")
+        assert [] = Path.wildcard(Path.join(Path.dirname(file_path), ".telegram-upload-*"))
+      end
+    end
   end
 
-  test "keeps local upload file names within conservative and filesystem byte limits" do
-    preserve_telegram_env(fn ->
-      file_path = tmp_file("compressed.mp4", "media")
-      extname = Path.extname(file_path)
-      max_upload_file_name_bytes = min(180, name_max(Path.dirname(file_path)))
-      # A three-byte character makes the title budget land in the middle of a
-      # codepoint unless truncation accounts for UTF-8 boundaries.
-      source_title = String.duplicate("€", 100)
-
-      response = %ExGram.Model.Message{
-        video: %ExGram.Model.Video{file_id: "telegram-file-id"}
-      }
-
-      Application.put_env(:lolek, :telegram_client, TelegramClient)
-      Application.put_env(:lolek, :telegram_test_result, {:ok, response})
-      Application.put_env(:lolek, :telegram_test_parent, self())
-      Application.put_env(:lolek, :telegram_local_file_uploads, true)
-
-      context = [source_title: source_title]
-
-      assert byte_size(source_title <> extname) > max_upload_file_name_bytes
-
-      assert {:ok, {:sent_media, _, [{".mp4", "telegram-file-id"}]}} =
-               Lolek.send_file(
-                 123,
-                 {:prepared_media, Path.dirname(file_path), [file_path]},
-                 context
-               )
-
-      assert_receive {:send_video, 123, "file://" <> encoded_path, _options}
-
-      upload_file_name = encoded_path |> URI.decode() |> Path.basename()
-      assert byte_size(upload_file_name) <= max_upload_file_name_bytes
-      assert String.valid?(upload_file_name)
-      assert String.ends_with?(upload_file_name, extname)
-      assert File.exists?(file_path)
-      assert [] = Path.wildcard(Path.join(Path.dirname(file_path), ".telegram-upload-*"))
-    end)
-  end
-
-  test "keeps local upload file names within byte limits after Unicode decomposition" do
-    preserve_telegram_env(fn ->
-      file_path = tmp_file("compressed.mp4", "media")
-      extname = Path.extname(file_path)
-      max_upload_file_name_bytes = min(180, name_max(Path.dirname(file_path)))
-      # This precomposed character expands under NFD, so original-byte truncation
-      # can still produce a name that is too long after filesystem decomposition.
-      source_title = String.duplicate("Ǖ", 100)
-
-      response = %ExGram.Model.Message{
-        video: %ExGram.Model.Video{file_id: "telegram-file-id"}
-      }
-
-      Application.put_env(:lolek, :telegram_client, TelegramClient)
-      Application.put_env(:lolek, :telegram_test_result, {:ok, response})
-      Application.put_env(:lolek, :telegram_test_parent, self())
-      Application.put_env(:lolek, :telegram_local_file_uploads, true)
-
-      context = [source_title: source_title]
-
-      assert byte_size(source_title <> extname) > max_upload_file_name_bytes
-
-      assert {:ok, {:sent_media, _, [{".mp4", "telegram-file-id"}]}} =
-               Lolek.send_file(
-                 123,
-                 {:prepared_media, Path.dirname(file_path), [file_path]},
-                 context
-               )
-
-      assert_receive {:send_video, 123, "file://" <> encoded_path, _options}
-
-      upload_file_name = encoded_path |> URI.decode() |> Path.basename()
-      assert byte_size(String.normalize(upload_file_name, :nfd)) <= max_upload_file_name_bytes
-      assert String.valid?(upload_file_name)
-      assert String.ends_with?(upload_file_name, extname)
-      assert File.exists?(file_path)
-      assert [] = Path.wildcard(Path.join(Path.dirname(file_path), ".telegram-upload-*"))
-    end)
-  end
-
-  test "streams first video uploads with larger chunks" do
-    preserve_telegram_env(fn ->
-      file_path = tmp_file("downloaded.mp4", "media")
-
-      response = %ExGram.Model.Message{
-        video: %ExGram.Model.Video{file_id: "telegram-file-id"}
-      }
-
-      Application.put_env(:lolek, :telegram_client, TelegramClient)
-      Application.put_env(:lolek, :telegram_test_result, {:ok, response})
-      Application.put_env(:lolek, :telegram_test_parent, self())
-
-      assert {:ok, {:sent_media, _, [{".mp4", "telegram-file-id"}]}} =
-               Lolek.send_file(123, {:prepared_media, Path.dirname(file_path), [file_path]})
-
-      assert_receive {:send_video, 123,
-                      {:file_content, %File.Stream{} = stream, "downloaded.mp4"}, _options}
-
-      assert stream.path == file_path
-      assert stream.line_or_bytes == 64 * 1024
-    end)
-  end
-
-  test "uses source titles as upload file names" do
-    preserve_telegram_env(fn ->
-      file_path = tmp_file("compressed.mp4", "media")
-
-      response = %ExGram.Model.Message{
-        video: %ExGram.Model.Video{file_id: "telegram-file-id"}
-      }
-
-      Application.put_env(:lolek, :telegram_client, TelegramClient)
-      Application.put_env(:lolek, :telegram_test_result, {:ok, response})
-      Application.put_env(:lolek, :telegram_test_parent, self())
-
-      context = [source_title: "A Video Title"]
-
-      assert {:ok, {:sent_media, _, [{".mp4", "telegram-file-id"}]}} =
-               Lolek.send_file(
-                 123,
-                 {:prepared_media, Path.dirname(file_path), [file_path]},
-                 context
-               )
-
-      assert_receive {:send_video, 123, {:file_content, %File.Stream{}, "A Video Title.mp4"},
-                      _options}
-    end)
-  end
-
-  test "sanitizes source titles before using them as upload file names" do
-    preserve_telegram_env(fn ->
-      file_path = tmp_file("compressed.mp4", "media")
-
-      response = %ExGram.Model.Message{
-        video: %ExGram.Model.Video{file_id: "telegram-file-id"}
-      }
-
-      Application.put_env(:lolek, :telegram_client, TelegramClient)
-      Application.put_env(:lolek, :telegram_test_result, {:ok, response})
-      Application.put_env(:lolek, :telegram_test_parent, self())
-
-      context = [source_title: "A / Video: https://example.com/watch Title?"]
-
-      assert {:ok, {:sent_media, _, [{".mp4", "telegram-file-id"}]}} =
-               Lolek.send_file(
-                 123,
-                 {:prepared_media, Path.dirname(file_path), [file_path]},
-                 context
-               )
-
-      assert_receive {:send_video, 123, {:file_content, %File.Stream{}, "A Video Title.mp4"},
-                      _options}
-    end)
-  end
-
-  test "sends text posts as text messages with the requester line" do
-    preserve_telegram_env(fn ->
-      Application.put_env(:lolek, :telegram_client, TelegramClient)
-      Application.put_env(:lolek, :telegram_test_result, {:ok, %ExGram.Model.Message{}})
-      Application.put_env(:lolek, :telegram_test_parent, self())
+  describe "post details and requester line" do
+    test "sends text posts with the post text and the requester line" do
+      respond_with(fn _call, _attempt -> {:ok, rich_response([])} end)
       Application.put_env(:lolek, :post_requester_caption, true)
-      Application.put_env(:lolek, :post_source_caption, false)
 
       context = [
         requester_name: "alice",
@@ -780,273 +506,167 @@ defmodule Lolek.SendFileTest do
       ]
 
       file_state = {:text_post, "/tmp/cache", "post text"}
+
       assert {:ok, ^file_state} = Lolek.send_file(123, file_state, context)
 
-      assert_receive {:send_message, 123, text, options}
-      assert text =~ ~r/^post text\n\nalice requested, processed in \d+\.\ds$/
+      assert_receive {:send_rich_message, 123,
+                      %ExGram.Model.InputRichMessage{html: html, media: nil}, options}
+
+      assert html =~
+               ~r{^<p>post text</p><hr/><footer>alice requested, processed in \d+\.\ds</footer>$}
+
       assert options[:message_thread_id] == 456
-    end)
-  end
+    end
 
-  test "truncates long text posts by Telegram's message limit" do
-    preserve_telegram_env(fn ->
-      Application.put_env(:lolek, :telegram_client, TelegramClient)
-      Application.put_env(:lolek, :telegram_test_result, {:ok, %ExGram.Model.Message{}})
-      Application.put_env(:lolek, :telegram_test_parent, self())
-      Application.put_env(:lolek, :post_requester_caption, false)
+    test "uses the post metadata of text posts" do
+      respond_with(fn _call, _attempt -> {:ok, rich_response([])} end)
 
-      file_state = {:text_post, "/tmp/cache", String.duplicate("a", 5000)}
-      assert {:ok, ^file_state} = Lolek.send_file(123, file_state)
+      post = %Lolek.Post{
+        platform: :twitter,
+        author: Lolek.Post.author("Jack", "jack", "https://x.com/jack"),
+        text: "just setting up my twttr"
+      }
 
-      assert_receive {:send_message, 123, text, _options}
-      assert utf16_code_units(text) == 4096
-      assert String.ends_with?(text, "...")
-    end)
-  end
+      Lolek.send_file(123, {:text_post, "/tmp/cache", "ignored"}, post: post)
 
-  test "returns Telegram errors for text posts" do
-    preserve_telegram_env(fn ->
-      error = %ExGram.Error{code: 400, message: "Bad Request"}
-      Application.put_env(:lolek, :telegram_client, TelegramClient)
-      Application.put_env(:lolek, :telegram_test_result, {:error, error})
+      assert_receive {:send_rich_message, 123, %ExGram.Model.InputRichMessage{html: html}, _}
+      assert html =~ ~s(<b>Jack</b> · <a href="https://x.com/jack">@jack</a>)
+      assert html =~ "<p>just setting up my twttr</p>"
+    end
+
+    test "returns Telegram errors for text posts" do
+      respond_with(fn _call, _attempt -> {:error, bad_request()} end)
 
       assert {:error, {:telegram_api, %ExGram.Error{code: 400}}} =
                Lolek.send_file(123, {:text_post, "/tmp/cache", "post text"})
-    end)
-  end
+    end
 
-  test "adds requester and elapsed time to uploaded video captions" do
-    preserve_telegram_env(fn ->
-      file_path = tmp_file("downloaded.mp4", "media")
+    test "does not show the post details when disabled" do
+      respond_with(fn _call, _attempt -> {:ok, rich_response([])} end)
 
-      response = %ExGram.Model.Message{
-        message_id: 456,
-        video: %ExGram.Model.Video{file_id: "telegram-file-id"}
-      }
+      Lolek.send_file(123, {:ready_media, [{"id", ".jpg"}]},
+        post: %Lolek.Post{text: "secret", author: Lolek.Post.author("Name", nil, nil)}
+      )
 
-      Application.put_env(:lolek, :telegram_client, TelegramClient)
-      Application.put_env(:lolek, :telegram_test_result, {:ok, response})
-      Application.put_env(:lolek, :telegram_test_parent, self())
+      assert_receive {:send_rich_message, 123, %ExGram.Model.InputRichMessage{html: html}, _}
+      assert html == ~s(<img src="tg://photo?id=m0"/>)
+    end
+
+    test "shows the post details when enabled" do
+      respond_with(fn _call, _attempt -> {:ok, rich_response([])} end)
+      Application.put_env(:lolek, :post_source_caption, true)
+
+      Lolek.send_file(123, {:ready_media, [{"id", ".jpg"}]},
+        post: %Lolek.Post{text: "shown", author: Lolek.Post.author("Name", nil, nil)}
+      )
+
+      assert_receive {:send_rich_message, 123, %ExGram.Model.InputRichMessage{html: html}, _}
+      assert html =~ "<p><b>Name</b></p>"
+      assert html =~ "<p>shown</p>"
+    end
+
+    test "updates the processing time with the new file_ids after the upload" do
+      respond_with(fn
+        {:send_rich_message, _, _, _}, _attempt -> {:ok, rich_response([video_block("new-id")])}
+        {:edit_message_text, _, _, _}, _attempt -> {:ok, rich_response([video_block("new-id")])}
+      end)
+
       Application.put_env(:lolek, :post_requester_caption, true)
-
+      file_path = tmp_file("downloaded.mp4", "media")
       context = [requester_name: "alice", started_at: System.monotonic_time()]
 
-      assert {:ok, {:sent_media, _, [{".mp4", "telegram-file-id"}]}} =
+      assert {:ok, {:sent_media, _, [{".mp4", "new-id"}]}} =
                Lolek.send_file(
                  123,
                  {:prepared_media, Path.dirname(file_path), [file_path]},
                  context
                )
 
-      assert_receive {:send_video, 123, {:file_content, %File.Stream{}, "downloaded.mp4"},
-                      options}
+      assert_receive {:send_rich_message, 123, _, _}
+      assert_receive {:edit_message_text, 123, 77, [rich_message: rich_message]}
+      assert [%ExGram.Model.InputRichMessageMedia{media: %{media: "new-id"}}] = rich_message.media
+      assert rich_message.html =~ ~r{<footer>alice requested, processed in \d+\.\ds</footer>}
+    end
 
-      assert options[:caption] =~ ~r/^alice requested, processed in \d+\.\ds$/
-
-      assert_receive {:edit_message_caption, 123, 456, edit_options}
-      assert edit_options[:caption] =~ ~r/^alice requested, processed in \d+\.\ds$/
-    end)
-  end
-
-  test "does not include source captions by default" do
-    preserve_telegram_env(fn ->
+    test "does not edit the message when the requester line is off" do
+      respond_with(fn _call, _attempt -> {:ok, rich_response([video_block("new-id")])} end)
       file_path = tmp_file("downloaded.mp4", "media")
 
-      response = %ExGram.Model.Message{
-        video: %ExGram.Model.Video{file_id: "telegram-file-id"}
-      }
+      Lolek.send_file(123, {:prepared_media, Path.dirname(file_path), [file_path]})
 
-      Application.put_env(:lolek, :telegram_client, TelegramClient)
-      Application.put_env(:lolek, :telegram_test_result, {:ok, response})
-      Application.put_env(:lolek, :telegram_test_parent, self())
-      Application.put_env(:lolek, :post_source_caption, false)
+      assert_receive {:send_rich_message, 123, _, _}
+      refute_receive {:edit_message_text, _, _, _}
+    end
+
+    test "keeps the result when the edit fails" do
+      respond_with(fn
+        {:send_rich_message, _, _, _}, _attempt -> {:ok, rich_response([video_block("new-id")])}
+        {:edit_message_text, _, _, _}, _attempt -> {:error, bad_request()}
+      end)
+
       Application.put_env(:lolek, :post_requester_caption, true)
+      context = [requester_name: "alice", started_at: System.monotonic_time()]
 
-      context = [
-        source_caption: "Source post text",
-        requester_name: "alice",
-        started_at: System.monotonic_time()
-      ]
+      assert {:ok, {:ready_media, [{"new-id", ".mp4"}]}} =
+               Lolek.send_file(123, {:ready_media, [{"new-id", ".mp4"}]}, context)
 
-      assert {:ok, {:sent_media, _, [{".mp4", "telegram-file-id"}]}} =
-               Lolek.send_file(
-                 123,
-                 {:prepared_media, Path.dirname(file_path), [file_path]},
-                 context
-               )
-
-      assert_receive {:send_video, 123, {:file_content, %File.Stream{}, "downloaded.mp4"},
-                      options}
-
-      refute options[:caption] =~ "Source post text"
-      assert options[:caption] =~ ~r/^alice requested, processed in \d+\.\ds$/
-    end)
+      assert_receive {:edit_message_text, 123, 77, _}
+    end
   end
 
-  test "includes source captions when enabled" do
-    preserve_telegram_env(fn ->
-      file_path = tmp_file("downloaded.mp4", "media")
+  defp respond_with(fun), do: Application.put_env(:lolek, :telegram_test_responder, fun)
 
-      response = %ExGram.Model.Message{
-        video: %ExGram.Model.Video{file_id: "telegram-file-id"}
-      }
-
-      Application.put_env(:lolek, :telegram_client, TelegramClient)
-      Application.put_env(:lolek, :telegram_test_result, {:ok, response})
-      Application.put_env(:lolek, :telegram_test_parent, self())
-      Application.put_env(:lolek, :post_source_caption, true)
-      Application.put_env(:lolek, :post_requester_caption, true)
-
-      context = [
-        source_caption: "Source post text\nsecond line",
-        requester_name: "alice",
-        started_at: System.monotonic_time()
-      ]
-
-      assert {:ok, {:sent_media, _, [{".mp4", "telegram-file-id"}]}} =
-               Lolek.send_file(
-                 123,
-                 {:prepared_media, Path.dirname(file_path), [file_path]},
-                 context
-               )
-
-      assert_receive {:send_video, 123, {:file_content, %File.Stream{}, "downloaded.mp4"},
-                      options}
-
-      assert options[:caption] =~
-               ~r/^Source post text\nsecond line\n\nalice requested, processed in \d+\.\ds$/
-    end)
-  end
-
-  test "truncates source captions while preserving requester captions" do
-    preserve_telegram_env(fn ->
-      file_path = tmp_file("downloaded.mp4", "media")
-
-      response = %ExGram.Model.Message{
-        video: %ExGram.Model.Video{file_id: "telegram-file-id"}
-      }
-
-      Application.put_env(:lolek, :telegram_client, TelegramClient)
-      Application.put_env(:lolek, :telegram_test_result, {:ok, response})
-      Application.put_env(:lolek, :telegram_test_parent, self())
-      Application.put_env(:lolek, :post_source_caption, true)
-      Application.put_env(:lolek, :post_requester_caption, true)
-
-      context = [
-        source_caption: String.duplicate("a", 2_000),
-        requester_name: "alice",
-        started_at: System.monotonic_time()
-      ]
-
-      assert {:ok, {:sent_media, _, [{".mp4", "telegram-file-id"}]}} =
-               Lolek.send_file(
-                 123,
-                 {:prepared_media, Path.dirname(file_path), [file_path]},
-                 context
-               )
-
-      assert_receive {:send_video, 123, {:file_content, %File.Stream{}, "downloaded.mp4"},
-                      options}
-
-      assert String.length(options[:caption]) == 1024
-      assert options[:caption] =~ ~r/\.\.\.\n\nalice requested, processed in \d+\.\ds$/
-    end)
-  end
-
-  test "truncates Unicode captions by Telegram's UTF-16 limit" do
-    preserve_telegram_env(fn ->
-      file_path = tmp_file("downloaded.mp4", "media")
-
-      response = %ExGram.Model.Message{
-        video: %ExGram.Model.Video{file_id: "telegram-file-id"}
-      }
-
-      Application.put_env(:lolek, :telegram_client, TelegramClient)
-      Application.put_env(:lolek, :telegram_test_result, {:ok, response})
-      Application.put_env(:lolek, :telegram_test_parent, self())
-      Application.put_env(:lolek, :post_source_caption, true)
-      Application.put_env(:lolek, :post_requester_caption, true)
-
-      context = [
-        source_caption: String.duplicate("😀", 2_000),
-        requester_name: "alice",
-        started_at: System.monotonic_time()
-      ]
-
-      assert {:ok, {:sent_media, _, [{".mp4", "telegram-file-id"}]}} =
-               Lolek.send_file(
-                 123,
-                 {:prepared_media, Path.dirname(file_path), [file_path]},
-                 context
-               )
-
-      assert_receive {:send_video, 123, {:file_content, %File.Stream{}, "downloaded.mp4"},
-                      options}
-
-      assert utf16_code_units(options[:caption]) in 1023..1024
-      assert options[:caption] =~ ~r/\.\.\.\n\nalice requested, processed in \d+\.\ds$/
-    end)
-  end
-
-  # A client that answers with 429 first and succeeds afterwards. `retry_after`
-  # of nil models a flood limit Telegram sent without the hint.
-  defp flood_wait_env(opts) do
-    retry_after = Keyword.fetch!(opts, :retry_after)
-
+  # Answers with a flood limit for the first `failures` attempts. `retry_after` of nil
+  # models a flood limit that Telegram sent without the hint.
+  defp flood_then_ok(opts) do
     parameters =
-      case retry_after do
+      case Keyword.fetch!(opts, :retry_after) do
         nil -> []
         seconds -> [%ExGram.Model.ResponseParameters{retry_after: seconds}]
       end
 
-    Application.put_env(:lolek, :telegram_client, Lolek.SendFileTest.FloodWaitTelegramClient)
-    Application.put_env(:lolek, :telegram_test_parent, self())
-    Application.put_env(:lolek, :telegram_test_attempts, :atomics.new(1, []))
-    Application.put_env(:lolek, :telegram_test_flood_failures, Keyword.get(opts, :failures, 1))
-
-    Application.put_env(:lolek, :telegram_test_error, %ExGram.Error{
+    error = %ExGram.Error{
       code: 429,
       message: "Too Many Requests",
       metadata: %{parameters: parameters}
-    })
+    }
 
-    Application.put_env(
-      :lolek,
-      :telegram_test_result,
-      {:ok, %ExGram.Model.Message{video: %ExGram.Model.Video{file_id: "telegram-file-id"}}}
-    )
+    failures = Keyword.fetch!(opts, :failures)
+
+    respond_with(fn _call, attempt ->
+      if attempt <= failures,
+        do: {:error, error},
+        else: {:ok, rich_response([video_block("file-id")])}
+    end)
   end
 
-  defp preserve_telegram_env(fun) do
-    client = Application.fetch_env(:lolek, :telegram_client)
-    result = Application.fetch_env(:lolek, :telegram_test_result)
-    error = Application.fetch_env(:lolek, :telegram_test_error)
-    parent = Application.fetch_env(:lolek, :telegram_test_parent)
-    local_file_uploads = Application.fetch_env(:lolek, :telegram_local_file_uploads)
-    post_source_caption = Application.fetch_env(:lolek, :post_source_caption)
-    post_requester_caption = Application.fetch_env(:lolek, :post_requester_caption)
-    max_gallery_media = Application.fetch_env(:lolek, :max_gallery_media)
+  defp bad_request, do: %ExGram.Error{code: 400, message: "Bad Request"}
 
-    try do
-      fun.()
-    after
-      restore_app_env(:telegram_client, client)
-      restore_app_env(:telegram_test_result, result)
-      restore_app_env(:telegram_test_error, error)
-      restore_app_env(:telegram_test_parent, parent)
-      restore_app_env(:telegram_local_file_uploads, local_file_uploads)
-      restore_app_env(:post_source_caption, post_source_caption)
-      restore_app_env(:post_requester_caption, post_requester_caption)
-      restore_app_env(:max_gallery_media, max_gallery_media)
-    end
+  defp rich_response(blocks) do
+    %ExGram.Model.Message{message_id: 77, rich_message: %ExGram.Model.RichMessage{blocks: blocks}}
   end
+
+  defp photo_block(file_id) do
+    %ExGram.Model.RichBlockPhoto{
+      type: "photo",
+      photo: [
+        %ExGram.Model.PhotoSize{file_id: "#{file_id}-small"},
+        %ExGram.Model.PhotoSize{file_id: file_id}
+      ]
+    }
+  end
+
+  defp video_block(file_id) do
+    %ExGram.Model.RichBlockVideo{type: "video", video: %ExGram.Model.Video{file_id: file_id}}
+  end
+
+  defp post_titled(title), do: %Lolek.Post{title: title}
 
   defp tmp_file(name, contents) do
     dir =
       Path.join(System.tmp_dir!(), "lolek-send-file-test-#{System.unique_integer([:positive])}")
 
     File.mkdir_p!(dir)
-
     path = Path.join(dir, name)
     File.write!(path, contents)
     path
@@ -1054,176 +674,8 @@ defmodule Lolek.SendFileTest do
 
   defp name_max(path) do
     case System.cmd("getconf", ["NAME_MAX", path], stderr_to_stdout: true) do
-      {output, 0} ->
-        output
-        |> String.trim()
-        |> String.to_integer()
-
-      {output, status} ->
-        flunk("getconf NAME_MAX #{path} failed with #{status}: #{output}")
+      {output, 0} -> output |> String.trim() |> String.to_integer()
+      {output, status} -> flunk("getconf NAME_MAX #{path} failed with #{status}: #{output}")
     end
-  end
-
-  defp utf16_code_units(text) do
-    text
-    |> :unicode.characters_to_binary(:utf8, {:utf16, :little})
-    |> byte_size()
-    |> div(2)
-  end
-
-  defp restore_app_env(key, {:ok, value}), do: Application.put_env(:lolek, key, value)
-  defp restore_app_env(key, :error), do: Application.delete_env(:lolek, key)
-end
-
-defmodule Lolek.SendFileTest.RaisingTelegramClient do
-  @moduledoc false
-
-  @behaviour Lolek.Telegram
-
-  @impl true
-  def send_message(_chat_id, _text, _options), do: {:error, :unexpected_send_message}
-
-  @impl true
-  def send_video(_chat_id, _video, _options) do
-    raise Application.fetch_env!(:lolek, :telegram_test_error)
-  end
-
-  @impl true
-  def send_document(_chat_id, _document, _options) do
-    raise Application.fetch_env!(:lolek, :telegram_test_error)
-  end
-
-  @impl true
-  def send_photo(_chat_id, _photo, _options) do
-    raise Application.fetch_env!(:lolek, :telegram_test_error)
-  end
-
-  @impl true
-  def send_animation(_chat_id, _animation, _options) do
-    raise Application.fetch_env!(:lolek, :telegram_test_error)
-  end
-
-  @impl true
-  def send_media_group(_chat_id, _media, _options) do
-    raise Application.fetch_env!(:lolek, :telegram_test_error)
-  end
-
-  @impl true
-  def edit_message_caption(_chat_id, _message_id, _options) do
-    raise Application.fetch_env!(:lolek, :telegram_test_error)
-  end
-
-  @impl true
-  def set_message_reaction(_chat_id, _message_id, _options) do
-    raise Application.fetch_env!(:lolek, :telegram_test_error)
-  end
-end
-
-defmodule Lolek.SendFileTest.FloodWaitTelegramClient do
-  @moduledoc """
-  Fails the first attempts with a flood limit, then succeeds.
-  """
-
-  @behaviour Lolek.Telegram
-
-  @impl true
-  def send_message(_chat_id, _text, _options), do: {:error, :unexpected_send_message}
-
-  @impl true
-  def send_video(chat_id, video, options) do
-    respond({:send_video, chat_id, video, options})
-  end
-
-  @impl true
-  def send_document(chat_id, document, options) do
-    respond({:send_document, chat_id, document, options})
-  end
-
-  @impl true
-  def send_photo(chat_id, photo, options) do
-    respond({:send_photo, chat_id, photo, options})
-  end
-
-  @impl true
-  def send_animation(chat_id, animation, options) do
-    respond({:send_animation, chat_id, animation, options})
-  end
-
-  @impl true
-  def send_media_group(chat_id, media, options) do
-    respond({:send_media_group, chat_id, media, options})
-  end
-
-  @impl true
-  def edit_message_caption(chat_id, message_id, options) do
-    respond({:edit_message_caption, chat_id, message_id, options})
-  end
-
-  @impl true
-  def set_message_reaction(chat_id, message_id, options) do
-    respond({:set_message_reaction, chat_id, message_id, options})
-  end
-
-  defp respond(call) do
-    if parent = Application.get_env(:lolek, :telegram_test_parent) do
-      send(parent, call)
-    end
-
-    counter = Application.fetch_env!(:lolek, :telegram_test_attempts)
-    attempt = :atomics.add_get(counter, 1, 1)
-    failures = Application.get_env(:lolek, :telegram_test_flood_failures, 1)
-
-    if attempt <= failures do
-      {:error, Application.fetch_env!(:lolek, :telegram_test_error)}
-    else
-      Application.fetch_env!(:lolek, :telegram_test_result)
-    end
-  end
-end
-
-defmodule Lolek.SendFileTest.GalleryTailFailsClient do
-  @moduledoc """
-  Takes the first media group and rejects every one after it.
-  """
-
-  @behaviour Lolek.Telegram
-
-  @impl true
-  def send_message(_chat_id, _text, _options), do: {:error, :unexpected_send_message}
-
-  @impl true
-  def send_video(_chat_id, _video, _options), do: rejected()
-
-  @impl true
-  def send_document(_chat_id, _document, _options), do: rejected()
-
-  @impl true
-  def send_photo(_chat_id, _photo, _options), do: rejected()
-
-  @impl true
-  def send_animation(_chat_id, _animation, _options), do: rejected()
-
-  @impl true
-  def edit_message_caption(_chat_id, _message_id, _options), do: rejected()
-
-  @impl true
-  def set_message_reaction(_chat_id, _message_id, _options), do: rejected()
-
-  @impl true
-  def send_media_group(chat_id, media, options) do
-    if parent = Application.get_env(:lolek, :telegram_test_parent) do
-      send(parent, {:send_media_group, chat_id, media, options})
-    end
-
-    counter = Application.fetch_env!(:lolek, :telegram_test_attempts)
-
-    case :atomics.add_get(counter, 1, 1) do
-      1 -> Application.fetch_env!(:lolek, :telegram_test_result)
-      _ -> rejected()
-    end
-  end
-
-  defp rejected do
-    {:error, %ExGram.Error{code: 400, message: "Bad Request"}}
   end
 end

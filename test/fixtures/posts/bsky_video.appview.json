@@ -1,0 +1,114 @@
+{
+ "thread": {
+  "post": {
+   "uri": "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.post/3myi2ihquwk26",
+   "cid": "bafyreierj7gohnwnik64sxcp5r7purbuqiqdlbnjsrxnkxwvq2zye5pyye",
+   "author": {
+    "did": "did:plc:z72i7hdynmk6r22z27h6tvur",
+    "handle": "bsky.app",
+    "displayName": "Bluesky",
+    "avatar": "https://cdn.bsky.app/img/avatar/plain/did:plc:z72i7hdynmk6r22z27h6tvur/bafkreihwihm6kpd6zuwhhlro75p5qks5qtrcu55jp3gddbfjsieiv7wuka",
+    "associated": {
+     "chat": {
+      "allowIncoming": "none"
+     },
+     "activitySubscription": {
+      "allowSubscriptions": "followers"
+     }
+    },
+    "labels": [],
+    "createdAt": "2023-04-12T04:53:57.057Z",
+    "verification": {
+     "verifications": [],
+     "verifiedStatus": "none",
+     "trustedVerifierStatus": "valid"
+    },
+    "status": {
+     "uri": "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.actor.status/self",
+     "cid": "bafyreihkojqw7p22odgjcbzjh5sh4vrntow24sd4nvntpqnddrd5pqma44",
+     "record": {
+      "$type": "app.bsky.actor.status",
+      "createdAt": "2026-10-20T16:00:37.680Z",
+      "durationMinutes": 60,
+      "embed": {
+       "$type": "app.bsky.embed.external",
+       "external": {
+        "$type": "app.bsky.embed.external#external",
+        "description": "Elon Take The Wheel Livestream: Alex Gibney, Director of \"MUSK\"",
+        "thumb": {
+         "$type": "blob",
+         "ref": {
+          "$link": "bafkreifbiu2m3dnnhmzq4dk6u4227p3xuq3zzqhhzvibhuojnz6unengny"
+         },
+         "mimeType": "image/jpeg",
+         "size": 195438
+        },
+        "title": "e.w. niedermeyer is live on Streamplace",
+        "uri": "https://stream.place/niedermeyer.online"
+       }
+      },
+      "status": "app.bsky.actor.status#live"
+     },
+     "status": "app.bsky.actor.status#live",
+     "embed": {
+      "external": {
+       "uri": "https://stream.place/niedermeyer.online",
+       "title": "e.w. niedermeyer is live on Streamplace",
+       "description": "Elon Take The Wheel Livestream: Alex Gibney, Director of \"MUSK\"",
+       "thumb": "https://cdn.bsky.app/img/feed_thumbnail/plain/did:plc:z72i7hdynmk6r22z27h6tvur/bafkreifbiu2m3dnnhmzq4dk6u4227p3xuq3zzqhhzvibhuojnz6unengny"
+      },
+      "$type": "app.bsky.embed.external#view"
+     },
+     "labels": [],
+     "expiresAt": "2026-10-20T17:00:37.680Z",
+     "isActive": false
+    }
+   },
+   "record": {
+    "$type": "app.bsky.feed.post",
+    "createdAt": "2026-10-22T16:11:13.754Z",
+    "embed": {
+     "$type": "app.bsky.embed.video",
+     "alt": "demonstrating a before & after of profile link rendering featuring @sarahmackattack.bsky.social",
+     "aspectRatio": {
+      "height": 1920,
+      "width": 1080
+     },
+     "presentation": "default",
+     "video": {
+      "$type": "blob",
+      "ref": {
+       "$link": "bafkreicibfmga2ff53e2ek3afepuwron44dve5gef2cximk67t7szxgamq"
+      },
+      "mimeType": "video/mp4",
+      "size": 9899738
+     }
+    },
+    "langs": [
+     "en"
+    ],
+    "text": "v1.136 is live! \n\nIntroducing: Profile links\n\nWe want independent writers, artists, developers, and creators to be able to build and fund sustainable projects on Bluesky.\n\nHelp your followers know how to support you by adding buttons for Patreon, Ko-fi, your newsletter or website, and more."
+   },
+   "embed": {
+    "cid": "bafkreicibfmga2ff53e2ek3afepuwron44dve5gef2cximk67t7szxgamq",
+    "playlist": "https://video.bsky.app/watch/did%3Aplc%3Az72i7hdynmk6r22z27h6tvur/bafkreicibfmga2ff53e2ek3afepuwron44dve5gef2cximk67t7szxgamq/playlist.m3u8",
+    "thumbnail": "https://video.bsky.app/watch/did%3Aplc%3Az72i7hdynmk6r22z27h6tvur/bafkreicibfmga2ff53e2ek3afepuwron44dve5gef2cximk67t7szxgamq/thumbnail.jpg",
+    "alt": "demonstrating a before & after of profile link rendering featuring @sarahmackattack.bsky.social",
+    "aspectRatio": {
+     "height": 1920,
+     "width": 1080
+    },
+    "presentation": "default",
+    "$type": "app.bsky.embed.video#view"
+   },
+   "bookmarkCount": 616,
+   "replyCount": 314,
+   "repostCount": 1594,
+   "likeCount": 5850,
+   "quoteCount": 742,
+   "indexedAt": "2026-10-22T16:11:16.448Z",
+   "labels": []
+  },
+  "$type": "app.bsky.feed.defs#threadViewPost"
+ }
+}

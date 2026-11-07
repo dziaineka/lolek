@@ -60,6 +60,55 @@ defmodule Lolek.YoutubePostDownloader do
     end
   end
 
+  @doc "Reads the post text and the author of a YouTube post page."
+  @spec post(String.t()) :: {:ok, Lolek.Post.t()} | {:error, term()}
+  def post(url) do
+    with {:ok, html_response} <- get(url) do
+      extract_post_metadata(html_response.body, url)
+    end
+  end
+
+  @spec extract_post_metadata(binary(), String.t()) ::
+          {:ok, Lolek.Post.t()} | {:error, String.t()}
+  def extract_post_metadata(body, url) do
+    with {:ok, post} <- extract_post(body) do
+      {:ok,
+       %Lolek.Post{
+         platform: :youtube,
+         source: :page,
+         url: url,
+         author: post_author(post),
+         text: Lolek.Post.Text.clean(post_caption(post), :youtube)
+       }}
+    end
+  end
+
+  @spec post_author(map()) :: Lolek.Post.author() | nil
+  defp post_author(post) do
+    name =
+      case post do
+        %{"authorText" => %{"runs" => [%{"text" => name} | _]}} -> name
+        %{"authorText" => %{"simpleText" => name}} -> name
+        _ -> nil
+      end
+
+    path =
+      get_in(post, [
+        "authorEndpoint",
+        "browseEndpoint",
+        "canonicalBaseUrl"
+      ])
+
+    handle =
+      case path do
+        "/@" <> handle -> handle
+        _ -> nil
+      end
+
+    url = if is_binary(path), do: "https://www.youtube.com#{path}"
+    Lolek.Post.author(name, handle, url)
+  end
+
   @spec extract_caption(binary()) :: {:ok, String.t() | nil} | {:error, String.t()}
   def extract_caption(body) do
     with {:ok, post} <- extract_post(body) do

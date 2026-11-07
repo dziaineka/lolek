@@ -1,0 +1,51 @@
+[
+ [
+  2,
+  {
+   "$type": "app.bsky.feed.post",
+   "author": {
+    "avatar": "https://cdn.bsky.app/img/avatar/plain/did:plc:cwf4mmm7mpzistinx3ox2zhj/bafkreicixoq23lsimr6cabhtss53jimjzouzkstif4xdjmvt4rcr5bjsku",
+    "createdAt": "2023-11-28T19:15:32.965Z",
+    "did": "did:plc:cwf4mmm7mpzistinx3ox2zhj",
+    "displayName": "Toni Schneider",
+    "handle": "toni.bsky.team",
+    "instance": "bsky.team",
+    "labels": [],
+    "verification": {
+     "trustedVerifierStatus": "none",
+     "verifications": [
+      {
+       "createdAt": "2026-03-09T17:58:00.876Z",
+       "isValid": true,
+       "issuer": "did:plc:z72i7hdynmk6r22z27h6tvur",
+       "issuerDisplayName": "Bluesky",
+       "issuerHandle": "bsky.app",
+       "uri": "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.graph.verification/3mgngmgwfk62n"
+      }
+     ],
+     "verifiedStatus": "valid"
+    }
+   },
+   "bookmarkCount": 124,
+   "category": "bluesky",
+   "cid": "bafyreihct4s4iu2udiauztpostlwdg6iysmztivrmpyxly7avylffjbxna",
+   "count": 0,
+   "createdAt": "2026-11-05T00:33:50.242Z",
+   "date": "2026-11-05 00:33:50",
+   "indexedAt": "2026-11-05T00:33:51.078Z",
+   "instance": "bsky.app",
+   "labels": [],
+   "langs": [
+    "en"
+   ],
+   "likeCount": 12234,
+   "post_id": "3mzjmn67mak2z",
+   "quoteCount": 71,
+   "replyCount": 219,
+   "repostCount": 1016,
+   "subcategory": "post",
+   "text": "It's been pretty incredible to watch the response to the midterm elections on Bluesky. Posts and likes doubled yesterday, and we're seeing a wave of new people joining and old friends coming back.",
+   "uri": "at://did:plc:cwf4mmm7mpzistinx3ox2zhj/app.bsky.feed.post/3mzjmn67mak2z"
+  }
+ ]
+]

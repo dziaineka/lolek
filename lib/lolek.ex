@@ -4,6 +4,7 @@ defmodule Lolek do
   """
   @upload_chunk_size 64 * 1024
   @max_caption_utf16_units 1024
+  @max_message_utf16_units 4096
   @caption_separator "\n\n"
   @caption_ellipsis "..."
   @max_upload_file_name_bytes 180
@@ -38,6 +39,16 @@ defmodule Lolek do
 
     with {:ok, _sent_entries} <- send_media_collection(chat_id, items, context) do
       {:ok, {:ready_media, limited_entries}}
+    end
+  end
+
+  def send_file(chat_id, {:text_post, _cache_root, text} = file_state, context) do
+    message = build_caption(text, requester_caption(context), @max_message_utf16_units)
+    options = add_message_thread_id([], context)
+
+    with {:ok, _response} <-
+           call_telegram(fn -> Lolek.Telegram.send_message(chat_id, message, options) end) do
+      {:ok, file_state}
     end
   end
 
@@ -526,7 +537,7 @@ defmodule Lolek do
     source_caption = source_caption(context)
     requester_caption = requester_caption(context)
 
-    build_caption(source_caption, requester_caption)
+    build_caption(source_caption, requester_caption, @max_caption_utf16_units)
   end
 
   @spec source_caption(keyword()) :: String.t() | nil
@@ -551,20 +562,20 @@ defmodule Lolek do
     end
   end
 
-  @spec build_caption(String.t() | nil, String.t() | nil) :: String.t() | nil
-  defp build_caption(nil, nil), do: nil
+  @spec build_caption(String.t() | nil, String.t() | nil, pos_integer()) :: String.t() | nil
+  defp build_caption(nil, nil, _max_utf16_units), do: nil
 
-  defp build_caption(source_caption, nil),
-    do: truncate_caption(source_caption, @max_caption_utf16_units)
+  defp build_caption(source_caption, nil, max_utf16_units),
+    do: truncate_caption(source_caption, max_utf16_units)
 
-  defp build_caption(nil, requester_caption),
-    do: truncate_caption(requester_caption, @max_caption_utf16_units)
+  defp build_caption(nil, requester_caption, max_utf16_units),
+    do: truncate_caption(requester_caption, max_utf16_units)
 
-  defp build_caption(source_caption, requester_caption) do
-    requester_caption = truncate_caption(requester_caption, @max_caption_utf16_units)
+  defp build_caption(source_caption, requester_caption, max_utf16_units) do
+    requester_caption = truncate_caption(requester_caption, max_utf16_units)
 
     available_source_utf16_units =
-      @max_caption_utf16_units -
+      max_utf16_units -
         utf16_code_units(requester_caption) - utf16_code_units(@caption_separator)
 
     if available_source_utf16_units > 0 do

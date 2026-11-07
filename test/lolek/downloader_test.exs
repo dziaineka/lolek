@@ -456,6 +456,66 @@ defmodule Lolek.DownloaderTest do
   end
 
   @tag :tmp_dir
+  test "returns a text post when gallery-dl finds post text without media", %{tmp_dir: tmp_dir} do
+    preserve_download_env(fn ->
+      bin_dir = Path.join(tmp_dir, "bin")
+      File.mkdir_p!(bin_dir)
+
+      write_script(bin_dir, "gallery-dl", """
+      #!/bin/sh
+      for arg in "$@"; do
+        if [ "$arg" = "--dump-json" ]; then
+          printf '[[2, {"content": "just setting up my twttr"}]]'
+        fi
+      done
+      exit 0
+      """)
+
+      write_script(bin_dir, "yt-dlp", "#!/bin/sh\necho 'should not be called' >&2\nexit 99")
+
+      set_gallery_env(bin_dir, true)
+
+      assert {:ok, {:text_post, ^tmp_dir, "just setting up my twttr"}} =
+               Lolek.Downloader.download("https://x.com/jack/status/20", {:new_file, tmp_dir})
+    end)
+  end
+
+  @tag :tmp_dir
+  test "falls back to yt-dlp when gallery-dl reports media it did not download", %{
+    tmp_dir: tmp_dir
+  } do
+    preserve_download_env(fn ->
+      bin_dir = Path.join(tmp_dir, "bin")
+      File.mkdir_p!(bin_dir)
+
+      write_script(bin_dir, "gallery-dl", """
+      #!/bin/sh
+      for arg in "$@"; do
+        if [ "$arg" = "--dump-json" ]; then
+          printf '[[2, {"content": "text"}], [6, "https://example.com/video", {}]]'
+        fi
+      done
+      exit 0
+      """)
+
+      write_script(bin_dir, "yt-dlp", """
+      #!/bin/sh
+      for arg in "$@"; do
+        if [ "$prev" = "-o" ]; then printf video > "$arg"; fi
+        prev="$arg"
+      done
+      """)
+
+      set_gallery_env(bin_dir, true)
+
+      assert {:ok, {:downloaded_media, ^tmp_dir, [file_path]}} =
+               Lolek.Downloader.download("https://example.com/post", {:new_file, tmp_dir})
+
+      assert Path.basename(file_path) == "downloaded.mp4"
+    end)
+  end
+
+  @tag :tmp_dir
   test "falls back to yt-dlp when gallery-dl fails", %{tmp_dir: tmp_dir} do
     preserve_download_env(fn ->
       bin_dir = Path.join(tmp_dir, "bin")

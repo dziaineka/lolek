@@ -342,5 +342,8 @@ defmodule Lolek.Handler do
   defp format_file_state({:sent_media, _cache_root, entries}),
     do: "sent_media:count=#{length(entries)}"
 
+  defp format_file_state({:text_post, _cache_root, text}),
+    do: "text_post:length=#{String.length(text)}"
+
   defp format_file_state(other), do: inspect(other)
 end

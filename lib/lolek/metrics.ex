@@ -340,6 +340,7 @@ defmodule Lolek.Metrics do
   defp file_state_label({:prepared_media, _cache_root, _files}), do: "compressed"
   defp file_state_label({:ready_media, _entries}), do: "ready_to_telegram"
   defp file_state_label({:sent_media, _cache_root, _entries}), do: "sent_to_telegram"
+  defp file_state_label({:text_post, _cache_root, _text}), do: "text_post"
   defp file_state_label(_file_state), do: "unknown"
 
   @spec result_label(term()) :: String.t()

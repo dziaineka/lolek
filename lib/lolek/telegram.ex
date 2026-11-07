@@ -3,6 +3,7 @@ defmodule Lolek.Telegram do
   Wraps Telegram API calls so sending can be tested without a real Telegram server.
   """
 
+  @callback send_message(integer(), String.t(), keyword()) :: {:ok, term()} | {:error, term()}
   @callback send_video(integer(), term(), keyword()) :: {:ok, term()} | {:error, term()}
   @callback send_document(integer(), term(), keyword()) :: {:ok, term()} | {:error, term()}
   @callback send_photo(integer(), term(), keyword()) :: {:ok, term()} | {:error, term()}
@@ -12,6 +13,12 @@ defmodule Lolek.Telegram do
               {:ok, term()} | {:error, term()}
   @callback set_message_reaction(integer(), integer(), keyword()) ::
               {:ok, term()} | {:error, term()}
+
+  @doc "Sends a text message to the given chat."
+  @spec send_message(integer(), String.t(), keyword()) :: {:ok, term()} | {:error, term()}
+  def send_message(chat_id, text, options) do
+    client().send_message(chat_id, text, options)
+  end
 
   @doc "Sends a video to the given chat."
   @spec send_video(integer(), term(), keyword()) :: {:ok, term()} | {:error, term()}

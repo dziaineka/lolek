@@ -9,7 +9,6 @@ defmodule Lolek.File do
   @downloaded_name "downloaded"
   @gallery_subdir "gallery"
   @media_manifest "media_manifest.json"
-  @legacy_gallery_manifest "gallery_manifest.json"
   @text_post_manifest "text_post.json"
 
   @type ready_media_entry :: {tg_file_id :: String.t(), ext :: String.t()}
@@ -301,14 +300,10 @@ defmodule Lolek.File do
   defp check_if_ready_to_tg(folder_path) do
     ready_to_telegram_path = Path.join(folder_path, @ready_to_telegram)
 
-    manifest_paths = [
-      Path.join(ready_to_telegram_path, @media_manifest),
-      Path.join(ready_to_telegram_path, @legacy_gallery_manifest)
-    ]
-
-    with {:error, _reason} <- read_media_manifests(manifest_paths),
+    with {:error, _reason} <-
+           read_ready_media(Path.join(ready_to_telegram_path, @media_manifest)),
          {:error, _reason} <- read_text_post_manifest(folder_path, ready_to_telegram_path) do
-      check_single_file_cache(ready_to_telegram_path)
+      :not_ready
     else
       {:ok, [_ | _] = entries} -> {:exists, {:ready_media, entries}}
       {:ok, {:text_post, _cache_root, _text} = text_post} -> {:exists, text_post}
@@ -327,28 +322,12 @@ defmodule Lolek.File do
     end
   end
 
-  @spec read_media_manifests([String.t()]) ::
-          {:ok, [ready_media_entry()]} | {:error, term()}
-  defp read_media_manifests([]), do: {:error, :enoent}
-
-  defp read_media_manifests([manifest_path | remaining]) do
+  @spec read_ready_media(String.t()) :: {:ok, [ready_media_entry()]} | {:error, term()}
+  defp read_ready_media(manifest_path) do
     case read_media_manifest(manifest_path) do
       {:ok, [_ | _] = entries} -> {:ok, entries}
-      _ -> read_media_manifests(remaining)
-    end
-  end
-
-  @spec check_single_file_cache(String.t()) :: :not_ready | {:exists, Lolek.File.file_state()}
-  defp check_single_file_cache(ready_to_telegram_path) do
-    case File.ls(ready_to_telegram_path) do
-      {:ok, file_names} ->
-        Enum.find_value(file_names, :not_ready, fn file_name ->
-          file_path = Path.join(ready_to_telegram_path, file_name)
-          check_cache_file(file_path)
-        end)
-
-      _ ->
-        :not_ready
+      {:error, reason} -> {:error, reason}
+      _ -> {:error, :invalid_media_manifest}
     end
   end
 
@@ -377,31 +356,6 @@ defmodule Lolek.File do
     case Lolek.GalleryDownloader.list_media_files(gallery_dir) do
       [] -> :not_gallery
       files -> {:exists, {:downloaded_media, folder_path, files}}
-    end
-  end
-
-  @spec check_cache_file(String.t()) :: {:exists, file_state()} | false
-  defp check_cache_file(file_path) do
-    if Path.basename(file_path) in [
-         @media_manifest,
-         @legacy_gallery_manifest,
-         @text_post_manifest
-       ] do
-      false
-    else
-      check_single_cache_media(file_path)
-    end
-  end
-
-  @spec check_single_cache_media(String.t()) :: {:exists, file_state()} | false
-  defp check_single_cache_media(file_path) do
-    if usable_cached_file?(file_path) do
-      ext = file_path |> Path.extname() |> String.downcase()
-      file_id = Path.basename(file_path, ext)
-      {:exists, {:ready_media, [{file_id, ext}]}}
-    else
-      remove_invalid_cache_file(file_path)
-      false
     end
   end
 

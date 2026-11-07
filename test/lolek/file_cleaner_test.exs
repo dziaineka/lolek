@@ -31,14 +31,14 @@ defmodule Lolek.FileCleanerTest do
     old_entry =
       create_cache_entry(tmp_dir, "old", [
         {"ready_to_telegram/media_manifest.json", 2},
-        {"source_metadata.json", 2},
+        {"post.json", 2},
         {"downloaded.mp4", 6}
       ])
 
     new_entry =
       create_cache_entry(tmp_dir, "new", [
         {"ready_to_telegram/media_manifest.json", 2},
-        {"source_metadata.json", 2}
+        {"post.json", 2}
       ])
 
     touch!(old_entry, {{2024, 1, 1}, {0, 0, 0}})
@@ -50,7 +50,7 @@ defmodule Lolek.FileCleanerTest do
     assert File.exists?(new_entry)
     refute File.exists?(Path.join(old_entry, "downloaded.mp4"))
     assert File.exists?(Path.join(old_entry, "ready_to_telegram/media_manifest.json"))
-    assert File.exists?(Path.join(old_entry, "source_metadata.json"))
+    assert File.exists?(Path.join(old_entry, "post.json"))
   end
 
   @tag :tmp_dir

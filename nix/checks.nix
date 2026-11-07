@@ -23,7 +23,7 @@ let
     inherit version;
     src = root;
     mixEnv = "dev";
-    hash = "sha256-Qqjf8yYfThS2KtqXZkz+z5lyVlRnu36K9LKkPFa/G9Y=";
+    hash = "sha256-a2Vxinhb1Ca+hq+o7tQFHvblZghR23H3CB+y148czCk=";
   };
 in
 {

@@ -29,12 +29,12 @@ defmodule Lolek.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:ex_gram, "0.70.1"},
-      {:req, "0.7.4", override: true},
+      {:ex_gram, "0.71.0"},
+      {:req, "0.7.5", override: true},
       {:html_entities, "0.5.2"},
       {:jason, "1.4.5"},
-      {:erlexec, "2.5.0"},
-      {:ex_check, "0.16.0", only: [:dev, :test], runtime: false},
+      {:erlexec, "2.6.0"},
+      {:ex_check, "0.17.1", only: [:dev, :test], runtime: false},
       {:credo, ">= 0.0.0", only: [:dev, :test], runtime: false},
       {:dialyxir, ">= 0.0.0", only: [:dev, :test], runtime: false},
       {:doctor, ">= 0.0.0", only: [:dev, :test], runtime: false},

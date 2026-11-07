@@ -2,6 +2,7 @@ defmodule Lolek.GalleryDownloader do
   @moduledoc """
   Downloads images and GIFs from social media URLs using gallery-dl.
   """
+  require Logger
 
   @image_extensions ~w(.jpg .jpeg .png .gif .webp .avif .heic .heif)
   @video_extensions ~w(.mp4 .mkv .webm .mov .m4v)
@@ -18,6 +19,14 @@ defmodule Lolek.GalleryDownloader do
 
   @spec run_gallery_dl(String.t(), String.t()) :: :ok | {:error, term()}
   defp run_gallery_dl(url, output_dir) do
+    with_cookies_fallback(
+      &run_gallery_dl(url, output_dir, &1),
+      fn _reason -> true end
+    )
+  end
+
+  @spec run_gallery_dl(String.t(), String.t(), [String.t()]) :: :ok | {:error, term()}
+  defp run_gallery_dl(url, output_dir, cookies_args) do
     result =
       Lolek.Command.run(
         "gallery-dl",
@@ -32,7 +41,8 @@ defmodule Lolek.GalleryDownloader do
           "-o",
           "extractor.ytdl.module=yt_dlp"
         ] ++
-          extra_args() ++
+          cookies_args ++
+          config_args() ++
           [
             "--dest",
             output_dir,
@@ -55,10 +65,19 @@ defmodule Lolek.GalleryDownloader do
   """
   @spec fetch_text_post(String.t()) :: {:ok, String.t()} | {:error, term()}
   def fetch_text_post(url) do
+    with_cookies_fallback(
+      &fetch_text_post(url, &1),
+      &(&1 not in [:post_has_media, :no_text_post])
+    )
+  end
+
+  @spec fetch_text_post(String.t(), [String.t()]) :: {:ok, String.t()} | {:error, term()}
+  defp fetch_text_post(url, cookies_args) do
     result =
       Lolek.Command.run(
         "gallery-dl",
-        ["--dump-json", "-o", "extractor.twitter.text-tweets=true"] ++ extra_args() ++ [url],
+        ["--dump-json", "-o", "extractor.twitter.text-tweets=true"] ++
+          cookies_args ++ config_args() ++ [url],
         timeout: command_timeout()
       )
 
@@ -74,20 +93,56 @@ defmodule Lolek.GalleryDownloader do
     end
   end
 
+  # Logged-in gallery-dl requests can fail where guest requests work. For
+  # example, the Twitter/X client transaction step can fail for logged-in
+  # sessions only. Thus a failed run with cookies is tried again without them.
+  @spec with_cookies_fallback(
+          ([String.t()] -> :ok | {:ok, term()} | {:error, term()}),
+          (term() -> boolean())
+        ) :: :ok | {:ok, term()} | {:error, term()}
+  defp with_cookies_fallback(fun, retry?) do
+    case cookies_args() do
+      [] -> fun.([])
+      cookies_args -> fun |> apply([cookies_args]) |> retry_without_cookies(fun, retry?)
+    end
+  end
+
+  @spec retry_without_cookies(
+          :ok | {:ok, term()} | {:error, term()},
+          ([String.t()] -> :ok | {:ok, term()} | {:error, term()}),
+          (term() -> boolean())
+        ) :: :ok | {:ok, term()} | {:error, term()}
+  defp retry_without_cookies({:error, reason} = error, fun, retry?) do
+    if retry?.(reason) do
+      Logger.info("gallery-dl failed with cookies, trying again without cookies")
+      fun.([])
+    else
+      error
+    end
+  end
+
+  defp retry_without_cookies(result, _fun, _retry?), do: result
+
   @spec parse_text_post(String.t()) :: {:ok, String.t()} | {:error, term()}
   def parse_text_post(output) do
     with {:ok, messages} when is_list(messages) <- Jason.decode(output),
+         nil <- Enum.find_value(messages, &error_message/1),
          false <- Enum.any?(messages, &media_message?/1),
          {:ok, text} <- Enum.find_value(messages, {:error, :no_text_post}, &message_text/1) do
       {:ok, text}
     else
       true -> {:error, :post_has_media}
+      {:gallery_dl_error, error} -> {:error, {:gallery_dl_error, error}}
       {:error, reason} -> {:error, reason}
       _ -> {:error, :invalid_gallery_dl_output}
     end
   end
 
-  # gallery-dl message types: 2 is a post directory, 3 is a media URL,
+  @spec error_message(term()) :: {:gallery_dl_error, term()} | nil
+  defp error_message([-1, error]), do: {:gallery_dl_error, error}
+  defp error_message(_message), do: nil
+
+  # gallery-dl message types: -1 is an error, 2 is a post directory, 3 is a media URL,
   # 6 is a URL for another extractor.
   @spec media_message?(term()) :: boolean()
   defp media_message?([type | _]) when type in [3, 6], do: true
@@ -193,21 +248,20 @@ defmodule Lolek.GalleryDownloader do
     end
   end
 
-  @spec extra_args() :: [String.t()]
-  defp extra_args do
-    cookies =
-      case Application.fetch_env!(:lolek, :gallery_dl_cookies_file) do
-        path when is_binary(path) -> ["--cookies", path]
-        nil -> []
-      end
+  @spec cookies_args() :: [String.t()]
+  defp cookies_args do
+    case Application.fetch_env!(:lolek, :gallery_dl_cookies_file) do
+      path when is_binary(path) -> ["--cookies", path]
+      nil -> []
+    end
+  end
 
-    config_file =
-      case Application.fetch_env!(:lolek, :gallery_dl_config_file) do
-        path when is_binary(path) -> ["--config", path]
-        nil -> []
-      end
-
-    cookies ++ config_file
+  @spec config_args() :: [String.t()]
+  defp config_args do
+    case Application.fetch_env!(:lolek, :gallery_dl_config_file) do
+      path when is_binary(path) -> ["--config", path]
+      nil -> []
+    end
   end
 
   @spec command_timeout() :: pos_integer()

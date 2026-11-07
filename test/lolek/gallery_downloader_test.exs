@@ -4,7 +4,8 @@ defmodule Lolek.GalleryDownloaderTest do
   @env_keys [
     :max_file_size_to_send_to_telegram,
     :max_gallery_media,
-    :download_command_timeout_seconds
+    :download_command_timeout_seconds,
+    :gallery_dl_cookies_file
   ]
 
   describe "download/2" do
@@ -106,6 +107,62 @@ defmodule Lolek.GalleryDownloaderTest do
 
         assert {:error, {:gallery_dl, _reason}} =
                  Lolek.GalleryDownloader.download("https://example.com/post", gallery_dir)
+      end)
+    end
+  end
+
+  describe "cookies fallback" do
+    # The fake gallery-dl fails like Twitter/X does for logged-in sessions.
+    @fake_gallery_dl """
+    #!/bin/sh
+    dest=; dump=0
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --cookies) echo "[twitter][error] HttpError: 404" >&2; exit 4 ;;
+        --dest) shift; dest="$1" ;;
+        --dump-json) dump=1 ;;
+      esac
+      shift
+    done
+    if [ "$dump" = "1" ]; then
+      printf '[[2, {"content": "guest text"}]]'
+    else
+      printf photo > "$dest/photo.jpg"
+    fi
+    """
+
+    @tag :tmp_dir
+    test "downloads media again without cookies when gallery-dl fails with them", %{
+      tmp_dir: tmp_dir
+    } do
+      preserve_env(fn ->
+        bin_dir = mkdir_bin(tmp_dir)
+        write_script(bin_dir, "gallery-dl", @fake_gallery_dl)
+        set_env(bin_dir)
+        Application.put_env(:lolek, :gallery_dl_cookies_file, Path.join(tmp_dir, "cookies.txt"))
+
+        assert {:ok, [path]} =
+                 Lolek.GalleryDownloader.download(
+                   "https://x.com/user/status/1",
+                   Path.join(tmp_dir, "gallery")
+                 )
+
+        assert Path.basename(path) == "photo.jpg"
+      end)
+    end
+
+    @tag :tmp_dir
+    test "reads text posts again without cookies when gallery-dl fails with them", %{
+      tmp_dir: tmp_dir
+    } do
+      preserve_env(fn ->
+        bin_dir = mkdir_bin(tmp_dir)
+        write_script(bin_dir, "gallery-dl", @fake_gallery_dl)
+        set_env(bin_dir)
+        Application.put_env(:lolek, :gallery_dl_cookies_file, Path.join(tmp_dir, "cookies.txt"))
+
+        assert {:ok, "guest text"} =
+                 Lolek.GalleryDownloader.fetch_text_post("https://x.com/user/status/1")
       end)
     end
   end
@@ -247,6 +304,13 @@ defmodule Lolek.GalleryDownloaderTest do
                Lolek.GalleryDownloader.parse_text_post(Jason.encode!([[2, %{"content" => " "}]]))
 
       assert {:error, :no_text_post} = Lolek.GalleryDownloader.parse_text_post("[]")
+    end
+
+    test "returns gallery-dl errors" do
+      output = Jason.encode!([[-1, %{"error" => "HttpError"}]])
+
+      assert {:error, {:gallery_dl_error, %{"error" => "HttpError"}}} =
+               Lolek.GalleryDownloader.parse_text_post(output)
     end
 
     test "rejects invalid output" do

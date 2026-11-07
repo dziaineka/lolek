@@ -43,8 +43,9 @@ in
       runHook preBuild
 
       export LOLEK_BOT_TOKEN="test_token"
-      # mix_audit fetches its advisory database at runtime.
-      mix check --except mix_audit
+      # These checks fetch data from Hex at runtime, but the Nix sandbox
+      # has no network access.
+      mix check --except hex_audit --except mix_audit
 
       runHook postBuild
     '';

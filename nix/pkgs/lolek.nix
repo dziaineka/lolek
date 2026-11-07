@@ -34,7 +34,7 @@ let
         pname = "lolek-mix-deps";
         inherit version;
         src = root;
-        hash = "sha256-V88VhbPh6GoQF7FZk+qRxLXrmcZp9GoqQy0XZMWxZs8=";
+        hash = "sha256-E7NpvGaOMVPYCNC6fT/b/3a8GgQt0sf4pZyggNuWRYk=";
       };
       doCheck = true;
       nativeCheckInputs = [ pkgs.getconf ];

@@ -1,6 +1,6 @@
 # yt-dlp nightly version (https://github.com/yt-dlp/yt-dlp-nightly-builds/releases), installed
 # as a PyPI dev-release in the final stage
-ARG YT_DLP_VERSION=2026.08.20.234504
+ARG YT_DLP_VERSION=2026.11.04.232659
 
 #### Builder
 FROM hexpm/elixir:1.20.5-erlang-29.1.2-debian-trixie-20261104-slim AS buildcontainer
@@ -47,13 +47,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # yt-dlp: provides both the CLI and the yt_dlp Python module required by gallery-dl's
 # ytdl extractor (extractor.ytdl.module=yt_dlp). Installed from its PyPI dev-release to
-# pin the nightly build, e.g. 2026.08.20.234504 -> 2026.8.20.234504.dev0
+# pin the nightly build, e.g. 2026.11.04.232659 -> 2026.11.4.232659.dev0
 ARG YT_DLP_VERSION
 RUN YT_DLP_PYPI_VERSION=$(IFS=.; set -- ${YT_DLP_VERSION}; echo "$1.${2#0}.${3#0}.$4.dev0") && \
   pip3 install --pre "yt-dlp[default]==${YT_DLP_PYPI_VERSION}" --no-cache-dir --break-system-packages \
   && yt-dlp --version
 
-ARG GALLERY_DL_VERSION=1.32.9
+ARG GALLERY_DL_VERSION=1.32.19
 RUN pip3 install gallery-dl==${GALLERY_DL_VERSION} --no-cache-dir --break-system-packages \
   && gallery-dl --version
 

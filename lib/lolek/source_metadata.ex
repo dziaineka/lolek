@@ -4,7 +4,6 @@ defmodule Lolek.SourceMetadata do
   """
 
   @post_file_name "post.json"
-  @legacy_file_name "source_metadata.json"
   @max_title_length 160
   @threads_handle ~r{\A/@([^/]+)/}
 
@@ -15,7 +14,7 @@ defmodule Lolek.SourceMetadata do
   """
   @spec get_or_fetch(String.t(), String.t()) :: {:ok, Lolek.Post.t()} | {:error, term()}
   def get_or_fetch(url, folder_path) do
-    case read_cached(folder_path, url) do
+    case read_cached(folder_path) do
       {:ok, post} -> {:ok, enrich_cached(post, folder_path)}
       {:error, :enoent} -> fetch_and_cache(url, folder_path)
       {:error, reason} -> {:error, reason}
@@ -34,35 +33,11 @@ defmodule Lolek.SourceMetadata do
     end
   end
 
-  @spec read_cached(String.t(), String.t()) :: {:ok, Lolek.Post.t()} | {:error, term()}
-  defp read_cached(folder_path, url) do
-    case read_json(Path.join(folder_path, @post_file_name)) do
-      {:ok, map} ->
-        with {:error, :invalid_post} <- Lolek.Post.from_map(map) do
-          {:error, "Cached source metadata is invalid"}
-        end
-
-      {:error, :enoent} ->
-        read_legacy(folder_path, url)
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
-
-  # Caches from older versions keep only the caption and the title.
-  @spec read_legacy(String.t(), String.t()) :: {:ok, Lolek.Post.t()} | {:error, term()}
-  defp read_legacy(folder_path, url) do
-    with {:ok, map} <- read_json(Path.join(folder_path, @legacy_file_name)) do
-      caption = Map.get(map, "caption")
-      title = Map.get(map, "title")
-
-      if valid_optional_string?(caption) and valid_optional_string?(title) do
-        post = %{Lolek.Post.empty(url) | text: Lolek.Post.Text.clean(caption, :generic)}
-        {:ok, %{post | title: sanitize_title(title) || sanitize_title(post.text)}}
-      else
-        {:error, "Cached source metadata is invalid"}
-      end
+  @spec read_cached(String.t()) :: {:ok, Lolek.Post.t()} | {:error, term()}
+  defp read_cached(folder_path) do
+    with {:ok, map} <- read_json(Path.join(folder_path, @post_file_name)),
+         {:error, :invalid_post} <- Lolek.Post.from_map(map) do
+      {:error, "Cached source metadata is invalid"}
     end
   end
 
@@ -241,9 +216,6 @@ defmodule Lolek.SourceMetadata do
       sanitized -> sanitized
     end
   end
-
-  @spec valid_optional_string?(term()) :: boolean()
-  defp valid_optional_string?(value), do: is_nil(value) or is_binary(value)
 
   @spec command_timeout(atom()) :: pos_integer()
   defp command_timeout(config_key) do

@@ -7,17 +7,6 @@ defmodule Lolek.FileTest do
   ]
 
   @tag :tmp_dir
-  test "reads existing single-file caches as one-item ready media", %{tmp_dir: tmp_dir} do
-    ready_path = Path.join([tmp_dir, "ready_to_telegram", "telegram-file-id.txt"])
-
-    File.mkdir_p!(Path.dirname(ready_path))
-    File.write!(ready_path, "document")
-
-    assert {:ok, {:ready_media, [{"telegram-file-id", ".txt"}]}} =
-             Lolek.File.get_file_state(tmp_dir)
-  end
-
-  @tag :tmp_dir
   test "caches one or more sent media entries in a shared manifest", %{tmp_dir: tmp_dir} do
     entries = [{".jpg", "photo-id"}, {".mp4", "video-id"}]
     manifest_path = Path.join([tmp_dir, "ready_to_telegram", "media_manifest.json"])
@@ -58,7 +47,7 @@ defmodule Lolek.FileTest do
     downloaded_path = Path.join(tmp_dir, "downloaded.mp4")
     compressed_path = Path.join(tmp_dir, "compressed.mp4")
     gallery_path = Path.join([tmp_dir, "gallery", "photo.jpg"])
-    metadata_path = Path.join(tmp_dir, "source_metadata.json")
+    metadata_path = Path.join(tmp_dir, "post.json")
     manifest_path = Path.join([tmp_dir, "ready_to_telegram", "media_manifest.json"])
 
     File.mkdir_p!(Path.dirname(gallery_path))
@@ -133,15 +122,12 @@ defmodule Lolek.FileTest do
   end
 
   @tag :tmp_dir
-  test "reads existing gallery manifests as ready media", %{tmp_dir: tmp_dir} do
+  test "does not take an empty media manifest as ready media", %{tmp_dir: tmp_dir} do
     ready_path = Path.join(tmp_dir, "ready_to_telegram")
-    manifest_path = Path.join(ready_path, "gallery_manifest.json")
-
     File.mkdir_p!(ready_path)
-    File.write!(manifest_path, Jason.encode!([%{"file_id" => "photo-id", "ext" => ".jpg"}]))
+    File.write!(Path.join(ready_path, "media_manifest.json"), "[]")
 
-    assert {:ok, {:ready_media, [{"photo-id", ".jpg"}]}} =
-             Lolek.File.get_file_state(tmp_dir)
+    assert {:ok, {:new_file, ^tmp_dir}} = Lolek.File.get_file_state(tmp_dir)
   end
 
   test "ignores file states that do not need caching" do
@@ -200,27 +186,6 @@ defmodule Lolek.FileTest do
                Lolek.File.get_file_state(tmp_dir)
 
       refute File.exists?(compressed_path)
-    end)
-  end
-
-  @tag :tmp_dir
-  test "ignores invalid ready-to-telegram cache files", %{tmp_dir: tmp_dir} do
-    preserve_file_env(fn ->
-      bin_dir = Path.join(tmp_dir, "bin")
-      ready_dir = Path.join(tmp_dir, "ready_to_telegram")
-      ready_path = Path.join(ready_dir, "telegram-file-id.mp4")
-      downloaded_path = Path.join(tmp_dir, "downloaded.mp4")
-
-      File.mkdir_p!(ready_dir)
-      File.write!(ready_path, "broken")
-      File.write!(downloaded_path, "video")
-      put_fake_executable(bin_dir, "ffprobe", "exit 0")
-      put_cache_env(bin_dir)
-
-      assert {:ok, {:downloaded_media, ^tmp_dir, [^downloaded_path]}} =
-               Lolek.File.get_file_state(tmp_dir)
-
-      refute File.exists?(ready_path)
     end)
   end
 

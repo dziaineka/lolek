@@ -39,19 +39,6 @@ defmodule Lolek.SourceMetadataTest do
   end
 
   @tag :tmp_dir
-  test "reads old caption-only cache entries", %{tmp_dir: tmp_dir} do
-    File.write!(
-      Path.join(tmp_dir, "source_metadata.json"),
-      Jason.encode!(%{caption: "&gt; First &amp; line\r\n  second\tline\n\n\nthird", title: nil})
-    )
-
-    assert {:ok, %Lolek.Post{text: "> First & line\nsecond line\n\nthird", title: title}} =
-             Lolek.SourceMetadata.get_or_fetch("https://example.com/video", tmp_dir)
-
-    assert title == "First & line second line third"
-  end
-
-  @tag :tmp_dir
   test "returns an error for an invalid cache entry", %{tmp_dir: tmp_dir} do
     File.write!(Path.join(tmp_dir, "post.json"), Jason.encode!(%{text: 5}))
 

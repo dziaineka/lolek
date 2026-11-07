@@ -45,6 +45,23 @@
                   };
                 };
               };
+              # Keep Nix builds on the versions pinned in .tool-versions.
+              yt-dlp = prev.yt-dlp.overrideAttrs (_: {
+                version = "2026.11.04.232659";
+                src = prev.fetchzip {
+                  url = "https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/download/2026.11.04.232659/yt-dlp.tar.gz";
+                  hash = "sha256-x7hh6K2j3BqFUJYuSdkX1MMspU6ud+6Vo8nXpd5WwPs=";
+                };
+              });
+              gallery-dl = (prev.gallery-dl.override { yt-dlp = final.yt-dlp; }).overrideAttrs (_: {
+                version = "1.32.19";
+                src = prev.fetchFromCodeberg {
+                  owner = "mikf";
+                  repo = "gallery-dl";
+                  tag = "v1.32.19";
+                  hash = "sha256-iMC0KpgyYPqyHpYwYw9DFsvCMHUIwqqVP2Pfm1SviB0=";
+                };
+              });
             })
           ];
         };

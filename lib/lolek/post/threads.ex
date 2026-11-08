@@ -73,11 +73,11 @@ defmodule Lolek.Post.Threads do
 
   defp post_url(_handle, _code), do: nil
 
+  # Threads shows a `quoted_attachment_post` (media of another post) as the media of
+  # this post, not as a quoted post. The media downloader gets that media.
   @spec quoted(map()) :: Lolek.Post.t() | nil
   defp quoted(info) do
-    share_info = map(info["share_info"])
-
-    case share_info["quoted_post"] || share_info["quoted_attachment_post"] do
+    case get_in(map(info["share_info"]), ["quoted_post"]) do
       %{"user" => %{"username" => _}} = quoted -> parse(quoted)
       _ -> nil
     end

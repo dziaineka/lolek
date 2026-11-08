@@ -74,7 +74,7 @@ defmodule Lolek.ThreadsDownloader do
 
   @spec text_post_from_page(http_response(), String.t()) :: {:ok, String.t()} | {:error, term()}
   def text_post_from_page(html_response, url) do
-    with {:ok, shortcode} <- extract_shortcode(url),
+    with {:ok, shortcode} <- page_shortcode(html_response, url),
          %{} = node <-
            html_response.body
            |> extract_embedded_json()
@@ -114,7 +114,7 @@ defmodule Lolek.ThreadsDownloader do
   @spec post_from_page(http_response(), String.t()) ::
           {:ok, Lolek.Post.t()} | {:error, String.t()}
   def post_from_page(html_response, url) do
-    with {:ok, shortcode} <- extract_shortcode(url),
+    with {:ok, shortcode} <- page_shortcode(html_response, url),
          %{} = node <-
            html_response.body
            |> extract_embedded_json()
@@ -160,6 +160,28 @@ defmodule Lolek.ThreadsDownloader do
 
       _ ->
         {:error, "Threads post shortcode not found"}
+    end
+  end
+
+  @doc """
+  Finds the shortcode of the post on the page. A share URL (`/share/<code>`) redirects
+  to the post URL, and the share code is not the post code. The canonical link of the
+  page gives the post URL.
+  """
+  @spec page_shortcode(http_response(), String.t()) :: {:ok, String.t()} | {:error, String.t()}
+  def page_shortcode(%{body: body}, url) do
+    case Regex.run(~r/<link rel="canonical" href="([^"]+)"/, body) do
+      [_, canonical_url] ->
+        canonical_url
+        |> String.replace("&#064;", "@")
+        |> extract_shortcode()
+        |> case do
+          {:ok, shortcode} -> {:ok, shortcode}
+          {:error, _} -> extract_shortcode(url)
+        end
+
+      _ ->
+        extract_shortcode(url)
     end
   end
 
@@ -249,7 +271,7 @@ defmodule Lolek.ThreadsDownloader do
       |> Enum.flat_map(&collect_media_nodes/1)
 
     media_node =
-      case extract_shortcode(url) do
+      case page_shortcode(html_response, url) do
         {:ok, shortcode} ->
           Enum.find(media_nodes, &(Map.get(&1, "code") == shortcode)) || List.first(media_nodes)
 

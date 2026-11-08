@@ -151,6 +151,26 @@ defmodule Lolek.PostTest do
       assert %{url: "https://example.com/a", title: "Example"} = post.link_card
     end
 
+    test "does not show the media of another post as a quoted post" do
+      node = %{
+        "code" => "P1",
+        "user" => %{"username" => "author"},
+        "caption" => %{"text" => "Look"},
+        "text_post_app_info" => %{
+          "share_info" => %{
+            "quoted_post" => nil,
+            "quoted_attachment_post" => %{
+              "code" => "Q1",
+              "user" => %{"username" => "other"},
+              "video_versions" => [%{"url" => "https://cdn.example/q.mp4"}]
+            }
+          }
+        }
+      }
+
+      assert %Lolek.Post{text: "Look", quoted: nil} = Lolek.Post.Threads.parse(node)
+    end
+
     test "finds the copy of the post that has the author in the page data" do
       documents = [
         %{"require" => [%{"code" => "P1", "caption" => nil}]},

@@ -192,6 +192,33 @@ defmodule Lolek.ThreadsDownloaderTest do
     end
   end
 
+  describe "post_from_page/2" do
+    test "finds the post of a share url from the canonical link" do
+      response =
+        page_response([
+          %{"code" => "DeOther", "user" => %{"username" => "someone"}},
+          %{
+            "code" => "DeMzwwRjFpO",
+            "user" => %{"username" => "author"},
+            "caption" => %{"text" => "Shared post"}
+          }
+        ])
+
+      response = %{
+        response
+        | body:
+            ~s(<link rel="canonical" href="https://www.threads.com/&#064;author/post/DeMzwwRjFpO" />) <>
+              response.body
+      }
+
+      assert {:ok, %Lolek.Post{text: "Shared post", author: %{handle: "author"}}} =
+               Lolek.ThreadsDownloader.post_from_page(
+                 response,
+                 "https://www.threads.com/share/_1tmo3oV0/"
+               )
+    end
+  end
+
   test "decodes shortcode into numeric post id" do
     assert {:ok, "3886214701562734339"} = Lolek.ThreadsDownloader.decode_shortcode("DXum65XjCcD")
   end

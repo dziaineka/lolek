@@ -21,6 +21,6 @@ let
 in
 corpusPackages
 // {
-  inherit lolek;
+  inherit lolek telegym;
   default = lolek;
 }

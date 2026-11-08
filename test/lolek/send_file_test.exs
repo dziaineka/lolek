@@ -33,13 +33,12 @@ defmodule Lolek.SendFileTest do
       Application.fetch_env!(:lolek, :telegram_test_responder).(call, attempt)
     end
 
-    defp local_files_exist({:send_rich_message, _chat_id, %{media: [_ | _] = media}, _options}) do
-      Enum.map(media, fn
-        %{media: %{media: "file://" <> encoded_path}} ->
-          encoded_path |> URI.decode() |> File.exists?()
-
-        _ ->
-          :not_local
+    defp local_files_exist({:send_rich_message, _chat_id, rich_message, _options}) do
+      rich_message
+      |> Lolek.SendFileTest.input_media()
+      |> Enum.map(fn
+        %{media: "file://" <> encoded_path} -> encoded_path |> URI.decode() |> File.exists?()
+        _ -> :not_local
       end)
     end
 
@@ -212,8 +211,11 @@ defmodule Lolek.SendFileTest do
 
     test "sends the post again without linked media when Telegram rejects it" do
       respond_with(fn
-        _call, 1 -> {:error, bad_request()}
-        _call, _attempt -> {:ok, rich_response([photo_block("photo-id")])}
+        _call, 1 ->
+          {:error, bad_request()}
+
+        _call, _attempt ->
+          {:ok, rich_response([%ExGram.Model.RichBlockParagraph{}, photo_block("photo-id")])}
       end)
 
       Application.put_env(:lolek, :post_source_caption, true)
@@ -234,9 +236,10 @@ defmodule Lolek.SendFileTest do
                  post: post
                )
 
-      assert_receive {:send_rich_message, 123, %ExGram.Model.InputRichMessage{html: first}, _}
-      assert first =~ ~s(<img src="https://cdn.example/quoted.jpg"/>)
-      assert_receive {:send_rich_message, 123, %ExGram.Model.InputRichMessage{html: second}, _}
+      assert_receive {:send_rich_message, 123, first, _}
+      assert markup(first) =~ ~s(<img src="https://cdn.example/quoted.jpg"/>)
+      assert_receive {:send_rich_message, 123, second, _}
+      second = markup(second)
       refute second =~ "https://cdn.example/quoted.jpg"
       assert second =~ "quoted"
     end
@@ -266,22 +269,18 @@ defmodule Lolek.SendFileTest do
                )
 
       assert_receive {:send_rich_message, 123,
-                      %ExGram.Model.InputRichMessage{
-                        html: html,
-                        media: [media],
-                        skip_entity_detection: true
-                      }, options}
+                      %ExGram.Model.InputRichMessage{skip_entity_detection: true} = rich_message,
+                      options}
 
-      assert html == ~s(<video src="tg://video?id=m0"></video>)
+      assert markup(rich_message) == ~s(<video src="upload:downloaded.mp4"/>)
 
-      assert %ExGram.Model.InputRichMessageMedia{
-               id: "m0",
-               media: %ExGram.Model.InputMediaVideo{
+      assert [
+               %ExGram.Model.InputMediaVideo{
                  type: "video",
                  supports_streaming: true,
                  media: {:file_content, %File.Stream{} = stream, "downloaded.mp4"}
                }
-             } = media
+             ] = input_media(rich_message)
 
       assert stream.path == file_path
       assert stream.line_or_bytes == 64 * 1024
@@ -309,14 +308,11 @@ defmodule Lolek.SendFileTest do
       assert {:ok, {:sent_media, "/tmp", [{".jpg", "p1"}, {".mp4", "v2"}, {".png", "p3"}]}} =
                Lolek.send_file(123, {:prepared_media, "/tmp", files})
 
-      assert_receive {:send_rich_message, 123,
-                      %ExGram.Model.InputRichMessage{html: html, media: media}, _}
+      assert_receive {:send_rich_message, 123, rich_message, _}
 
-      assert html ==
-               ~s(<tg-collage><img src="tg://photo?id=m0"/><video src="tg://video?id=m1"></video>) <>
-                 ~s(<img src="tg://photo?id=m2"/></tg-collage>)
-
-      assert ["m0", "m1", "m2"] = Enum.map(media, & &1.id)
+      assert markup(rich_message) ==
+               ~s(<tg-collage><img src="upload:gallery-1.jpg"/><video src="upload:gallery-2.mp4"/>) <>
+                 ~s(<img src="upload:gallery-3.png"/></tg-collage>)
     end
 
     test "sends Instagram galleries as a slideshow" do
@@ -327,8 +323,8 @@ defmodule Lolek.SendFileTest do
         post: %Lolek.Post{platform: :instagram}
       )
 
-      assert_receive {:send_rich_message, 123, %ExGram.Model.InputRichMessage{html: html}, _}
-      assert html =~ "<tg-slideshow>"
+      assert_receive {:send_rich_message, 123, rich_message, _}
+      assert markup(rich_message) =~ "<tg-slideshow>"
     end
 
     test "does not cache file_ids that do not match the uploaded files" do
@@ -346,8 +342,8 @@ defmodule Lolek.SendFileTest do
 
       Lolek.send_file(123, {:prepared_media, "/tmp", files})
 
-      assert_receive {:send_rich_message, 123, %ExGram.Model.InputRichMessage{media: media}, _}
-      assert length(media) == 2
+      assert_receive {:send_rich_message, 123, rich_message, _}
+      assert length(input_media(rich_message)) == 2
     end
 
     test "sends cached media by file_id and applies the gallery limit" do
@@ -358,33 +354,35 @@ defmodule Lolek.SendFileTest do
       assert {:ok, {:ready_media, [{"id-1", ".jpg"}, {"id-2", ".gif"}]}} =
                Lolek.send_file(123, {:ready_media, entries})
 
-      assert_receive {:send_rich_message, 123,
-                      %ExGram.Model.InputRichMessage{html: html, media: media}, _}
+      assert_receive {:send_rich_message, 123, rich_message, _}
 
-      assert html =~ ~s(<video src="tg://video?id=m1"></video>)
+      assert markup(rich_message) ==
+               ~s(<tg-collage><img src="id-1"/><animation src="id-2"/></tg-collage>)
 
       assert [
-               %ExGram.Model.InputRichMessageMedia{
-                 media: %ExGram.Model.InputMediaPhoto{media: "id-1"}
-               },
-               %ExGram.Model.InputRichMessageMedia{
-                 media: %ExGram.Model.InputMediaAnimation{media: "id-2"}
-               }
-             ] = media
+               %ExGram.Model.InputMediaPhoto{media: "id-1"},
+               %ExGram.Model.InputMediaAnimation{media: "id-2"}
+             ] = input_media(rich_message)
     end
 
-    test "sends other files as documents after the visual media" do
-      respond_with(fn _call, _attempt -> {:ok, rich_response([])} end)
+    test "sends other files as documents after the visual media and keeps their file_ids" do
+      respond_with(fn _call, _attempt ->
+        {:ok,
+         rich_response([
+           photo_block("new-photo"),
+           %ExGram.Model.RichBlockDocument{document: %ExGram.Model.Document{file_id: "new-doc"}}
+         ])}
+      end)
 
-      Lolek.send_file(123, {:ready_media, [{"doc-id", ".txt"}, {"photo-id", ".jpg"}]})
+      files = [tmp_file("file.txt", "doc"), tmp_file("photo.jpg", "photo")]
 
-      assert_receive {:send_rich_message, 123,
-                      %ExGram.Model.InputRichMessage{html: html, media: media}, _}
+      assert {:ok, {:sent_media, "/tmp", [{".jpg", "new-photo"}, {".txt", "new-doc"}]}} =
+               Lolek.send_file(123, {:prepared_media, "/tmp", files})
 
-      assert html ==
-               ~s(<img src="tg://photo?id=m1"/><tg-document src="tg://document?id=m0"></tg-document>)
+      assert_receive {:send_rich_message, 123, rich_message, _}
 
-      assert %ExGram.Model.InputMediaDocument{media: "doc-id"} = hd(media).media
+      assert markup(rich_message) ==
+               ~s(<img src="upload:photo.jpg"/><tg-document src="upload:file.txt"/>)
     end
   end
 
@@ -396,8 +394,8 @@ defmodule Lolek.SendFileTest do
 
       Lolek.send_file(123, {:prepared_media, "/tmp", files}, post: post_titled("Gallery title"))
 
-      assert_receive {:send_rich_message, 123, %ExGram.Model.InputRichMessage{media: media}, []}
-      assert Enum.all?(media, &String.starts_with?(&1.media.media, "file://"))
+      assert_receive {:send_rich_message, 123, rich_message, []}
+      assert Enum.all?(input_media(rich_message), &String.starts_with?(&1.media, "file://"))
       assert_receive {:local_files_exist, [true, true]}
 
       for file <- files do
@@ -412,8 +410,9 @@ defmodule Lolek.SendFileTest do
 
       Lolek.send_file(123, {:prepared_media, Path.dirname(file_path), [file_path]})
 
-      assert_receive {:send_rich_message, 123, %ExGram.Model.InputRichMessage{media: [media]}, _}
-      assert "file://" <> encoded_path = media.media.media
+      assert_receive {:send_rich_message, 123, rich_message, _}
+      [media] = input_media(rich_message)
+      assert "file://" <> encoded_path = media.media
       assert encoded_path == String.replace(file_path, " ", "%20")
     end
 
@@ -439,8 +438,9 @@ defmodule Lolek.SendFileTest do
         post: post_titled("A / Video: https://example.com/watch Title?")
       )
 
-      assert_receive {:send_rich_message, 123, %ExGram.Model.InputRichMessage{media: [media]}, _}
-      assert {:file_content, %File.Stream{}, "A Video Title.mp4"} = media.media.media
+      assert_receive {:send_rich_message, 123, rich_message, _}
+      [media] = input_media(rich_message)
+      assert {:file_content, %File.Stream{}, "A Video Title.mp4"} = media.media
     end
 
     test "uses post titles as local upload file names" do
@@ -452,8 +452,9 @@ defmodule Lolek.SendFileTest do
         post: post_titled("A / Video: https://example.com/watch Title?")
       )
 
-      assert_receive {:send_rich_message, 123, %ExGram.Model.InputRichMessage{media: [media]}, _}
-      assert "file://" <> encoded_path = media.media.media
+      assert_receive {:send_rich_message, 123, rich_message, _}
+      [media] = input_media(rich_message)
+      assert "file://" <> encoded_path = media.media
       assert encoded_path |> URI.decode() |> Path.basename() == "A Video Title.mp4"
       assert File.exists?(file_path)
       assert [] = Path.wildcard(Path.join(Path.dirname(file_path), ".telegram-upload-*"))
@@ -475,10 +476,10 @@ defmodule Lolek.SendFileTest do
           post: post_titled(title)
         )
 
-        assert_receive {:send_rich_message, 123, %ExGram.Model.InputRichMessage{media: [media]},
-                        _}
+        assert_receive {:send_rich_message, 123, rich_message, _}
+        [media] = input_media(rich_message)
 
-        "file://" <> encoded_path = media.media.media
+        "file://" <> encoded_path = media.media
         upload_file_name = encoded_path |> URI.decode() |> Path.basename()
 
         measured =
@@ -509,8 +510,9 @@ defmodule Lolek.SendFileTest do
 
       assert {:ok, ^file_state} = Lolek.send_file(123, file_state, context)
 
-      assert_receive {:send_rich_message, 123,
-                      %ExGram.Model.InputRichMessage{html: html, media: nil}, options}
+      assert_receive {:send_rich_message, 123, rich_message, options}
+      assert input_media(rich_message) == []
+      html = markup(rich_message)
 
       assert html =~
                ~r{^<p>post text</p><hr/><footer>alice requested, processed in \d+\.\ds</footer>$}
@@ -529,7 +531,8 @@ defmodule Lolek.SendFileTest do
 
       Lolek.send_file(123, {:text_post, "/tmp/cache", "ignored"}, post: post)
 
-      assert_receive {:send_rich_message, 123, %ExGram.Model.InputRichMessage{html: html}, _}
+      assert_receive {:send_rich_message, 123, rich_message, _}
+      html = markup(rich_message)
       assert html =~ ~s(<b>Jack</b> · <a href="https://x.com/jack">@jack</a>)
       assert html =~ "<p>just setting up my twttr</p>"
     end
@@ -548,8 +551,9 @@ defmodule Lolek.SendFileTest do
         post: %Lolek.Post{text: "secret", author: Lolek.Post.author("Name", nil, nil)}
       )
 
-      assert_receive {:send_rich_message, 123, %ExGram.Model.InputRichMessage{html: html}, _}
-      assert html == ~s(<img src="tg://photo?id=m0"/>)
+      assert_receive {:send_rich_message, 123, rich_message, _}
+      html = markup(rich_message)
+      assert html == ~s(<img src="id"/>)
     end
 
     test "shows the post details when enabled" do
@@ -560,7 +564,8 @@ defmodule Lolek.SendFileTest do
         post: %Lolek.Post{text: "shown", author: Lolek.Post.author("Name", nil, nil)}
       )
 
-      assert_receive {:send_rich_message, 123, %ExGram.Model.InputRichMessage{html: html}, _}
+      assert_receive {:send_rich_message, 123, rich_message, _}
+      html = markup(rich_message)
       assert html =~ "<p><b>Name</b></p>"
       assert html =~ "<p>shown</p>"
     end
@@ -584,8 +589,8 @@ defmodule Lolek.SendFileTest do
 
       assert_receive {:send_rich_message, 123, _, _}
       assert_receive {:edit_message_text, 123, 77, [rich_message: rich_message]}
-      assert [%ExGram.Model.InputRichMessageMedia{media: %{media: "new-id"}}] = rich_message.media
-      assert rich_message.html =~ ~r{<footer>alice requested, processed in \d+\.\ds</footer>}
+      assert [%ExGram.Model.InputMediaVideo{media: "new-id"}] = input_media(rich_message)
+      assert markup(rich_message) =~ ~r{<footer>alice requested, processed in \d+\.\ds</footer>}
     end
 
     test "does not edit the message when the requester line is off" do
@@ -613,6 +618,23 @@ defmodule Lolek.SendFileTest do
       assert_receive {:edit_message_text, 123, 77, _}
     end
   end
+
+  defp markup(rich_message), do: Lolek.Test.RichMarkup.render(rich_message)
+
+  @doc false
+  # The uploaded and cached media of a rich message, in block order.
+  def input_media(%ExGram.Model.InputRichMessage{blocks: blocks}),
+    do: Enum.flat_map(blocks, &block_media/1)
+
+  defp block_media(%{photo: %{} = media}), do: [media]
+  defp block_media(%{video: %{} = media}), do: [media]
+  defp block_media(%{animation: %{} = media}), do: [media]
+  defp block_media(%{document: %{} = media}), do: [media]
+
+  defp block_media(%{blocks: blocks}) when is_list(blocks),
+    do: Enum.flat_map(blocks, &block_media/1)
+
+  defp block_media(_block), do: []
 
   defp respond_with(fun), do: Application.put_env(:lolek, :telegram_test_responder, fun)
 

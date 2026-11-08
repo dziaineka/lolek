@@ -96,10 +96,11 @@ in
 
     postSourceCaption = mkOption {
       type = types.bool;
-      default = false;
+      default = true;
       description = ''
-        Whether to include cached source post text in Telegram media captions.
-        Lolek still fetches and caches source text when this is disabled.
+        Whether to show the source post details in the Telegram rich message:
+        author, text with links, quoted post, parent post, date, and counters.
+        When disabled, the message shows only the media.
       '';
     };
 
@@ -107,7 +108,7 @@ in
       type = types.bool;
       default = false;
       description = ''
-        Whether to include the requester's name in Telegram media captions.
+        Whether to show the "requested, processed in" line in the message footer.
       '';
     };
 
@@ -128,9 +129,12 @@ in
     };
 
     maxGalleryMedia = mkOption {
-      type = types.ints.positive;
+      type = types.ints.between 1 50;
       default = 50;
-      description = "Maximum number of media files downloaded and posted for one gallery.";
+      description = ''
+        Maximum number of media files downloaded and posted for one gallery.
+        A Telegram rich message holds up to 50 media files.
+      '';
     };
 
     metrics = {

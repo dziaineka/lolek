@@ -8,7 +8,6 @@ PORT = int(os.environ["LOLEK_MEDIA_ORIGIN_PORT"])
 
 class MediaKind(Enum):
     PASSTHROUGH = "passthrough"
-    LEGACY = "legacy"
     COMPRESSED = "compressed"
 
 
@@ -16,11 +15,6 @@ MEDIA = {
     MediaKind.PASSTHROUGH: {
         "path": os.environ["LOLEK_MEDIA_ORIGIN_PASSTHROUGH_PATH"],
         "file": os.environ["LOLEK_MEDIA_ORIGIN_PASSTHROUGH_FILE"],
-    },
-    MediaKind.LEGACY: {
-        "path": os.environ["LOLEK_MEDIA_ORIGIN_LEGACY_PATH"],
-        "file": os.environ["LOLEK_MEDIA_ORIGIN_LEGACY_FILE"],
-        "downloadable": False,
     },
     MediaKind.COMPRESSED: {
         "path": os.environ["LOLEK_MEDIA_ORIGIN_COMPRESSED_PATH"],

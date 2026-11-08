@@ -3,17 +3,12 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/release-26.05";
-    telegym = {
-      url = "github:booxter/telegym/lolek-missing-features";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
   };
 
   outputs =
     {
       self,
       nixpkgs,
-      telegym,
     }:
     let
       systems = [
@@ -72,7 +67,10 @@
         import ./nix/package.nix {
           pkgs = pkgsFor system;
           root = ./.;
-          telegym = telegym.packages.${system}.telegym;
+          telegym = import ./nix/telegym/package.nix {
+            pkgs = pkgsFor system;
+            inherit systems;
+          };
           inherit systems;
         }
       );
@@ -85,8 +83,10 @@
           module = self.nixosModules.default;
           package = self.packages.${system}.lolek;
           corpus = self.packages.${system}.corpus;
-          telegym = telegym.packages.${system}.telegym;
-          telegymModule = telegym.nixosModules.default;
+          telegym = self.packages.${system}.telegym;
+          telegymModule = import ./nix/telegym/module.nix {
+            package = self.packages.${system}.telegym;
+          };
           testCases = self.packages.${system}.get-test-cases;
         }
       );

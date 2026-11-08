@@ -184,7 +184,7 @@ pkgs.testers.nixosTest {
         machine.succeed(
             "curl -fsS -H 'Content-Type: application/json' --data %s "
             "%s/debug/inject/update | "
-            "jq -e '.ok and .delivery_method == \"polling\"' >/dev/null"
+            "jq -e '.ok and .queued' >/dev/null"
             % (shell_quote(payload), telegym_base_url)
         )
 
@@ -212,19 +212,26 @@ pkgs.testers.nixosTest {
             % metrics_url
         )
 
-    def message_kind(message):
-        if message.get("video"):
-            return "video"
-        if message.get("photo"):
-            return "photo"
-        raise AssertionError("unexpected corpus message: %r" % message)
+    # Lolek sends one rich message for each post. Its media are photo and video
+    # blocks, at the top level or in a collage or slideshow.
+    def message_media(message):
+        rich_message = message.get("rich_message")
+        if rich_message is None:
+            raise AssertionError("unexpected corpus message: %r" % message)
+        media = []
 
-    def message_file_id(message):
-        if message.get("video"):
-            return message["video"]["file_id"]
-        if message.get("photo"):
-            return message["photo"][-1]["file_id"]
-        raise AssertionError("message has no media file ID: %r" % message)
+        def collect(blocks):
+            for block in blocks:
+                if block.get("type") == "video":
+                    media.append(("video", block["video"]["file_id"]))
+                elif block.get("type") == "photo":
+                    media.append(("photo", block["photo"][-1]["file_id"]))
+                collect(block.get("blocks") or [])
+
+        collect(rich_message.get("blocks") or [])
+        if not media:
+            raise AssertionError("message has no media: %r" % message)
+        return media
 
     def file_sha256(path):
         return machine.succeed("sha256sum %s" % shell_quote(path)).split()[0]
@@ -270,7 +277,7 @@ pkgs.testers.nixosTest {
         % (telegym_base_url, shell_quote(fake_token))
     )
 
-    first_case_messages = []
+    first_case_media = []
     first_case = accepted_cases[0]
 
     for index, case in enumerate(accepted_cases, start=1):
@@ -279,22 +286,23 @@ pkgs.testers.nixosTest {
             fixtures = case_scenario["fixtures"]
             chat_id = 20000 + index
             inject(case, chat_id)
-            messages = wait_for_messages(chat_id, len(fixtures))
+            messages = wait_for_messages(chat_id, 1)
             wait_for_idle()
+            media = message_media(messages[0])
 
             expected_kinds = sorted(
                 fixture_kind(fixture) for fixture in fixtures
             )
-            assert sorted(message_kind(message) for message in messages) == expected_kinds
+            assert sorted(kind for kind, _file_id in media) == expected_kinds
 
             expected_hashes = sorted(file_sha256(fixture_paths[name]) for name in fixtures)
             uploaded_hashes = sorted(
-                uploaded_sha256(message_file_id(message)) for message in messages
+                uploaded_sha256(file_id) for _kind, file_id in media
             )
             assert uploaded_hashes == expected_hashes
 
             if case == first_case:
-                first_case_messages = messages
+                first_case_media = media
 
     with subtest("reject excluded corpus URLs"):
         for index, case in enumerate(rejected_cases, start=1):
@@ -351,14 +359,9 @@ pkgs.testers.nixosTest {
         events_before_cache_hit = len(events)
         cache_chat_id = 50000
         inject(first_case, cache_chat_id)
-        cached_messages = wait_for_messages(
-            cache_chat_id,
-            len(scenario(first_case)["fixtures"]),
-        )
+        cached_messages = wait_for_messages(cache_chat_id, 1)
         wait_for_idle()
-        assert sorted(message_file_id(message) for message in cached_messages) == sorted(
-            message_file_id(message) for message in first_case_messages
-        )
+        assert sorted(message_media(cached_messages[0])) == sorted(first_case_media)
         events_after_cache_hit = json.loads(
             machine.succeed("curl -fsS %s/debug/events" % origin_base_url)
         )["events"]

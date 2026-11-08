@@ -17,8 +17,10 @@ push:
 check:
 	mix check
 
+# -L prints the build logs; --show-trace prints the full trace of evaluation errors.
+# Only the checks of the current system run (the NixOS VM checks need Linux).
 nix-check:
-	nix flake check
+	nix flake check -L --show-trace
 
 format:
 	mix format

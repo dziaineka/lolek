@@ -1,5 +1,49 @@
 # Testing
 
+## Manual test with Telegym
+
+[Telegym](https://github.com/kolomiichenko/telegym) is a mock of the Telegram
+Bot API. The integration tests use Telegym v0.7.0, which keeps the rich
+messages and their media. You can also use it to examine a post manually,
+without a real Telegram bot.
+
+1. Start the mock (it listens on port 5678):
+
+   ```console
+   nix shell .#telegym -c telegym-mock -listen 127.0.0.1:5678 -metrics-listen ""
+   ```
+
+2. Start Lolek with the default mock token:
+
+   ```console
+   LOLEK_BOT_TOKEN=1234567890:telegym_default_mock_token_xxxxxxxx \
+   LOLEK_TELEGRAM_BASE_URL=http://127.0.0.1:5678 \
+   LOLEK_DOWNLOAD_DIR_PATH=/tmp/lolek-telegym \
+   LOLEK_GALLERY_DOWNLOAD_ENABLED=true \
+   mix run --no-halt
+   ```
+
+3. Send a URL as a user message:
+
+   ```console
+   curl -fsS -H 'Content-Type: application/json' \
+     --data '{"token":"1234567890:telegym_default_mock_token_xxxxxxxx","chat_id":1234,"text":"https://x.com/NASA/status/2119089554837979631"}' \
+     http://127.0.0.1:5678/debug/inject/update
+   ```
+
+4. Examine the result:
+   - `GET /debug/messages/<token>?chat_id=1234` gives the sent rich message
+     blocks. The newest message is first.
+   - `GET /debug/requests/<token>?method=sendRichMessage` gives the request
+     that Lolek sent.
+   - `GET /debug/files/<file_id>` gives an uploaded file.
+   - `http://127.0.0.1:5678/debug/chat` is a chat in the browser.
+
+Telegym reads only the `blocks` form of rich messages. Lolek sends this form.
+Telegym does not apply `editMessageText` with `rich_message`. Thus, when
+`LOLEK_POST_REQUESTER_CAPTION=true`, the edit with the processing time shows
+as a message without content. Real Telegram applies the edit.
+
 ## Upstream extractor test cases
 
 List media-producing gallery-dl and yt-dlp test cases using Nix:

@@ -44,8 +44,50 @@ defmodule Lolek.ThreadsDownloader do
          {:ok, html_response} <- get(normalized_url, html_headers()) do
       case fetch_media_items_from_page(html_response, normalized_url) do
         {:ok, [_ | _] = media_items} -> download_media_files(media_items, output_dir)
-        {:error, reason} -> {:error, reason}
+        {:error, reason} -> no_media_result(html_response, normalized_url, reason)
       end
+    end
+  end
+
+  # A text-only post has no media. An empty list lets the downloader read the post text.
+  @spec no_media_result(http_response(), String.t(), String.t()) ::
+          {:ok, []} | {:error, String.t()}
+  defp no_media_result(html_response, url, reason) do
+    case text_post_from_page(html_response, url) do
+      {:ok, _text} -> {:ok, []}
+      {:error, _} -> {:error, reason}
+    end
+  end
+
+  @doc """
+  Reads the text of a Threads post without media.
+
+  Returns an error when the post has media, so that the media downloaders can try it.
+  """
+  @spec fetch_text_post(String.t()) :: {:ok, String.t()} | {:error, term()}
+  def fetch_text_post(url) do
+    with {:ok, normalized_url} <- normalize_url(url),
+         {:ok, html_response} <- get(normalized_url, html_headers()) do
+      text_post_from_page(html_response, normalized_url)
+    end
+  end
+
+  @spec text_post_from_page(http_response(), String.t()) :: {:ok, String.t()} | {:error, term()}
+  def text_post_from_page(html_response, url) do
+    with {:ok, shortcode} <- extract_shortcode(url),
+         %{} = node <-
+           html_response.body
+           |> extract_embedded_json()
+           |> Lolek.Post.Threads.find_post(shortcode),
+         [] <- do_collect_media(node),
+         %Lolek.Post{text: text} when is_binary(text) <- Lolek.Post.Threads.parse(node, url),
+         text when text != "" <- String.trim(text) do
+      {:ok, text}
+    else
+      nil -> {:error, "Threads post data was not found"}
+      [_ | _] -> {:error, :post_has_media}
+      {:error, reason} -> {:error, reason}
+      _ -> {:error, :no_text_post}
     end
   end
 

@@ -115,13 +115,28 @@ defmodule Lolek.Downloader do
   @spec try_text_post(String.t(), String.t()) ::
           {:ok, Lolek.File.file_state()} | {:error, term()}
   defp try_text_post(url, output_path) do
-    with :yt_dlp <- downloader_module(url),
-         info_json_path = Path.join([output_path, @gallery_subdir, "info.json"]),
-         {:ok, text} <- Lolek.GalleryDownloader.fetch_text_post(url, info_json_path) do
-      Logger.info("Found a text-only post for url: #{Lolek.Url.normalize_for_log(url)}")
-      {:ok, {:text_post, output_path, text}}
-    else
-      _ -> {:error, :no_gallery_files}
+    case fetch_text_post(url, output_path) do
+      {:ok, text} ->
+        Logger.info("Found a text-only post for url: #{Lolek.Url.normalize_for_log(url)}")
+        {:ok, {:text_post, output_path, text}}
+
+      {:error, _reason} ->
+        {:error, :no_gallery_files}
+    end
+  end
+
+  @spec fetch_text_post(String.t(), String.t()) :: {:ok, String.t()} | {:error, term()}
+  defp fetch_text_post(url, output_path) do
+    case downloader_module(url) do
+      Lolek.ThreadsDownloader ->
+        Lolek.ThreadsDownloader.fetch_text_post(url)
+
+      Lolek.YoutubePostDownloader ->
+        {:error, :not_supported}
+
+      :yt_dlp ->
+        info_json_path = Path.join([output_path, @gallery_subdir, "info.json"])
+        Lolek.GalleryDownloader.fetch_text_post(url, info_json_path)
     end
   end
 

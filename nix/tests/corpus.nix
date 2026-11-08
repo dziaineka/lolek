@@ -277,8 +277,7 @@ pkgs.testers.nixosTest {
         % (telegym_base_url, shell_quote(fake_token))
     )
 
-    first_case_media = []
-    first_case = accepted_cases[0]
+    cache_cases = {}
 
     for index, case in enumerate(accepted_cases, start=1):
         with subtest(case["id"]):
@@ -299,8 +298,10 @@ pkgs.testers.nixosTest {
             ]
             assert uploaded_media == expected_media
 
-            if case == first_case:
-                first_case_media = media
+            for block in messages[0]["rich_message"]["blocks"]:
+                layout = block["type"]
+                if layout in {"video", "collage", "slideshow"}:
+                    cache_cases.setdefault(layout, (case, media))
 
     with subtest("reject excluded corpus URLs"):
         for index, case in enumerate(rejected_cases, start=1):
@@ -354,12 +355,21 @@ pkgs.testers.nixosTest {
             assert events_by_case[case["id"]] == []
 
     with subtest("reuse Telegram file IDs without another download"):
+        assert cache_cases.keys() == {"video", "collage", "slideshow"}
         events_before_cache_hit = len(events)
-        cache_chat_id = 50000
-        inject(first_case, cache_chat_id)
-        cached_messages = wait_for_messages(cache_chat_id, 1)
-        wait_for_idle()
-        assert sorted(message_media(cached_messages[0])) == sorted(first_case_media)
+
+        for index, (layout, (case, original_media)) in enumerate(cache_cases.items()):
+            with subtest("reuse cached %s" % layout):
+                cache_chat_id = 50000 + index
+                inject(case, cache_chat_id)
+                cached_messages = wait_for_messages(cache_chat_id, 1)
+                wait_for_idle()
+                assert message_media(cached_messages[0]) == original_media
+                assert any(
+                    block["type"] == layout
+                    for block in cached_messages[0]["rich_message"]["blocks"]
+                )
+
         events_after_cache_hit = json.loads(
             machine.succeed("curl -fsS %s/debug/events" % origin_base_url)
         )["events"]

@@ -290,16 +290,14 @@ pkgs.testers.nixosTest {
             wait_for_idle()
             media = message_media(messages[0])
 
-            expected_kinds = sorted(
-                fixture_kind(fixture) for fixture in fixtures
-            )
-            assert sorted(kind for kind, _file_id in media) == expected_kinds
-
-            expected_hashes = sorted(file_sha256(fixture_paths[name]) for name in fixtures)
-            uploaded_hashes = sorted(
-                uploaded_sha256(file_id) for _kind, file_id in media
-            )
-            assert uploaded_hashes == expected_hashes
+            expected_media = [
+                (fixture_kind(name), file_sha256(fixture_paths[name]))
+                for name in fixtures
+            ]
+            uploaded_media = [
+                (kind, uploaded_sha256(file_id)) for kind, file_id in media
+            ]
+            assert uploaded_media == expected_media
 
             if case == first_case:
                 first_case_media = media

@@ -7,6 +7,18 @@ Bot API. The integration tests use Telegym v0.7.0, which keeps the rich
 messages and their media. You can also use it to examine a post manually,
 without a real Telegram bot.
 
+The Makefile has a target for each step. Use three terminals:
+
+```console
+make telegym-mock                     # 1. start the mock
+make telegym-bot                      # 2. start Lolek connected to the mock
+make telegym-send URL=<post-url>      # 3. send a URL as a user message
+make telegym-messages                 # 4. show the sent rich messages
+make telegym-clear                    # remove the messages and the files
+```
+
+The steps below show the same commands without make.
+
 1. Start the mock (it listens on port 5678):
 
    ```console
@@ -146,8 +158,23 @@ cache. A host lock prevents concurrent live sweeps.
 
 Use `--report path.json` for a structured result report. Process logs and
 temporary downloads are removed on exit unless `--keep-work-dir` is passed.
-The `Live corpus` CI job runs both profiles sequentially and uploads their
-JSON reports.
+CI does not run the live corpus tests, because they use live media services.
+Run them manually. To run all live corpus checks (both profiles) and see one
+summary, use:
+
+```console
+make live-corpus-test
+```
+
+It writes the JSON reports to `live-corpus-reports/` and stops with status 1
+when a case regressed, or 2 when a result is inconclusive. The Makefile targets `live-corpus`, `live-corpus-check`,
+`live-corpus-gallery`, and `live-corpus-gallery-check` run the apps above.
+Give the runner options with `ARGS`:
+
+```console
+make live-corpus ARGS="--case coub-f7f8bd840092a5ad"
+make live-corpus-gallery-check ARGS="--report gallery-report.json"
+```
 
 The runner is also an independent Python project under `corpus/`. Its
 [README](corpus/README.md) documents locked `uv` development and conventional

@@ -51,3 +51,6 @@ config/cookies.txt
 # claude config
 .claude/settings.local.json
 .playwright-mcp/
+
+# Live corpus reports (make live-corpus-test)
+/live-corpus-reports/

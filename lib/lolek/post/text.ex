@@ -13,6 +13,8 @@ defmodule Lolek.Post.Text do
   def clean(text, platform, opts) when is_binary(text) do
     text
     |> HtmlEntities.decode()
+    # Some sites put this object replacement character where they show media.
+    |> String.replace("\u{FFFC}", "")
     |> String.replace(["\r\n", "\r"], "\n")
     |> remove_platform_noise(platform, opts)
     |> String.split("\n")

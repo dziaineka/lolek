@@ -122,8 +122,21 @@ defmodule Lolek.SourceMetadata do
     end
   end
 
+  # The page data gives the whole post. When it is missing, the caption is used.
   @spec fetch_threads_post(String.t()) :: {:ok, Lolek.Post.t()} | {:error, term()}
   defp fetch_threads_post(url) do
+    case Lolek.ThreadsDownloader.post(url) do
+      {:ok, post} ->
+        {:ok, post}
+
+      {:error, reason} ->
+        Logger.info("Threads post data failed, using the caption; reason: #{inspect(reason)}")
+        fetch_threads_caption(url)
+    end
+  end
+
+  @spec fetch_threads_caption(String.t()) :: {:ok, Lolek.Post.t()} | {:error, term()}
+  defp fetch_threads_caption(url) do
     with {:ok, caption} <- Lolek.ThreadsDownloader.caption(url) do
       handle =
         case Regex.run(@threads_handle, URI.parse(url).path || "") do

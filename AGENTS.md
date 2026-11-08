@@ -145,10 +145,10 @@ File processing uses tagged tuples for state transitions:
 Lolek sends each post as one Telegram rich message (`sendRichMessage`, Bot API 10.1+). The message looks like the source post.
 
 - `Lolek.Post` is the source post: author, text with link facets, date, counters, quoted post, parent post, link card. `Lolek.SourceMetadata` caches it in `post.json` in the URL cache folder.
-- Metadata sources, highest priority first: the public Bluesky API (`Lolek.Post.Bluesky`), gallery-dl JSON (`Lolek.Post.GalleryDl`), page parsers (Threads, YouTube posts), yt-dlp JSON (`Lolek.Post.YtDlp`). `Lolek.Post.merge/2` combines them.
+- Metadata sources, highest priority first: the public Bluesky API (`Lolek.Post.Bluesky`), gallery-dl JSON (`Lolek.Post.GalleryDl`), page data (Threads posts in `Lolek.Post.Threads`, YouTube posts), yt-dlp JSON (`Lolek.Post.YtDlp`). `Lolek.Post.merge/2` combines them.
 - `Lolek.Post.Enricher` fetches the quoted tweet and the parent tweet with gallery-dl.
-- `Lolek.RichPost` builds the rich message HTML. The layout changes per platform (collage for X, Bluesky, Threads, and Facebook; slideshow for Instagram and TikTok). Media files are referenced as `tg://photo?id=mN` and uploaded in the `media` list.
-- After the send, Lolek reads the file_ids from the `rich_message` blocks of the response for the cache.
+- `Lolek.RichPost` builds the rich message from `InputRichBlock*` structs (not HTML or Markdown). The layout changes per platform (collage for X, Bluesky, Threads, and Facebook; slideshow for Instagram and TikTok). Uploads are `{:file_content, ...}` or `file://` sources in the media blocks; ExGram sends them as multipart parts.
+- After the send, Lolek reads the file_ids of its uploads from the `rich_message` blocks of the response (at the block positions that `Lolek.RichPost.build/3` returns) for the cache.
 
 ### Supervised Processes
 

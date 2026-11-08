@@ -37,9 +37,6 @@ let
   passthroughMediaDuration = 1;
   passthroughSourceCaption = "Cached source caption";
   passthroughSourceTitle = "Passthrough Cached Title";
-  legacyMediaPath = "/legacy-cached.mp4";
-  legacyMediaUrl = "${mediaOriginBaseUrl}${legacyMediaPath}";
-  legacyVideoFileId = "fake-legacy-video-file-id";
   compressedMediaPath = "/compressed.mp4";
   compressedMediaUrl = "${mediaOriginBaseUrl}${compressedMediaPath}";
   compressedMediaWidth = 640;
@@ -152,8 +149,6 @@ pkgs.testers.nixosTest {
           LOLEK_MEDIA_ORIGIN_PORT = toString mediaOriginPort;
           LOLEK_MEDIA_ORIGIN_PASSTHROUGH_PATH = passthroughMediaPath;
           LOLEK_MEDIA_ORIGIN_PASSTHROUGH_FILE = toString passthroughMediaFile;
-          LOLEK_MEDIA_ORIGIN_LEGACY_PATH = legacyMediaPath;
-          LOLEK_MEDIA_ORIGIN_LEGACY_FILE = toString passthroughMediaFile;
           LOLEK_MEDIA_ORIGIN_COMPRESSED_PATH = compressedMediaPath;
           LOLEK_MEDIA_ORIGIN_COMPRESSED_FILE = toString compressedMediaFile;
         };
@@ -197,19 +192,13 @@ pkgs.testers.nixosTest {
     passthrough_media_url = "${passthroughMediaUrl}"
     passthrough_source_caption = "${passthroughSourceCaption}"
     passthrough_source_title = "${passthroughSourceTitle}"
-    legacy_media_url = "${legacyMediaUrl}"
-    legacy_video_file_id = "${legacyVideoFileId}"
     metrics_url = "http://127.0.0.1:${toString metricsPort}/metrics"
     metrics_file = "/tmp/lolek-metrics.prom"
     compressed_media_file = "${compressedMediaFile}"
     compressed_media_url = "${compressedMediaUrl}"
     passthrough_folder_name = base64.b64encode(passthrough_media_url.encode()).decode().rstrip("=")
     passthrough_cache_dir = "%s/%s" % (download_dir, passthrough_folder_name)
-    passthrough_metadata_file = "%s/source_metadata.json" % passthrough_cache_dir
-    legacy_folder_name = base64.b64encode(legacy_media_url.encode()).decode().rstrip("=")
-    legacy_cache_dir = "%s/%s" % (download_dir, legacy_folder_name)
-    legacy_ready_dir = "%s/%s" % (legacy_cache_dir, ready_dir_name)
-    legacy_cache_file = "%s/%s.mp4" % (legacy_ready_dir, legacy_video_file_id)
+    passthrough_metadata_file = "%s/post.json" % passthrough_cache_dir
     compressed_folder_name = base64.b64encode(compressed_media_url.encode()).decode().rstrip("=")
     compressed_cache_dir = "%s/%s" % (download_dir, compressed_folder_name)
     cleanup_test_dir = "${stateDir}/cleanup-test"
@@ -228,21 +217,29 @@ pkgs.testers.nixosTest {
         machine.succeed(
             "curl -fsS -H 'Content-Type: application/json' --data %s "
             "%s/debug/inject/update | "
-            "jq -e '.ok and .delivery_method == \"polling\"' >/dev/null"
+            "jq -e '.ok and .queued' >/dev/null"
             % (shell_quote(payload), telegym_base_url)
+        )
+
+    # Lolek sends rich messages; a video is a "video" block of the message.
+    def message_video(message):
+        blocks = (message.get("rich_message") or {}).get("blocks") or []
+        return next(
+            (block["video"] for block in blocks if block.get("type") == "video"),
+            None,
         )
 
     def video_messages():
         response = json.loads(
             machine.succeed("curl -fsS %s" % shell_quote(messages_url))
         )
-        return [message for message in response["messages"] if message.get("video")]
+        return [message for message in response["messages"] if message_video(message)]
 
     def wait_for_video_count(expected):
         machine.wait_until_succeeds(
             "curl -fsS %s | "
-            "jq -e '[.messages[] | select(.video != null)] | length == %d' "
-            ">/dev/null" % (shell_quote(messages_url), expected)
+            "jq -e '[.messages[] | select(any(.rich_message.blocks[]?; .type == \"video\"))] "
+            "| length == %d' >/dev/null" % (shell_quote(messages_url), expected)
         )
         messages = video_messages()
         assert len(messages) == expected, messages
@@ -274,10 +271,10 @@ pkgs.testers.nixosTest {
         % telegym_base_url
     )
 
-    # A cached source title should be used as the multipart filename for fresh uploads.
+    # A cached post title should be used as the multipart filename for fresh uploads.
     passthrough_metadata = json.dumps(
         {
-            "caption": passthrough_source_caption,
+            "text": passthrough_source_caption,
             "title": passthrough_source_title,
         },
         separators=(",", ":"),
@@ -295,21 +292,6 @@ pkgs.testers.nixosTest {
         % (service_user, service_group, shell_quote(passthrough_metadata_file))
     )
 
-    # Simulate a valid single-file cache left by a pre-manifest Lolek release.
-    machine.succeed(
-        "install -d -o %s -g %s -m 0750 %s"
-        % (service_user, service_group, shell_quote(legacy_ready_dir))
-    )
-    machine.succeed(
-        "install -o %s -g %s -m 0640 %s %s"
-        % (
-            service_user,
-            service_group,
-            shell_quote(passthrough_media_file),
-            shell_quote(legacy_cache_file),
-        )
-    )
-
     machine.succeed("systemctl start ${serviceUnit}")
     machine.wait_for_unit("${serviceUnit}")
     machine.wait_until_succeeds(
@@ -323,10 +305,12 @@ pkgs.testers.nixosTest {
         inject(passthrough_media_url)
         messages = wait_for_video_count(1)
         passthrough_message = messages[0]
-        passthrough_video = passthrough_message["video"]
+        passthrough_video = message_video(passthrough_message)
         passthrough_video_file_id = passthrough_video["file_id"]
         assert passthrough_video["file_name"] == "%s.mp4" % passthrough_source_title
-        assert passthrough_source_caption in passthrough_message["caption"]
+        assert passthrough_source_caption in json.dumps(
+            passthrough_message["rich_message"], ensure_ascii=False
+        )
         machine.succeed(
             "curl -fsS %s/debug/files/%s -o %s"
             % (
@@ -346,33 +330,17 @@ pkgs.testers.nixosTest {
     with subtest("reuse a cached Telegram file ID"):
         inject(passthrough_media_url)
         messages = wait_for_video_count(2)
-        assert messages[0]["video"]["file_id"] == passthrough_video_file_id, messages[0]
+        assert message_video(messages[0])["file_id"] == passthrough_video_file_id, messages[0]
         machine.succeed(
             "curl -fsS %s/debug/files | jq -e '.count == 1' >/dev/null"
             % telegym_base_url
         )
         wait_for_idle()
 
-    with subtest("reuse a pre-manifest cache entry"):
-        inject(legacy_media_url)
-        messages = wait_for_video_count(3)
-        assert messages[0]["video"]["file_id"] == legacy_video_file_id, messages[0]
-        wait_for_idle()
-        machine.succeed(
-            "journalctl -u ${serviceUnit} --no-pager | "
-            "grep -F %s | grep -F 'result=ok:ready_media:count=1'"
-            % shell_quote("Finished download for url: %s;" % legacy_media_url)
-        )
-        machine.succeed("test -f %s" % shell_quote(legacy_cache_file))
-        machine.succeed(
-            "test ! -e %s"
-            % shell_quote("%s/%s" % (legacy_ready_dir, media_manifest_name))
-        )
-
     with subtest("compress media above the Telegram size limit"):
         inject(compressed_media_url)
-        messages = wait_for_video_count(4)
-        compressed_video_file_id = messages[0]["video"]["file_id"]
+        messages = wait_for_video_count(3)
+        compressed_video_file_id = message_video(messages[0])["file_id"]
         machine.succeed(
             "curl -fsS %s/debug/files/%s -o %s"
             % (
@@ -407,7 +375,7 @@ pkgs.testers.nixosTest {
         machine.succeed(
             "grep -aq %s %s"
             % (
-                shell_quote('"caption":"%s"' % passthrough_source_caption),
+                shell_quote('"text":"%s"' % passthrough_source_caption),
                 shell_quote(passthrough_metadata_file),
             )
         )
@@ -458,7 +426,7 @@ pkgs.testers.nixosTest {
             machine.succeed("mkdir -p %s" % shell_quote(entry))
             machine.succeed(
                 "printf meta > %s"
-                % shell_quote("%s/source_metadata.json" % entry)
+                % shell_quote("%s/post.json" % entry)
             )
             machine.succeed("truncate -s 8 %s" % shell_quote("%s/downloaded.mp4" % entry))
         machine.succeed(
@@ -472,7 +440,7 @@ pkgs.testers.nixosTest {
             % cleanup_test_dir
         )
         for entry in cleanup_entries:
-            machine.succeed("test -f %s" % shell_quote("%s/source_metadata.json" % entry))
+            machine.succeed("test -f %s" % shell_quote("%s/post.json" % entry))
             machine.succeed("test ! -e %s" % shell_quote("%s/downloaded.mp4" % entry))
 
     with subtest("evict whole entries when metadata exceeds the limit"):
@@ -487,25 +455,25 @@ pkgs.testers.nixosTest {
     with subtest("expose metrics for the exercised service paths"):
         machine.succeed("curl -fsS %s > %s" % (metrics_url, metrics_file))
         machine.succeed(
-            "grep -F 'lolek_messages_total{result=\"ok\"} 4' %s" % metrics_file
+            "grep -F 'lolek_messages_total{result=\"ok\"} 3' %s" % metrics_file
         )
         machine.succeed(
-            "grep -F 'lolek_chat_rate_limiter_total{result=\"admitted\"} 4' %s"
+            "grep -F 'lolek_chat_rate_limiter_total{result=\"admitted\"} 3' %s"
             % metrics_file
         )
         machine.succeed(
             "grep -F 'lolek_cache_lookup_total{state=\"new_file\"} 2' %s" % metrics_file
         )
         machine.succeed(
-            "grep -F 'lolek_cache_lookup_total{state=\"ready_to_telegram\"} 2' %s"
+            "grep -F 'lolek_cache_lookup_total{state=\"ready_to_telegram\"} 1' %s"
             % metrics_file
         )
         machine.succeed(
-            "grep -F 'lolek_processing_stage_total{result=\"ok\",stage=\"telegram_send\"} 4' %s"
+            "grep -F 'lolek_processing_stage_total{result=\"ok\",stage=\"telegram_send\"} 3' %s"
             % metrics_file
         )
         machine.succeed(
-            "grep -F 'lolek_processing_stage_duration_seconds_count{result=\"ok\",stage=\"telegram_send\"} 4' %s"
+            "grep -F 'lolek_processing_stage_duration_seconds_count{result=\"ok\",stage=\"telegram_send\"} 3' %s"
             % metrics_file
         )
         machine.succeed("grep -F 'lolek_processing_active 0' %s" % metrics_file)

@@ -248,7 +248,7 @@ pkgs.testers.nixosTest {
         machine.succeed(
             "curl -fsS -H 'Content-Type: application/json' --data %s "
             "%s/debug/inject/update | "
-            "jq -e '.ok and .delivery_method == \"polling\"' >/dev/null"
+            "jq -e '.ok and .queued' >/dev/null"
             % (shell_quote(inject_payload), telegym_base_url)
         )
 
@@ -258,14 +258,20 @@ pkgs.testers.nixosTest {
         )
         machine.wait_until_succeeds(
             "curl -fsS %s | "
-            "jq -e '[.messages[] | select(.video != null)] | length == 1' >/dev/null"
+            "jq -e '[.messages[] | select(any(.rich_message.blocks[]?; .type == \"video\"))] | length == 1' >/dev/null"
             % shell_quote(messages_url)
         )
 
         messages = json.loads(machine.succeed("curl -fsS %s" % shell_quote(messages_url)))
-        video_messages = [message for message in messages["messages"] if message.get("video")]
-        assert len(video_messages) == 1, video_messages
-        video = video_messages[0]["video"]
+        # Lolek sends rich messages; the video is a "video" block of the message.
+        videos = [
+            block["video"]
+            for message in messages["messages"]
+            for block in (message.get("rich_message") or {}).get("blocks") or []
+            if block.get("type") == "video"
+        ]
+        assert len(videos) == 1, messages
+        video = videos[0]
         video_file_id = video["file_id"]
         assert video.get("file_name", "").endswith(".mp4"), video
 

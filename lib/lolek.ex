@@ -74,6 +74,7 @@ defmodule Lolek do
   @spec send_rich_post(integer(), [media_item()], keyword(), boolean()) ::
           {:ok, [{String.t(), String.t()}]} | {:error, term()}
   defp send_rich_post(chat_id, items, context, details?) do
+    items = visual_media_first(items)
     post = Keyword.get(context, :post)
     build_opts = [details: details?, requester: requester_caption(context)]
     options = send_options(items, context)
@@ -91,7 +92,7 @@ defmodule Lolek do
 
     case result do
       {:ok, {%ExGram.Model.Message{} = message, used_opts}} ->
-        entries = extract_file_entries(items, message)
+        entries = extract_file_entries(items, message, post, used_opts)
         refresh_after_send(chat_id, message, post, items, entries, used_opts, context)
         {:ok, entries}
 
@@ -111,7 +112,7 @@ defmodule Lolek do
           keyword()
         ) :: {:ok, term()} | {:error, term()}
   defp send_rich_message(chat_id, post, media, build_opts, options) do
-    rich_message = Lolek.RichPost.build(post, media, build_opts)
+    {rich_message, _media_indexes} = Lolek.RichPost.build(post, media, build_opts)
     call_telegram(fn -> Lolek.Telegram.send_rich_message(chat_id, rich_message, options) end)
   end
 
@@ -193,15 +194,33 @@ defmodule Lolek do
     Application.fetch_env!(:lolek, :max_gallery_media)
   end
 
-  @spec extract_file_entries([media_item()], ExGram.Model.Message.t()) ::
-          [{String.t(), String.t()}]
-  defp extract_file_entries([], _message), do: []
+  # The rich message shows other files after the visual media, so the items take the
+  # same order. Then the file_ids of the response match the items.
+  @spec visual_media_first([media_item()]) :: [media_item()]
+  defp visual_media_first(items) do
+    {visual, other} =
+      Enum.split_with(items, fn {_source, ext} -> Lolek.RichPost.visual_media?(ext) end)
 
-  defp extract_file_entries(items, %ExGram.Model.Message{rich_message: rich_message}) do
+    visual ++ other
+  end
+
+  @spec extract_file_entries(
+          [media_item()],
+          ExGram.Model.Message.t(),
+          Lolek.Post.t() | nil,
+          keyword()
+        ) :: [{String.t(), String.t()}]
+  defp extract_file_entries([], _message, _post, _build_opts), do: []
+
+  defp extract_file_entries(items, %ExGram.Model.Message{} = message, post, build_opts) do
+    # The block positions do not depend on the media sources.
+    placeholders = Enum.map(items, fn {_source, ext} -> %{source: nil, ext: ext, options: []} end)
+    {_rich_message, media_indexes} = Lolek.RichPost.build(post, placeholders, build_opts)
+
     file_ids =
-      case rich_message do
+      case message.rich_message do
         %ExGram.Model.RichMessage{blocks: blocks} when is_list(blocks) ->
-          Enum.flat_map(blocks, &block_file_ids/1)
+          Lolek.RichPost.file_ids(blocks, media_indexes)
 
         _ ->
           []
@@ -221,32 +240,6 @@ defmodule Lolek do
     end
   end
 
-  # Quotations hold the media of linked posts, not the uploaded media.
-  @spec block_file_ids(term()) :: [String.t()]
-  defp block_file_ids(%ExGram.Model.RichBlockBlockQuotation{}), do: []
-  defp block_file_ids(%ExGram.Model.RichBlockExpandableBlockQuotation{}), do: []
-
-  defp block_file_ids(%ExGram.Model.RichBlockPhoto{photo: [_ | _] = sizes}),
-    do: [List.last(sizes).file_id]
-
-  defp block_file_ids(%ExGram.Model.RichBlockVideo{video: %ExGram.Model.Video{file_id: id}}),
-    do: [id]
-
-  defp block_file_ids(%ExGram.Model.RichBlockAnimation{
-         animation: %ExGram.Model.Animation{file_id: id}
-       }),
-       do: [id]
-
-  defp block_file_ids(%ExGram.Model.RichBlockDocument{
-         document: %ExGram.Model.Document{file_id: id}
-       }),
-       do: [id]
-
-  defp block_file_ids(%{blocks: blocks}) when is_list(blocks),
-    do: Enum.flat_map(blocks, &block_file_ids/1)
-
-  defp block_file_ids(_block), do: []
-
   # The "processed in" time is known only after the upload, so the message is edited
   # with the final time. The edit uses the new file_ids and does not upload again.
   @spec refresh_after_send(
@@ -262,7 +255,7 @@ defmodule Lolek do
     with %ExGram.Model.Message{message_id: message_id} when is_integer(message_id) <- message,
          requester when is_binary(requester) <- requester_caption(context),
          {:ok, media} <- refreshed_media(items, entries) do
-      rich_message =
+      {rich_message, _media_indexes} =
         Lolek.RichPost.build(post, media, Keyword.put(build_opts, :requester, requester))
 
       edit_rich_message(chat_id, message_id, rich_message)

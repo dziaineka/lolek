@@ -148,7 +148,7 @@ pkgs.testers.nixosTest {
         machine.succeed(
             "curl -fsS -H 'Content-Type: application/json' --data %s "
             "%s/debug/inject/update | "
-            "jq -e '.ok and .delivery_method == \"polling\"' >/dev/null"
+            "jq -e '.ok and .queued' >/dev/null"
             % (shell_quote(payload), telegym_base_url)
         )
 
@@ -182,7 +182,7 @@ pkgs.testers.nixosTest {
     def wait_for_video_count(expected):
         machine.wait_until_succeeds(
             "curl -fsS %s | "
-            "jq -e '[.messages[] | select(.video != null)] | length == %d' "
+            "jq -e '[.messages[] | select(any(.rich_message.blocks[]?; .type == \"video\"))] | length == %d' "
             ">/dev/null" % (shell_quote(messages_url), expected)
         )
 

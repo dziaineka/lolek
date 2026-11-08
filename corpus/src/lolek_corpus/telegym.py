@@ -41,32 +41,58 @@ class DownloadedFile:
     sha256: str
 
 
-def message_media(message: JsonObject) -> MediaReference:
-    """Return the Telegram media kind and file ID from a Telegym message."""
-    for field, kind in (
-        ("video", TelegramMediaKind.VIDEO),
-        ("animation", TelegramMediaKind.ANIMATION),
-        ("document", TelegramMediaKind.DOCUMENT),
-    ):
-        if field in message and message[field] is not None:
-            media = require_json_object(message[field], f"Telegym message {field}")
-            return MediaReference(
-                kind,
-                require_non_empty_string(
-                    media.get("file_id"), f"Telegym message {field}.file_id"
-                ),
-            )
-    if "photo" in message and message["photo"] is not None:
-        photos = require_json_object_list(message["photo"], "Telegym message photo")
-        if not photos:
-            raise HarnessError("Telegym message photo must not be empty")
-        return MediaReference(
-            TelegramMediaKind.PHOTO,
-            require_non_empty_string(
-                photos[-1].get("file_id"), "Telegym message photo file_id"
-            ),
+_MEDIA_BLOCKS = (
+    ("photo", TelegramMediaKind.PHOTO),
+    ("video", TelegramMediaKind.VIDEO),
+    ("animation", TelegramMediaKind.ANIMATION),
+    ("document", TelegramMediaKind.DOCUMENT),
+)
+
+
+def _block_media(block: JsonObject) -> list[MediaReference]:
+    """Return the media of one rich message block and its nested blocks."""
+    block_type = block.get("type")
+    for field, kind in _MEDIA_BLOCKS:
+        if block_type != field:
+            continue
+        if kind is TelegramMediaKind.PHOTO:
+            sizes = require_json_object_list(block.get("photo"), "Telegym photo block")
+            if not sizes:
+                raise HarnessError("Telegym photo block must not be empty")
+            media = sizes[-1]
+        else:
+            media = require_json_object(block.get(field), f"Telegym {field} block")
+        file_id = require_non_empty_string(
+            media.get("file_id"), f"Telegym {field} block file_id"
         )
-    raise CaseMismatch(f"unexpected non-media Telegym message: {message!r}")
+        # Telegym returns the URL as the file ID of media sent by URL, like the
+        # images of a quoted post. Those are not uploads of Lolek.
+        if file_id.startswith(("http://", "https://")):
+            return []
+        return [MediaReference(kind, file_id)]
+    nested = block.get("blocks")
+    if nested is None:
+        return []
+    return [
+        media
+        for child in require_json_object_list(nested, "Telegym nested blocks")
+        for media in _block_media(child)
+    ]
+
+
+def message_media(message: JsonObject) -> tuple[MediaReference, ...]:
+    """Return the uploaded media kinds and file IDs of one Telegym rich message."""
+    rich_message = message.get("rich_message")
+    if rich_message is None:
+        raise CaseMismatch(f"unexpected non-rich Telegym message: {message!r}")
+    blocks = require_json_object_list(
+        require_json_object(rich_message, "Telegym rich message").get("blocks"),
+        "Telegym rich message blocks",
+    )
+    media = tuple(item for block in blocks for item in _block_media(block))
+    if not media:
+        raise CaseMismatch(f"unexpected non-media Telegym message: {message!r}")
+    return media
 
 
 @dataclasses.dataclass(frozen=True)
@@ -115,8 +141,9 @@ class Telegym:
                 "text": text,
             },
         )
-        if not response.get("ok") or response.get("delivery_method") != "polling":
-            raise HarnessError(f"Telegym did not inject by polling: {response!r}")
+        # A polling bot gets the update from getUpdates, so Telegym queues it.
+        if response.get("ok") is not True or response.get("queued") is not True:
+            raise HarnessError(f"Telegym did not queue the update: {response!r}")
 
     def media(self, chat_id: int) -> tuple[MediaReference, ...]:
         """Return typed media references from one test chat's messages."""
@@ -126,7 +153,7 @@ class Telegym:
         messages = require_json_object_list(
             response.get("messages", []), "Telegym messages"
         )
-        return tuple(message_media(message) for message in messages)
+        return tuple(item for message in messages for item in message_media(message))
 
     def file_store_stats(self) -> FileStoreStats:
         """Return the retained multipart file count and total size."""

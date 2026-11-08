@@ -1,7 +1,8 @@
 defmodule Lolek.RichPost do
   @moduledoc """
-  Builds a Telegram rich message (`ExGram.Model.InputRichMessage`) that looks like the
-  source post: author header, text with links, media, linked posts, and a footer.
+  Builds a Telegram rich message (`ExGram.Model.InputRichMessage`) from rich blocks. The
+  message looks like the source post: author header, text with links, media, linked
+  posts, and a footer.
   """
 
   @gif_extensions ~w(.gif)
@@ -37,39 +38,110 @@ defmodule Lolek.RichPost do
   """
   @type media :: %{source: term(), ext: String.t(), options: keyword()}
 
+  @typedoc "Rich text: a string, a rich text object, or a list of them."
+  @type rich_text :: String.t() | struct() | [rich_text()]
+
   @type option ::
           {:details, boolean()}
           | {:requester, String.t() | nil}
           | {:remote_media, boolean()}
 
   @doc """
-  Builds the rich message.
+  Builds the rich message. Returns the message and the indexes of the top-level blocks
+  that hold the given media, in the order of the media. Put visual media (photos,
+  videos, animations) before other files: other files are separate document blocks
+  after the visual media.
 
   Options:
     * `:details` - show the author, text, linked posts, date, and stats (default `true`)
     * `:requester` - the "requested by" line, or nil
     * `:remote_media` - show media of linked posts by URL (default `true`)
   """
-  @spec build(Lolek.Post.t() | nil, [media()], [option()]) :: ExGram.Model.InputRichMessage.t()
+  @spec build(Lolek.Post.t() | nil, [media()], [option()]) ::
+          {ExGram.Model.InputRichMessage.t(), [non_neg_integer()]}
   def build(post, media, opts \\ []) do
     post = post || Lolek.Post.empty()
     details? = Keyword.get(opts, :details, true)
     opts = Keyword.put(opts, :details, details?)
-    {media_html, input_media} = media_block(media, container(post.platform))
+    media_blocks = media_blocks(media, container(post.platform))
 
-    body =
+    sections =
       post
       |> sections(details?)
-      |> Enum.map(&section(&1, post, media_html, opts))
-      |> IO.iodata_to_binary()
+      |> Enum.map(fn
+        :media -> Enum.map(media_blocks, &{:media, &1})
+        name -> name |> section(post, opts) |> Enum.map(&{:other, &1})
+      end)
+      |> List.flatten()
+      |> separate(post |> footer(opts) |> Enum.map(&{:other, &1}))
 
-    html = separate(body, post |> footer(opts) |> IO.iodata_to_binary())
+    blocks = Enum.map(sections, &elem(&1, 1))
 
-    %ExGram.Model.InputRichMessage{
-      html: html,
-      media: if(input_media == [], do: nil, else: input_media),
-      skip_entity_detection: true
-    }
+    media_indexes =
+      sections
+      |> Enum.with_index()
+      |> Enum.flat_map(fn
+        {{:media, _block}, index} -> [index]
+        _ -> []
+      end)
+
+    {%ExGram.Model.InputRichMessage{blocks: blocks, skip_entity_detection: true}, media_indexes}
+  end
+
+  @doc """
+  Returns the file_ids of the uploaded media from the blocks of a sent rich message.
+  `media_indexes` comes from `build/3`.
+  """
+  @spec file_ids([struct()], [non_neg_integer()]) :: [String.t()]
+  def file_ids(blocks, media_indexes) do
+    Enum.flat_map(media_indexes, fn index ->
+      case Enum.at(blocks, index) do
+        nil -> []
+        block -> block_file_ids(block)
+      end
+    end)
+  end
+
+  @spec block_file_ids(term()) :: [String.t()]
+  defp block_file_ids(%ExGram.Model.RichBlockPhoto{photo: [_ | _] = sizes}),
+    do: [List.last(sizes).file_id]
+
+  defp block_file_ids(%ExGram.Model.RichBlockVideo{video: %ExGram.Model.Video{file_id: id}}),
+    do: [id]
+
+  defp block_file_ids(%ExGram.Model.RichBlockAnimation{
+         animation: %ExGram.Model.Animation{file_id: id}
+       }),
+       do: [id]
+
+  defp block_file_ids(%ExGram.Model.RichBlockDocument{
+         document: %ExGram.Model.Document{file_id: id}
+       }),
+       do: [id]
+
+  defp block_file_ids(%{blocks: blocks}) when is_list(blocks),
+    do: Enum.flat_map(blocks, &block_file_ids/1)
+
+  defp block_file_ids(_block), do: []
+
+  # Rich messages have no margins, so dividers keep the footer apart from the post.
+  @spec separate([{atom(), struct()}], [{atom(), struct()}]) :: [{atom(), struct()}]
+  defp separate(body, footer) do
+    body = drop_trailing_divider(body)
+
+    case {body, footer} do
+      {[], footer} -> footer
+      {body, []} -> body
+      {body, footer} -> body ++ [{:other, divider()} | footer]
+    end
+  end
+
+  @spec drop_trailing_divider([{atom(), struct()}]) :: [{atom(), struct()}]
+  defp drop_trailing_divider(blocks) do
+    case List.last(blocks) do
+      {:other, %ExGram.Model.InputRichBlockDivider{}} -> List.delete_at(blocks, -1)
+      _ -> blocks
+    end
   end
 
   @spec sections(Lolek.Post.t(), boolean()) :: [atom()]
@@ -88,151 +160,142 @@ defmodule Lolek.RichPost do
 
   defp sections(_post, true), do: [:media, :title, :header, :text, :link_card]
 
-  # Rich messages have no margins, so a divider keeps the footer apart from the post.
-  @spec separate(String.t(), String.t()) :: String.t()
-  defp separate(body, footer) do
-    body = String.trim_trailing(body, "<hr/>")
-
-    case {body, footer} do
-      {"", footer} -> footer
-      {body, ""} -> body
-      {body, footer} -> body <> "<hr/>" <> footer
-    end
-  end
-
   @spec container(Lolek.Post.platform()) :: :collage | :slideshow
   defp container(platform) when platform in [:instagram, :tiktok], do: :slideshow
   defp container(_platform), do: :collage
 
-  @spec section(atom(), Lolek.Post.t(), iodata(), keyword()) :: iodata()
-  defp section(:media, _post, media_html, _opts), do: media_html
-
-  defp section(:header, post, _media_html, _opts) do
+  @spec section(atom(), Lolek.Post.t(), keyword()) :: [struct()]
+  defp section(:header, post, _opts) do
     case header(post) do
-      [] -> []
-      header -> [header, "<hr/>"]
+      nil -> []
+      header -> [paragraph(header), divider()]
     end
   end
 
-  defp section(:text, post, _media_html, _opts), do: text(post, @max_text_chars)
+  defp section(:text, post, _opts), do: post |> text(@max_text_chars) |> Enum.map(&paragraph/1)
 
-  defp section(:reply_to, %Lolek.Post{reply_to: nil}, _media_html, _opts), do: []
+  defp section(:reply_to, %Lolek.Post{reply_to: nil}, _opts), do: []
 
-  defp section(:reply_to, %Lolek.Post{reply_to: %Lolek.Post{text: nil} = parent}, _, _opts) do
+  defp section(:reply_to, %Lolek.Post{reply_to: %Lolek.Post{text: nil} = parent}, _opts) do
     case parent.author do
       %{handle: handle} when is_binary(handle) ->
-        ["<p>↩️ Replying to ", link(parent.author.url || parent.url, "@" <> handle), "</p>"]
+        [paragraph(["↩️ Replying to ", link(parent.author.url || parent.url, "@" <> handle)])]
 
       _ ->
         []
     end
   end
 
-  defp section(:reply_to, %Lolek.Post{reply_to: parent}, _media_html, opts),
-    do: linked_post(parent, opts)
+  defp section(:reply_to, %Lolek.Post{reply_to: parent}, opts), do: linked_post(parent, opts)
 
-  defp section(:quoted, %Lolek.Post{quoted: nil}, _media_html, _opts), do: []
+  defp section(:quoted, %Lolek.Post{quoted: nil}, _opts), do: []
+  defp section(:quoted, %Lolek.Post{quoted: quoted}, opts), do: linked_post(quoted, opts)
 
-  defp section(:quoted, %Lolek.Post{quoted: quoted}, _media_html, opts),
-    do: linked_post(quoted, opts)
+  defp section(:link_card, %Lolek.Post{link_card: nil}, _opts), do: []
 
-  defp section(:link_card, %Lolek.Post{link_card: nil}, _media_html, _opts), do: []
-
-  defp section(:link_card, %Lolek.Post{link_card: card}, _media_html, _opts) do
-    title = card.title || card.url
+  defp section(:link_card, %Lolek.Post{link_card: card}, _opts) do
     host = URI.parse(card.url).host
 
-    [
-      "<blockquote><p><b>",
-      link(card.url, title),
-      "</b></p>",
-      if(card.description, do: ["<p>", escape(card.description), "</p>"], else: []),
-      if(host, do: ["<p>", escape(host), "</p>"], else: []),
-      "</blockquote>"
-    ]
+    blocks =
+      [
+        paragraph(bold(link(card.url, card.title || card.url))),
+        card.description && paragraph(card.description),
+        host && paragraph(host)
+      ]
+      |> Enum.reject(&is_nil/1)
+
+    [%ExGram.Model.InputRichBlockBlockQuotation{type: "blockquote", blocks: blocks}]
   end
 
-  defp section(:location, %Lolek.Post{extra: %{location: location}}, _media_html, _opts),
-    do: ["<p>📍 ", escape(location), "</p>"]
+  defp section(:location, %Lolek.Post{extra: %{location: location}}, _opts),
+    do: [paragraph("📍 " <> location)]
 
-  defp section(:music, %Lolek.Post{extra: %{music: music}}, _media_html, _opts),
-    do: ["<p>♫ ", escape(music), "</p>"]
+  defp section(:music, %Lolek.Post{extra: %{music: music}}, _opts),
+    do: [paragraph("♫ " <> music)]
 
-  defp section(:title, %Lolek.Post{title: title, text: text}, _media_html, _opts)
-       when is_binary(title) do
+  defp section(:title, %Lolek.Post{title: title, text: text}, _opts) when is_binary(title) do
     if is_binary(text) and String.starts_with?(text, String.trim_trailing(title, ".")),
       do: [],
-      else: ["<h3>", escape(title), "</h3>"]
+      else: [%ExGram.Model.InputRichBlockSectionHeading{type: "heading", text: title, size: 3}]
   end
 
-  defp section(_name, _post, _media_html, _opts), do: []
+  defp section(_name, _post, _opts), do: []
 
-  # A quoted post or a parent post, shown as an expandable quotation: Telegram shows the
-  # first lines, and the reader can open the rest.
-  @spec linked_post(Lolek.Post.t(), keyword()) :: iodata()
+  # A quoted post or a parent post, shown as a quotation with its own header, text,
+  # images, and source link.
+  @spec linked_post(Lolek.Post.t(), keyword()) :: [struct()]
   defp linked_post(post, opts) do
     remote_media =
-      if Keyword.get(opts, :remote_media, true),
-        do: remote_media_block(post.media),
-        else: []
+      if Keyword.get(opts, :remote_media, true), do: remote_media_blocks(post.media), else: []
 
-    body = [header(post), text(post, @max_linked_text_chars), remote_media]
+    header = if header = header(post), do: [paragraph(header)], else: []
+    text = post |> text(@max_linked_text_chars) |> Enum.map(&paragraph/1)
 
-    if IO.iodata_length(body) == 0 do
-      []
-    else
-      footer =
-        if post.url, do: ["<p>", link(post.url, platform_name(post)), "</p>"], else: []
+    case header ++ text ++ remote_media do
+      [] ->
+        []
 
-      ["<blockquote expandable>", body, footer, "</blockquote>"]
+      blocks ->
+        source = if post.url, do: [paragraph(link(post.url, platform_name(post)))], else: []
+        [%ExGram.Model.InputRichBlockBlockQuotation{type: "blockquote", blocks: blocks ++ source}]
     end
   end
 
-  @spec header(Lolek.Post.t()) :: iodata()
-  defp header(%Lolek.Post{author: nil}), do: []
+  @spec header(Lolek.Post.t()) :: rich_text() | nil
+  defp header(%Lolek.Post{author: nil}), do: nil
 
   defp header(%Lolek.Post{author: author}) do
-    verified = if author.verified, do: " ✓", else: ""
+    verified = if author.verified, do: [" ✓"], else: []
 
     case {author.name, author.handle} do
-      {nil, handle} ->
-        ["<p><b>", link(author.url, "@" <> handle), "</b>", verified, "</p>"]
-
-      {name, nil} ->
-        ["<p><b>", link(author.url, name), "</b>", verified, "</p>"]
-
-      {name, handle} ->
-        [
-          "<p><b>",
-          escape(name),
-          "</b>",
-          verified,
-          @separator,
-          link(author.url, "@" <> handle),
-          "</p>"
-        ]
+      {nil, handle} -> [bold(link(author.url, "@" <> handle)) | verified]
+      {name, nil} -> [bold(link(author.url, name)) | verified]
+      {name, handle} -> [bold(name)] ++ verified ++ [@separator, link(author.url, "@" <> handle)]
     end
   end
 
-  @spec text(Lolek.Post.t(), pos_integer()) :: iodata()
+  # Returns one rich text for each paragraph. Line breaks in a paragraph stay as "\n".
+  @spec text(Lolek.Post.t(), pos_integer()) :: [rich_text()]
   defp text(%Lolek.Post{text: nil}, _max_chars), do: []
 
   defp text(%Lolek.Post{text: text, facets: facets, platform: platform}, max_chars) do
     {text, facets} = truncate(text, facets, max_chars)
 
     text
-    |> Lolek.RichPost.Linkify.segments(facets, platform)
-    |> Enum.map(fn
-      {:text, value} -> escape(value)
-      {:link, label, url} -> link(url, label)
-    end)
-    |> IO.iodata_to_binary()
     |> String.replace(["\r\n", "\r"], "\n")
-    |> String.split(~r/\n{2,}/)
-    |> Enum.map(&String.trim/1)
-    |> Enum.reject(&(&1 == ""))
-    |> Enum.map(&["<p>", String.replace(&1, "\n", "<br>"), "</p>"])
+    |> Lolek.RichPost.Linkify.segments(facets, platform)
+    |> Enum.reduce([[]], fn
+      {:text, value}, paragraphs ->
+        [first | rest] = String.split(value, ~r/\n{2,}/)
+        [current | done] = paragraphs
+        Enum.reduce(rest, [[first | current] | done], &[[&1] | &2])
+
+      {:link, label, url}, [current | done] ->
+        [[link(url, label) | current] | done]
+    end)
+    |> Enum.map(&(&1 |> Enum.reverse() |> trim_parts()))
+    |> Enum.reject(&(&1 == []))
+    |> Enum.reverse()
   end
+
+  @spec trim_parts([rich_text()]) :: [rich_text()]
+  defp trim_parts(parts) do
+    parts
+    |> trim_first(&String.trim_leading/1)
+    |> Enum.reverse()
+    |> trim_first(&String.trim_trailing/1)
+    |> Enum.reverse()
+  end
+
+  @spec trim_first([rich_text()], (String.t() -> String.t())) :: [rich_text()]
+  defp trim_first([first | rest], trim) when is_binary(first) do
+    case trim.(first) do
+      "" -> trim_first(rest, trim)
+      trimmed -> [trimmed | rest]
+    end
+  end
+
+  defp trim_first(parts, _trim), do: parts
 
   @spec truncate(String.t(), [Lolek.Post.facet()] | nil, pos_integer()) ::
           {String.t(), [Lolek.Post.facet()] | nil}
@@ -247,65 +310,74 @@ defmodule Lolek.RichPost do
     end
   end
 
-  # The post details and the requester line are separate footers with a divider between them.
-  @spec footer(Lolek.Post.t(), keyword()) :: iodata()
+  # The post details and the requester line are separate footers with a divider
+  # between them.
+  @spec footer(Lolek.Post.t(), keyword()) :: [struct()]
   defp footer(post, opts) do
     details =
       if Keyword.fetch!(opts, :details),
         do: footer_block([date_and_source(post), stats(post.stats)]),
-        else: []
+        else: nil
 
     requester =
       case Keyword.get(opts, :requester) do
-        requester when is_binary(requester) -> footer_block([escape(requester)])
-        _ -> []
+        requester when is_binary(requester) -> footer_block([requester])
+        _ -> nil
       end
 
     [details, requester]
-    |> Enum.reject(&(&1 == []))
-    |> Enum.intersperse("<hr/>")
+    |> Enum.reject(&is_nil/1)
+    |> Enum.intersperse(divider())
   end
 
-  @spec footer_block([iodata()]) :: iodata()
+  @spec footer_block([rich_text()]) :: struct() | nil
   defp footer_block(lines) do
-    case Enum.reject(lines, &(IO.iodata_length(&1) == 0)) do
-      [] -> []
-      lines -> ["<footer>", Enum.intersperse(lines, "<br>"), "</footer>"]
+    case Enum.reject(lines, &(&1 == [])) do
+      [] ->
+        nil
+
+      lines ->
+        %ExGram.Model.InputRichBlockFooter{type: "footer", text: Enum.intersperse(lines, "\n")}
     end
   end
 
-  @spec date_and_source(Lolek.Post.t()) :: iodata()
+  @spec date_and_source(Lolek.Post.t()) :: rich_text()
   defp date_and_source(post) do
     date =
       case post.published_at do
         %DateTime{} = datetime ->
-          [
-            ~s(<tg-time unix="#{DateTime.to_unix(datetime)}" format="Dt">),
-            Calendar.strftime(datetime, "%Y-%m-%d %H:%M UTC"),
-            "</tg-time>"
-          ]
+          %ExGram.Model.RichTextDateTime{
+            type: "date_time",
+            text: Calendar.strftime(datetime, "%Y-%m-%d %H:%M UTC"),
+            unix_time: DateTime.to_unix(datetime),
+            date_time_format: "Dt"
+          }
 
         nil ->
-          []
+          nil
       end
 
-    source = if post.url, do: link(post.url, platform_name(post)), else: []
+    source = if post.url, do: link(post.url, platform_name(post))
 
     [date, source]
-    |> Enum.reject(&(IO.iodata_length(&1) == 0))
+    |> Enum.reject(&is_nil/1)
     |> Enum.intersperse(@separator)
   end
 
-  @spec stats(Lolek.Post.stats()) :: iodata()
+  @spec stats(Lolek.Post.stats()) :: rich_text()
   defp stats(stats) do
     @stat_icons
     |> Enum.flat_map(fn {key, icon} ->
       case Map.get(stats, key) do
-        count when is_integer(count) and count > 0 -> [[icon, " ", compact_count(count)]]
+        count when is_integer(count) and count > 0 -> ["#{icon} #{compact_count(count)}"]
         _ -> []
       end
     end)
     |> Enum.intersperse(@separator)
+    |> case do
+      [] -> []
+      parts -> Enum.join(parts)
+    end
   end
 
   @doc "Formats a count the way social networks do: 1234 is 1.2K, 2500000 is 2.5M."
@@ -331,57 +403,73 @@ defmodule Lolek.RichPost do
     Map.get(@platform_names, platform) || (url && URI.parse(url).host) || "Source"
   end
 
-  @spec media_block([media()], :collage | :slideshow) :: {iodata(), [struct()]}
-  defp media_block(media, container) do
-    entries =
-      media
-      |> Enum.with_index()
-      |> Enum.map(fn {item, index} -> media_entry(item, "m#{index}") end)
-
+  # Returns the top-level blocks of the media: one block or a collage/slideshow for the
+  # visual media, then one document block for each other file.
+  @spec media_blocks([media()], :collage | :slideshow) :: [struct()]
+  defp media_blocks(media, container) do
     {visual, documents} =
-      Enum.split_with(entries, fn {kind, _html, _input} -> kind != :document end)
+      media
+      |> Enum.map(&media_entry/1)
+      |> Enum.split_with(fn {kind, _block} -> kind != :document end)
 
-    visual_html = Enum.map(visual, &elem(&1, 1))
-    document_html = Enum.map(documents, &elem(&1, 1))
-
-    html =
-      case visual_html do
+    visual_block =
+      case Enum.map(visual, &elem(&1, 1)) do
         [] -> []
-        [single] -> single
-        many -> wrap(many, container)
+        [single] -> [single]
+        many -> [wrap(many, container)]
       end
 
-    {[html, document_html], Enum.map(entries, &elem(&1, 2))}
+    visual_block ++ Enum.map(documents, &elem(&1, 1))
   end
 
-  @spec wrap(iodata(), :collage | :slideshow) :: iodata()
-  defp wrap(html, :collage), do: ["<tg-collage>", html, "</tg-collage>"]
-  defp wrap(html, :slideshow), do: ["<tg-slideshow>", html, "</tg-slideshow>"]
+  @spec wrap([struct()], :collage | :slideshow) :: struct()
+  defp wrap(blocks, :collage),
+    do: %ExGram.Model.InputRichBlockCollage{type: "collage", blocks: blocks}
 
-  @spec media_entry(media(), String.t()) ::
-          {:photo | :video | :document, iodata(), ExGram.Model.InputRichMessageMedia.t()}
-  defp media_entry(%{source: source, ext: ext} = item, id) do
+  defp wrap(blocks, :slideshow),
+    do: %ExGram.Model.InputRichBlockSlideshow{type: "slideshow", blocks: blocks}
+
+  @doc "Returns true when the file is shown as a photo, a video, or an animation."
+  @spec visual_media?(String.t()) :: boolean()
+  def visual_media?(ext) do
+    ext in @gif_extensions or ext in @photo_extensions or
+      Lolek.GalleryDownloader.video_file?("x#{ext}")
+  end
+
+  @spec media_entry(media()) :: {:visual | :document, struct()}
+  defp media_entry(%{source: source, ext: ext} = item) do
     options = Map.get(item, :options, [])
 
-    {kind, html, input} =
-      cond do
-        ext in @gif_extensions ->
-          {:video, ~s(<video src="tg://video?id=#{id}"></video>),
-           %ExGram.Model.InputMediaAnimation{type: "animation", media: source}}
+    cond do
+      ext in @gif_extensions ->
+        {:visual,
+         %ExGram.Model.InputRichBlockAnimation{
+           type: "animation",
+           animation: %ExGram.Model.InputMediaAnimation{type: "animation", media: source}
+         }}
 
-        Lolek.GalleryDownloader.video_file?("x#{ext}") ->
-          {:video, ~s(<video src="tg://video?id=#{id}"></video>), video_input(source, options)}
+      Lolek.GalleryDownloader.video_file?("x#{ext}") ->
+        {:visual,
+         %ExGram.Model.InputRichBlockVideo{type: "video", video: video_input(source, options)}}
 
-        ext in @photo_extensions ->
-          {:photo, ~s(<img src="tg://photo?id=#{id}"/>),
-           %ExGram.Model.InputMediaPhoto{type: "photo", media: source}}
+      ext in @photo_extensions ->
+        {:visual, photo_block(source)}
 
-        true ->
-          {:document, ~s(<tg-document src="tg://document?id=#{id}"></tg-document>),
-           %ExGram.Model.InputMediaDocument{type: "document", media: source}}
-      end
+      true ->
+        {:document,
+         %ExGram.Model.InputRichBlockDocument{
+           type: "document",
+           document: %ExGram.Model.InputMediaDocument{type: "document", media: source}
+         }}
+    end
+  end
 
-    {kind, html, %ExGram.Model.InputRichMessageMedia{id: id, media: input}}
+  @spec photo_block(term()) :: ExGram.Model.InputRichBlockPhoto.t()
+  defp photo_block(source) do
+    %ExGram.Model.InputRichBlockPhoto{
+      type: "photo",
+      photo: %ExGram.Model.InputMediaPhoto{type: "photo", media: source}
+    }
   end
 
   @spec video_input(term(), keyword()) :: ExGram.Model.InputMediaVideo.t()
@@ -396,32 +484,29 @@ defmodule Lolek.RichPost do
     }
   end
 
-  @spec remote_media_block([Lolek.Post.remote_media()]) :: iodata()
-  defp remote_media_block(media) do
-    html =
-      media
-      |> Enum.filter(&(&1.type == :photo))
-      |> Enum.take(@max_remote_media)
-      |> Enum.map(&[~s(<img src="), escape(&1.url), ~s("/>)])
-
-    case html do
+  @spec remote_media_blocks([Lolek.Post.remote_media()]) :: [struct()]
+  defp remote_media_blocks(media) do
+    media
+    |> Enum.filter(&(&1.type == :photo))
+    |> Enum.take(@max_remote_media)
+    |> Enum.map(&photo_block(&1.url))
+    |> case do
       [] -> []
-      [single] -> single
-      many -> wrap(many, :collage)
+      [single] -> [single]
+      many -> [wrap(many, :collage)]
     end
   end
 
-  @spec link(String.t() | nil, String.t()) :: iodata()
-  defp link(nil, label), do: escape(label)
-  defp link(url, label), do: [~s(<a href="), escape(url), ~s(">), escape(label), "</a>"]
+  @spec paragraph(rich_text()) :: ExGram.Model.InputRichBlockParagraph.t()
+  defp paragraph(text), do: %ExGram.Model.InputRichBlockParagraph{type: "paragraph", text: text}
 
-  @doc "Escapes text for rich message HTML."
-  @spec escape(String.t()) :: String.t()
-  def escape(text) do
-    text
-    |> String.replace("&", "&amp;")
-    |> String.replace("<", "&lt;")
-    |> String.replace(">", "&gt;")
-    |> String.replace("\"", "&quot;")
-  end
+  @spec divider() :: ExGram.Model.InputRichBlockDivider.t()
+  defp divider, do: %ExGram.Model.InputRichBlockDivider{type: "divider"}
+
+  @spec bold(rich_text()) :: ExGram.Model.RichTextBold.t()
+  defp bold(text), do: %ExGram.Model.RichTextBold{type: "bold", text: text}
+
+  @spec link(String.t() | nil, String.t()) :: rich_text()
+  defp link(nil, label), do: label
+  defp link(url, label), do: %ExGram.Model.RichTextUrl{type: "url", text: label, url: url}
 end

@@ -143,7 +143,7 @@ pkgs.testers.nixosTest {
         machine.succeed(
             "curl -fsS -H 'Content-Type: application/json' --data %s "
             "%s/debug/inject/update | "
-            "jq -e '.ok and .delivery_method == \"polling\"' >/dev/null"
+            "jq -e '.ok and .queued' >/dev/null"
             % (shell_quote(payload), telegym_base_url)
         )
         machine.wait_until_succeeds(

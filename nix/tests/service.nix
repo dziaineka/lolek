@@ -137,6 +137,8 @@ pkgs.testers.nixosTest {
           ;
         environment = {
           LOLEK_TELEGRAM_BASE_URL = telegymBaseUrl;
+          LOLEK_POST_SOURCE_CAPTION = true;
+          LOLEK_GALLERY_DOWNLOAD_ENABLED = false;
         };
       };
 

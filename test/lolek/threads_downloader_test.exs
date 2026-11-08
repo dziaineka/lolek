@@ -141,6 +141,57 @@ defmodule Lolek.ThreadsDownloaderTest do
              )
   end
 
+  describe "text_post_from_page/2" do
+    @text_post_url "https://www.threads.com/@author/post/DeeaText"
+
+    test "reads the text of a post without media" do
+      response =
+        page_response(%{
+          "code" => "DeeaText",
+          "user" => %{"username" => "author"},
+          "image_versions2" => %{"candidates" => []},
+          "caption" => %{"text" => "  Only text  "}
+        })
+
+      assert {:ok, "Only text"} =
+               Lolek.ThreadsDownloader.text_post_from_page(response, @text_post_url)
+    end
+
+    test "returns an error for a post with media" do
+      response =
+        page_response(%{
+          "code" => "DeeaText",
+          "user" => %{"username" => "author"},
+          "image_versions2" => %{
+            "candidates" => [%{"url" => "https://cdn.example.com/1.jpg"}]
+          },
+          "caption" => %{"text" => "Text with a photo"}
+        })
+
+      assert {:error, :post_has_media} =
+               Lolek.ThreadsDownloader.text_post_from_page(response, @text_post_url)
+    end
+
+    test "returns an error for a post without text" do
+      response =
+        page_response(%{
+          "code" => "DeeaText",
+          "user" => %{"username" => "author"},
+          "image_versions2" => %{"candidates" => []}
+        })
+
+      assert {:error, :no_text_post} =
+               Lolek.ThreadsDownloader.text_post_from_page(response, @text_post_url)
+    end
+
+    test "returns an error when the post is not on the page" do
+      response = page_response(%{"code" => "Other", "user" => %{"username" => "author"}})
+
+      assert {:error, "Threads post data was not found"} =
+               Lolek.ThreadsDownloader.text_post_from_page(response, @text_post_url)
+    end
+  end
+
   test "decodes shortcode into numeric post id" do
     assert {:ok, "3886214701562734339"} = Lolek.ThreadsDownloader.decode_shortcode("DXum65XjCcD")
   end

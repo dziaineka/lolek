@@ -541,7 +541,9 @@ in
       // optionalAttrs (cfg.allowedUrlPatterns != null) {
         LOLEK_ALLOWED_URLS_REGEX = lib.concatStringsSep "|" (map lib.escapeRegex cfg.allowedUrlPatterns);
       }
-      // builtins.mapAttrs (_: toString) cfg.environment;
+      // builtins.mapAttrs (
+        _: value: if builtins.isBool value then lib.boolToString value else toString value
+      ) cfg.environment;
 
       serviceConfig = {
         ExecStart = "${cfg.package}/bin/lolek start";

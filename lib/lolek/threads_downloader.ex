@@ -60,6 +60,30 @@ defmodule Lolek.ThreadsDownloader do
     end
   end
 
+  @doc "Reads the post (author, text, counters, linked posts) from the Threads post page."
+  @spec post(String.t()) :: {:ok, Lolek.Post.t()} | {:error, String.t()}
+  def post(url) do
+    with {:ok, normalized_url} <- normalize_url(url),
+         {:ok, html_response} <- get(normalized_url, html_headers()) do
+      post_from_page(html_response, normalized_url)
+    end
+  end
+
+  @spec post_from_page(http_response(), String.t()) ::
+          {:ok, Lolek.Post.t()} | {:error, String.t()}
+  def post_from_page(html_response, url) do
+    with {:ok, shortcode} <- extract_shortcode(url),
+         %{} = node <-
+           html_response.body
+           |> extract_embedded_json()
+           |> Lolek.Post.Threads.find_post(shortcode) do
+      {:ok, Lolek.Post.Threads.parse(node, url)}
+    else
+      nil -> {:error, "Threads post data was not found"}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
   @spec normalize_url(String.t()) :: {:ok, String.t()} | {:error, String.t()}
   def normalize_url(url) do
     case URI.parse(url) do

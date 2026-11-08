@@ -67,6 +67,105 @@ defmodule Lolek.PostTest do
     end
   end
 
+  describe "Lolek.Post.Threads" do
+    test "reads the author, text, date, and counters of a post" do
+      %{"DfFVRsRDiu4" => node} = fixture("threads_post.page.json")
+      post = Lolek.Post.Threads.parse(node)
+
+      assert post.platform == :threads
+      assert post.url == "https://www.threads.com/@eugenia_warsaw/post/DfFVRsRDiu4"
+
+      assert %{
+               handle: "eugenia_warsaw",
+               verified: true,
+               url: "https://www.threads.com/@eugenia_warsaw"
+             } =
+               post.author
+
+      assert post.author.name =~ "Риелтор Варшава"
+      # The object replacement character at the end of the caption is removed.
+      assert post.text ==
+               "Трехкомнатные квартиры площадью… 38м2🫣🫣🫣\nДумала что трешка 45м2 это предел, но оказывается бывает и не такое)"
+
+      assert post.facets == nil
+      assert post.published_at == ~U[2026-10-29 15:30:02Z]
+      assert post.stats == %{likes: 13, replies: 7, reposts: 1, quotes: 0}
+      assert post.reply_to == nil
+      assert length(post.media) == 2
+    end
+
+    test "reads the author of the parent post of a reply" do
+      %{"DfFaK0lgNpV" => node} = fixture("threads_post.page.json")
+
+      assert %Lolek.Post{author: %{handle: "eugenia_warsaw"}, text: nil} =
+               Lolek.Post.Threads.parse(node).reply_to
+    end
+
+    test "reads links, mentions, the quoted post, and the link card" do
+      quoted = %{
+        "code" => "Q1",
+        "user" => %{"username" => "quoted_user", "full_name" => "Quoted"},
+        "caption" => %{"text" => "Quoted text \u{FFFC}"},
+        "image_versions2" => %{"candidates" => [%{"url" => "https://cdn.example/q.jpg"}]}
+      }
+
+      node = %{
+        "code" => "P1",
+        "user" => %{"username" => "author", "full_name" => "Author"},
+        "text_post_app_info" => %{
+          "text_fragments" => %{
+            "fragments" => [
+              %{"plaintext" => " Hi "},
+              %{
+                "plaintext" => "@friend",
+                "mention_fragment" => %{"mentioned_user_info" => %{"username" => "friend"}}
+              },
+              %{"plaintext" => ", see "},
+              %{
+                "plaintext" => "example.com",
+                "link_fragment" => %{"uri" => "https://example.com/a"}
+              },
+              %{"plaintext" => " \u{FFFC}"}
+            ]
+          },
+          "share_info" => %{"quoted_post" => quoted},
+          "link_preview_attachment" => %{
+            "url" => "https://example.com/a",
+            "title" => "Example",
+            "display_url" => "example.com"
+          }
+        }
+      }
+
+      post = Lolek.Post.Threads.parse(node)
+
+      assert post.text == "Hi @friend, see example.com"
+
+      assert [
+               %{start: 3, stop: 10, type: :mention, value: "https://www.threads.com/@friend"},
+               %{start: 16, stop: 27, type: :link, value: "https://example.com/a"}
+             ] = post.facets
+
+      assert %Lolek.Post{text: "Quoted text", author: %{handle: "quoted_user"}} = post.quoted
+      assert [%{type: :photo, url: "https://cdn.example/q.jpg"}] = post.quoted.media
+      assert %{url: "https://example.com/a", title: "Example"} = post.link_card
+    end
+
+    test "finds the copy of the post that has the author in the page data" do
+      documents = [
+        %{"require" => [%{"code" => "P1", "caption" => nil}]},
+        %{
+          "data" => %{
+            "post" => %{"code" => "P1", "user" => %{"username" => "a"}, "like_count" => 1}
+          }
+        }
+      ]
+
+      assert %{"like_count" => 1} = Lolek.Post.Threads.find_post(documents, "P1")
+      assert Lolek.Post.Threads.find_post(documents, "P2") == nil
+    end
+  end
+
   describe "Lolek.Post.GalleryDl.parse_messages/1" do
     test "reads tweets: display name, screen name, stats, and the quote reference" do
       {:ok, post} = Lolek.Post.GalleryDl.parse_messages(fixture("x_gallery.gallery_dl.json"))

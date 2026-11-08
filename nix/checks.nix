@@ -13,7 +13,7 @@ let
   lib = pkgs.lib;
   mixBuilders = import ./pkgs/mix-builders.nix { inherit pkgs; };
   inherit (mixBuilders) fetchMixDeps mixRelease;
-  version = "6.1.0";
+  version = "6.1.1";
   checkSrc = lib.fileset.toSource {
     inherit root;
     fileset = lib.fileset.gitTracked root;

@@ -9,6 +9,25 @@ defmodule Lolek.SendFileTest do
     @behaviour Lolek.Telegram
 
     @impl true
+    def send_media_group(chat_id, media, options),
+      do: respond({:send_media_group, chat_id, media, options})
+
+    @impl true
+    def delete_message(chat_id, message_id), do: respond({:delete_message, chat_id, message_id})
+
+    @impl true
+    def send_video(chat_id, file_id, options),
+      do: respond({:send_video, chat_id, file_id, options})
+
+    @impl true
+    def send_photo(chat_id, file_id, options),
+      do: respond({:send_photo, chat_id, file_id, options})
+
+    @impl true
+    def edit_message_reply_markup(chat_id, message_id, options),
+      do: respond({:edit_message_reply_markup, chat_id, message_id, options})
+
+    @impl true
     def send_rich_message(chat_id, rich_message, options),
       do: respond({:send_rich_message, chat_id, rich_message, options})
 
@@ -49,6 +68,26 @@ defmodule Lolek.SendFileTest do
     @moduledoc false
 
     @behaviour Lolek.Telegram
+
+    @impl true
+    def send_media_group(_chat_id, _media, _options),
+      do: raise(Application.fetch_env!(:lolek, :telegram_test_error))
+
+    @impl true
+    def delete_message(_chat_id, _message_id),
+      do: raise(Application.fetch_env!(:lolek, :telegram_test_error))
+
+    @impl true
+    def send_video(_chat_id, _file_id, _options),
+      do: raise(Application.fetch_env!(:lolek, :telegram_test_error))
+
+    @impl true
+    def send_photo(_chat_id, _file_id, _options),
+      do: raise(Application.fetch_env!(:lolek, :telegram_test_error))
+
+    @impl true
+    def edit_message_reply_markup(_chat_id, _message_id, _options),
+      do: raise(Application.fetch_env!(:lolek, :telegram_test_error))
 
     @impl true
     def send_rich_message(_chat_id, _rich_message, _options),

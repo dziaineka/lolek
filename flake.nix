@@ -2,7 +2,7 @@
   description = "Lolek Telegram media downloader bot";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/release-26.05";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
   };
 
   outputs =
@@ -41,12 +41,18 @@
                 };
               };
               # Keep Nix builds on the versions pinned in .tool-versions.
-              yt-dlp = prev.yt-dlp.overrideAttrs (_: {
+              yt-dlp = prev.yt-dlp.overrideAttrs (old: {
                 version = "2026.11.04.232659";
                 src = prev.fetchzip {
                   url = "https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/download/2026.11.04.232659/yt-dlp.tar.gz";
                   hash = "sha256-x7hh6K2j3BqFUJYuSdkX1MMspU6ud+6Vo8nXpd5WwPs=";
                 };
+                # The release archive installs docs too. Let Nix install them
+                # into its separate outputs without duplicate directories.
+                postInstall = ''
+                  rm -rf "$out/share/doc" "$out/share/man"
+                ''
+                + old.postInstall;
               });
               gallery-dl = (prev.gallery-dl.override { yt-dlp = final.yt-dlp; }).overrideAttrs (_: {
                 version = "1.32.19";

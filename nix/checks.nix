@@ -34,6 +34,8 @@ in
     mixEnv = "dev";
     mixFodDeps = mixCheckDeps;
     erlangDeterministicBuilds = false;
+    # This check produces a success marker, not a release with executables.
+    dontMixReleaseFixup = true;
     nativeBuildInputs = [
       pkgs.getconf
       pkgs.writableTmpDirAsHomeHook
@@ -45,7 +47,7 @@ in
       export LOLEK_BOT_TOKEN="test_token"
       # These checks fetch data from Hex at runtime, but the Nix sandbox
       # has no network access.
-      mix check --except hex_audit --except mix_audit
+      mix check --except hex_audit --except mix_audit --except hex_outdated
 
       runHook postBuild
     '';
@@ -93,6 +95,16 @@ in
   };
 
   nixos-service = import ./tests/service.nix {
+    inherit
+      pkgs
+      module
+      package
+      telegym
+      telegymModule
+      ;
+  };
+
+  nixos-private-media = import ./tests/private-media.nix {
     inherit
       pkgs
       module

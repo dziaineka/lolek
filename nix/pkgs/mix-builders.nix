@@ -1,8 +1,14 @@
 { pkgs }:
 
 let
-  beamPackages = pkgs.beam.packages.erlang_29;
-  elixir = beamPackages.elixir_1_20;
+  beamPackages = pkgs.beam.packages.erlang_29.overrideScope (
+    _final: prev: {
+      elixir = pkgs.beam.packages.erlang_29.elixir_1_20;
+      hex = prev.hex.overrideAttrs (_: {
+        __darwinAllowLocalNetworking = true;
+      });
+    }
+  );
 
   # Mix coordinates compilation with local TCP sockets, but Darwin's Nix
   # sandbox denies listeners by default. Permit local networking for every
@@ -11,14 +17,9 @@ let
     attrs:
     attrs
     // {
-      inherit elixir hex;
       __darwinAllowLocalNetworking = true;
     };
 
-  baseHex = beamPackages.hex.override { inherit elixir; };
-  hex = baseHex.overrideAttrs (_: {
-    __darwinAllowLocalNetworking = true;
-  });
   rebar3WithPlugins = beamPackages.rebar3WithPlugins {
     globalPlugins = [ beamPackages.pc ];
   };

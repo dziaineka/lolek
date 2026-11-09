@@ -176,6 +176,30 @@ jobs:
       - name: Run test
         run: nix build .#checks.x86_64-linux.nixos-service -L
 
+  nixos-private-media:
+    name: NixOS private media test
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      NIX_CONFIG: system-features = benchmark big-parallel nixos-test uid-range
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          android: true
+          dotnet: true
+          haskell: true
+          tool-cache: false
+
+      - name: Set up Nix
+        uses: ./.github/actions/setup-nix
+
+      - name: Run test
+        run: nix build .#checks.x86_64-linux.nixos-private-media -L
+
   nixos-concurrency:
     name: NixOS concurrency test
     runs-on: ubuntu-latest

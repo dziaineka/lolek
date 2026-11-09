@@ -26,6 +26,17 @@ defmodule Lolek.Handler do
   # {:update, update} → This tuple will match as a default handle
 
   @impl true
+  def handle(
+        {:command, :start,
+         %ExGram.Model.Message{chat: %{type: "private"}, text: "media_" <> token} =
+           message},
+        context
+      ) do
+    with_fresh_message(message, fn ->
+      deliver_private_media(message, String.trim(token), context)
+    end)
+  end
+
   def handle({:command, :start, %ExGram.Model.Message{} = message}, context) do
     with_fresh_message(message, fn ->
       answer(context, "Hi! Send me an url and I will try to show media from it.")
@@ -41,12 +52,15 @@ defmodule Lolek.Handler do
             from: from
           } = message
         },
-        _context
+        context
       ) do
     with_fresh_message(message, fn ->
       result =
         with_processing_deadline(message, fn ->
-          handle_text_message(text, chat_id, from, topic_message_thread_id(message))
+          handle_text_message(text, chat_id, from,
+            message_thread_id: topic_message_thread_id(message),
+            private_media_bot_username: context.bot_info.username
+          )
         end)
 
       maybe_react_to_failure(message, result)
@@ -55,6 +69,49 @@ defmodule Lolek.Handler do
 
   def handle(_, _context) do
     :ok
+  end
+
+  @spec deliver_private_media(ExGram.Model.Message.t(), String.t(), ExGram.Cnt.t()) ::
+          :ok | ExGram.Cnt.t()
+  defp deliver_private_media(%{chat: %{id: chat_id}} = message, token, context) do
+    if Lolek.ChatRateLimiter.admit?(chat_id) do
+      private_media_result(Lolek.PrivateMedia.deliver(chat_id, token), message, context)
+    else
+      answer(context, "Too many requests. Please try again in a minute.")
+    end
+  end
+
+  @spec private_media_result(:ok | {:error, term()}, ExGram.Model.Message.t(), ExGram.Cnt.t()) ::
+          :ok | ExGram.Cnt.t()
+  defp private_media_result(:ok, %{chat: %{id: chat_id}, message_id: message_id}, _context) do
+    # Cleanup must not turn a successful delivery into an error that invites a retry.
+    case Lolek.Telegram.delete_message(chat_id, message_id) do
+      {:ok, _result} ->
+        :ok
+
+      {:error, reason} ->
+        log_private_media_cleanup_failure(reason)
+    end
+  rescue
+    error ->
+      log_private_media_cleanup_failure(error)
+  end
+
+  defp private_media_result({:error, :expired_link}, _message, context) do
+    answer(
+      context,
+      "This media link has expired. Request the post again for a new link."
+    )
+  end
+
+  defp private_media_result({:error, reason}, _message, context) do
+    Logger.warning("Could not send private media: #{inspect(reason)}")
+    answer(context, "I couldn't send the media. Please try the link again.")
+  end
+
+  @spec log_private_media_cleanup_failure(term()) :: :ok
+  defp log_private_media_cleanup_failure(reason) do
+    Logger.warning("Could not delete private media request: #{inspect(reason)}")
   end
 
   @doc false
@@ -68,12 +125,12 @@ defmodule Lolek.Handler do
 
   def topic_message_thread_id(%ExGram.Model.Message{}), do: nil
 
-  @spec handle_text_message(String.t(), integer(), ExGram.Model.User.t() | nil, integer() | nil) ::
+  @spec handle_text_message(String.t(), integer(), ExGram.Model.User.t() | nil, keyword()) ::
           :ok | {:failure, term()}
-  defp handle_text_message(text, chat_id, from, message_thread_id) do
+  defp handle_text_message(text, chat_id, from, send_context) do
     case Lolek.Url.extract_url(text) do
       {:ok, url} ->
-        case process_admitted_url(chat_id, url, from, message_thread_id) do
+        case process_admitted_url(chat_id, url, from, send_context) do
           {:ok, _file_state} ->
             Lolek.Metrics.record_message_result(:ok)
             :ok
@@ -120,13 +177,13 @@ defmodule Lolek.Handler do
           integer(),
           String.t(),
           ExGram.Model.User.t() | nil,
-          integer() | nil
+          keyword()
         ) ::
           {:ok, Lolek.File.file_state()} | {:error, term()}
-  defp process_admitted_url(chat_id, url, from, message_thread_id) do
+  defp process_admitted_url(chat_id, url, from, send_context) do
     if Lolek.ChatRateLimiter.admit?(chat_id) do
       Lolek.UrlProcessing.process(url, fn ->
-        process_url_with_limit(chat_id, url, from, message_thread_id)
+        process_url_with_limit(chat_id, url, from, send_context)
       end)
     else
       {:error, :chat_rate_limited}
@@ -137,12 +194,12 @@ defmodule Lolek.Handler do
           integer(),
           String.t(),
           ExGram.Model.User.t() | nil,
-          integer() | nil
+          keyword()
         ) ::
           {:ok, Lolek.File.file_state()} | {:error, term()}
-  defp process_url_with_limit(chat_id, url, from, message_thread_id) do
+  defp process_url_with_limit(chat_id, url, from, send_context) do
     Lolek.ProcessingLimiter.with_limit(chat_id, fn ->
-      process_url(chat_id, url, Lolek.Requester.display_name(from), message_thread_id)
+      process_url(chat_id, url, Lolek.Requester.display_name(from), send_context)
     end)
   end
 
@@ -201,14 +258,14 @@ defmodule Lolek.Handler do
     max(deadline - System.system_time(:millisecond), 0)
   end
 
-  @spec process_url(integer(), String.t(), String.t(), integer() | nil) ::
+  @spec process_url(integer(), String.t(), String.t(), keyword()) ::
           {:ok, Lolek.File.file_state()} | {:error, term()}
-  defp process_url(chat_id, url, requester_name, message_thread_id) do
+  defp process_url(chat_id, url, requester_name, send_context) do
     log_url = Lolek.Url.normalize_for_log(url)
     started_at = System.monotonic_time()
 
     timed_step("total", log_url, fn ->
-      do_process_url(chat_id, url, log_url, requester_name, message_thread_id, started_at)
+      do_process_url(chat_id, url, log_url, requester_name, send_context, started_at)
     end)
   end
 
@@ -217,19 +274,20 @@ defmodule Lolek.Handler do
           String.t(),
           String.t(),
           String.t(),
-          integer() | nil,
+          keyword(),
           integer()
         ) ::
           {:ok, Lolek.File.file_state()} | {:error, term()}
-  defp do_process_url(chat_id, url, log_url, requester_name, message_thread_id, started_at) do
+  defp do_process_url(chat_id, url, log_url, requester_name, send_context, started_at) do
     with {:ok, folder_path} <- Lolek.File.get_folder_path(url),
          post <- source_post(url, folder_path, log_url),
-         send_context = [
-           requester_name: requester_name,
-           message_thread_id: message_thread_id,
-           started_at: started_at,
-           post: post
-         ],
+         send_context =
+           send_context ++
+             [
+               requester_name: requester_name,
+               started_at: started_at,
+               post: post
+             ],
          {:ok, file_state} <-
            timed_step("cache lookup", log_url, fn -> Lolek.File.get_file_state(folder_path) end),
          {:ok, file_state} <-

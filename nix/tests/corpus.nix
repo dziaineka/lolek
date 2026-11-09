@@ -197,14 +197,16 @@ pkgs.testers.nixosTest {
 
     def wait_for_messages(chat_id, expected_count):
         url = messages_url(chat_id)
+        # Telegym also records button edits in the message history.
+        posts = ".messages | map(select(.rich_message != null))"
         machine.wait_until_succeeds(
-            "curl -fsS %s | jq -e '.count == %d' >/dev/null"
-            % (shell_quote(url), expected_count),
+            "curl -fsS %s | jq -e %s >/dev/null"
+            % (shell_quote(url), shell_quote("%s | length == %d" % (posts, expected_count))),
             timeout=60,
         )
-        return json.loads(machine.succeed("curl -fsS %s" % shell_quote(url)))[
-            "messages"
-        ]
+        return json.loads(
+            machine.succeed("curl -fsS %s | jq %s" % (shell_quote(url), shell_quote(posts)))
+        )
 
     def wait_for_idle():
         machine.wait_until_succeeds(

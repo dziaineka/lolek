@@ -94,6 +94,14 @@ defmodule Lolek do
       {:ok, {%ExGram.Model.Message{} = message, used_opts}} ->
         entries = extract_file_entries(items, message, post, used_opts)
         refresh_after_send(chat_id, message, post, items, entries, used_opts, context)
+
+        Lolek.PrivateMedia.attach(
+          chat_id,
+          message.message_id,
+          entries,
+          Keyword.get(context, :private_media_bot_username)
+        )
+
         {:ok, entries}
 
       {:ok, {other, _used_opts}} ->

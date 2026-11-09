@@ -1,0 +1,92 @@
+diff --git a/pkg/mock/media_group.go b/pkg/mock/media_group.go
+new file mode 100644
+index 0000000..caf0f9f
+--- /dev/null
++++ b/pkg/mock/media_group.go
+@@ -0,0 +1,62 @@
++package mock
++
++import (
++	"encoding/json"
++	"net/http"
++	"strconv"
++	"strings"
++
++	"github.com/gin-gonic/gin"
++)
++
++// SendMediaGroup supports photo/video albums sent with existing file IDs.
++func (h *Handlers) SendMediaGroup(c *gin.Context, bot *botEntry) {
++	body, err := readBody(c)
++	if err != nil {
++		errResp(c, http.StatusBadRequest, "Bad Request: "+err.Error())
++		return
++	}
++	chatID := toInt64(body["chat_id"])
++	if chatID == 0 {
++		errResp(c, http.StatusBadRequest, "Bad Request: chat_id is required")
++		return
++	}
++
++	data, err := json.Marshal(body["media"])
++	if text, ok := body["media"].(string); ok {
++		data = []byte(text)
++	}
++	var media []struct {
++		Type    string `json:"type"`
++		Media   string `json:"media"`
++		Caption string `json:"caption"`
++	}
++	if err != nil || json.Unmarshal(data, &media) != nil || len(media) < 2 || len(media) > 10 {
++		errResp(c, http.StatusBadRequest, "Bad Request: media must contain 2 to 10 items")
++		return
++	}
++	// Validate the whole album before storing any messages.
++	for _, item := range media {
++		if (item.Type != "photo" && item.Type != "video") || item.Media == "" || strings.Contains(item.Media, "://") {
++			errResp(c, http.StatusBadRequest, "Bad Request: only photo/video file IDs are supported")
++			return
++		}
++	}
++
++	groupID := strconv.FormatInt(h.Store.NextEventSeq(), 10)
++	messages := make([]Message, 0, len(media))
++	for _, item := range media {
++		message := h.newBotMessage(bot, chatID)
++		message.MediaGroupID = groupID
++		message.Caption = item.Caption
++		setMessageThread(&message, body)
++		if item.Type == "photo" {
++			message.Photo = []PhotoSize{{FileID: item.Media, FileUniqueID: item.Media + "_u", Width: 1, Height: 1}}
++		} else {
++			message.Video = &Video{FileID: item.Media, FileUniqueID: item.Media + "_u", Width: 1, Height: 1, Duration: 1}
++		}
++		bot.AppendMessage(message)
++		messages = append(messages, message)
++	}
++	c.JSON(http.StatusOK, APIResponse{OK: true, Result: messages})
++}
+diff --git a/pkg/mock/server.go b/pkg/mock/server.go
+index c3883b7..e2511de 100644
+--- a/pkg/mock/server.go
++++ b/pkg/mock/server.go
+@@ -257,6 +257,7 @@ func (s *Server) registerBotAPI(g *gin.RouterGroup) {
+ 	g.POST("/sendRichMessage", s.withBot(s.handlers.SendRichMessage))
+ 	g.POST("/sendPhoto", s.withBot(s.handlers.SendPhoto))
+ 	g.POST("/sendVideo", s.withBot(s.handlers.SendVideo))
++	g.POST("/sendMediaGroup", s.withBot(s.handlers.SendMediaGroup))
+ 	g.POST("/sendAnimation", s.withBot(s.handlers.SendAnimation))
+ 	g.POST("/sendSticker", s.withBot(s.handlers.SendSticker))
+ 	g.POST("/sendDice", s.withBot(s.handlers.SendDice))
+diff --git a/pkg/mock/types.go b/pkg/mock/types.go
+index bbd970e..36051cb 100644
+--- a/pkg/mock/types.go
++++ b/pkg/mock/types.go
+@@ -43,6 +43,7 @@ type Chat struct {
+ 
+ type Message struct {
+ 	MessageID       int          `json:"message_id"`
++	MediaGroupID    string       `json:"media_group_id,omitempty"`
+ 	From            *User        `json:"from,omitempty"`
+ 	Date            int64        `json:"date"`
+ 	Chat            Chat         `json:"chat"`

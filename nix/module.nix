@@ -242,13 +242,21 @@ in
     maxVideoSizeToSendToTelegram = mkOption {
       type = types.ints.positive;
       default = 40000000;
-      description = "Video byte budget used when calculating compression bitrate.";
+      description = ''
+        Video byte budget used for every video transcode. Together with the audio
+        budget, this sets the size above which compatible videos are compressed.
+        The upload ceiling is maxFileSizeToSendToTelegram.
+      '';
     };
 
     maxAudioSizeToSendToTelegram = mkOption {
       type = types.ints.positive;
       default = 5000000;
-      description = "Audio byte budget used when calculating compression bitrate.";
+      description = ''
+        Audio byte budget used for every video transcode. Together with the video
+        budget, this sets the size above which compatible videos are compressed.
+        The upload ceiling is maxFileSizeToSendToTelegram.
+      '';
     };
 
     maxFileSizeToCompress = mkOption {

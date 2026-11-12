@@ -359,7 +359,8 @@ pkgs.testers.nixosTest {
         )
         wait_for_idle()
         machine.succeed(
-            "test $(journalctl -u ${serviceUnit} --no-pager | grep -c 'Compressed video with libx264') -eq 1"
+            "test $(stat -c %%s %s) -le %d"
+            % (shell_quote(compressed_upload_file), max_file_size_to_send_to_telegram)
         )
 
     with subtest("persist file IDs and remove uploaded media"):

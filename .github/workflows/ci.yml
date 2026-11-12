@@ -115,30 +115,6 @@ jobs:
       - name: Run check
         run: nix build .#get-test-cases -L
 
-  nixos-corpus:
-    name: NixOS upstream corpus test
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    env:
-      NIX_CONFIG: system-features = benchmark big-parallel nixos-test uid-range
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Free disk space
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with:
-          android: true
-          dotnet: true
-          haskell: true
-          tool-cache: false
-
-      - name: Set up Nix
-        uses: ./.github/actions/setup-nix
-
-      - name: Run test
-        run: nix build .#checks.x86_64-linux.nixos-corpus -L
-
   nixos-module-url-allowlist:
     name: NixOS module URL allowlist test
     runs-on: ubuntu-latest
@@ -152,10 +128,28 @@ jobs:
       - name: Run test
         run: nix build .#checks.x86_64-linux.nixos-module-url-allowlist -L
 
-  nixos-service:
-    name: NixOS service test
+  nixos-tests:
+    name: ${{ matrix.name }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - check: nixos-corpus
+            name: NixOS upstream corpus test
+          - check: nixos-service
+            name: NixOS service test
+          - check: nixos-video-budget
+            name: NixOS video budget test
+          - check: nixos-private-media
+            name: NixOS private media test
+          - check: nixos-concurrency
+            name: NixOS concurrency test
+          - check: nixos-deadline
+            name: NixOS deadline test
+          - check: nixos-tiktok-audio-mux
+            name: NixOS TikTok audio muxing test
     env:
       NIX_CONFIG: system-features = benchmark big-parallel nixos-test uid-range
     steps:
@@ -174,124 +168,6 @@ jobs:
         uses: ./.github/actions/setup-nix
 
       - name: Run test
-        run: nix build .#checks.x86_64-linux.nixos-service -L
-
-  nixos-video-budget:
-    name: NixOS video budget test
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    env:
-      NIX_CONFIG: system-features = benchmark big-parallel nixos-test uid-range
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Free disk space
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with:
-          android: true
-          dotnet: true
-          haskell: true
-          tool-cache: false
-
-      - name: Set up Nix
-        uses: ./.github/actions/setup-nix
-
-      - name: Run test
-        run: nix build .#checks.x86_64-linux.nixos-video-budget -L
-
-  nixos-private-media:
-    name: NixOS private media test
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    env:
-      NIX_CONFIG: system-features = benchmark big-parallel nixos-test uid-range
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Free disk space
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with:
-          android: true
-          dotnet: true
-          haskell: true
-          tool-cache: false
-
-      - name: Set up Nix
-        uses: ./.github/actions/setup-nix
-
-      - name: Run test
-        run: nix build .#checks.x86_64-linux.nixos-private-media -L
-
-  nixos-concurrency:
-    name: NixOS concurrency test
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    env:
-      NIX_CONFIG: system-features = benchmark big-parallel nixos-test uid-range
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Free disk space
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with:
-          android: true
-          dotnet: true
-          haskell: true
-          tool-cache: false
-
-      - name: Set up Nix
-        uses: ./.github/actions/setup-nix
-
-      - name: Run test
-        run: nix build .#checks.x86_64-linux.nixos-concurrency -L
-
-  nixos-deadline:
-    name: NixOS deadline test
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    env:
-      NIX_CONFIG: system-features = benchmark big-parallel nixos-test
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Free disk space
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with:
-          android: true
-          dotnet: true
-          haskell: true
-          tool-cache: false
-
-      - name: Set up Nix
-        uses: ./.github/actions/setup-nix
-
-      - name: Run test
-        run: nix build .#checks.x86_64-linux.nixos-deadline -L
-
-  nixos-tiktok-audio-mux:
-    name: NixOS TikTok audio muxing test
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    env:
-      NIX_CONFIG: system-features = benchmark big-parallel nixos-test uid-range
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Free disk space
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with:
-          android: true
-          dotnet: true
-          haskell: true
-          tool-cache: false
-
-      - name: Set up Nix
-        uses: ./.github/actions/setup-nix
-
-      - name: Run test
-        run: nix build .#checks.x86_64-linux.nixos-tiktok-audio-mux -L
+        env:
+          NIX_CHECK: ${{ matrix.check }}
+        run: nix build ".#checks.x86_64-linux.$NIX_CHECK" -L

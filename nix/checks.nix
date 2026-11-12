@@ -104,6 +104,16 @@ in
       ;
   };
 
+  nixos-video-budget = import ./tests/video-budget.nix {
+    inherit
+      pkgs
+      module
+      package
+      telegym
+      telegymModule
+      ;
+  };
+
   nixos-private-media = import ./tests/private-media.nix {
     inherit
       pkgs

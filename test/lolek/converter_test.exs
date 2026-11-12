@@ -14,6 +14,36 @@ defmodule Lolek.ConverterTest do
   ]
 
   @tag :tmp_dir
+  test "compresses above the target and accepts output above the target but below the ceiling", %{
+    tmp_dir: tmp_dir
+  } do
+    preserve_converter_env(fn ->
+      bin_dir = Path.join(tmp_dir, "bin")
+      file_path = Path.join(tmp_dir, "downloaded.mp4")
+      File.write!(file_path, String.duplicate("v", 10))
+      put_video_probe(bin_dir, "10.0", "h264")
+
+      put_fake_executable(bin_dir, "ffmpeg", """
+      for arg do
+        output="$arg"
+      done
+      printf encoded > "$output"
+      """)
+
+      put_compression_env()
+      Application.put_env(:lolek, :max_file_size_to_send_to_telegram, 20)
+      System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
+      {:ok, _apps} = Application.ensure_all_started(:erlexec)
+
+      assert {:ok, {:prepared_media, ^tmp_dir, [prepared_path]}} =
+               Lolek.Converter.adapt_to_telegram({:downloaded_media, tmp_dir, [file_path]})
+
+      assert File.read!(prepared_path) == "encoded"
+      refute File.exists?(file_path)
+    end)
+  end
+
+  @tag :tmp_dir
   test "returns an error when downloaded mp4 is missing", %{tmp_dir: tmp_dir} do
     file_path = Path.join(tmp_dir, "downloaded.mp4")
 
@@ -127,6 +157,8 @@ defmodule Lolek.ConverterTest do
       put_fake_executable(bin_dir, "ffmpeg", "exit 1")
       put_compression_env()
       Application.put_env(:lolek, :max_file_size_to_send_to_telegram, 100)
+      Application.put_env(:lolek, :max_video_size_to_send_to_telegram, 80)
+      Application.put_env(:lolek, :max_audio_size_to_send_to_telegram, 20)
 
       System.put_env("PATH", bin_dir <> path_delimiter() <> System.get_env("PATH", ""))
       {:ok, _apps} = Application.ensure_all_started(:erlexec)
@@ -735,8 +767,8 @@ defmodule Lolek.ConverterTest do
 
   defp put_compression_env do
     Application.put_env(:lolek, :max_file_size_to_send_to_telegram, 1)
-    Application.put_env(:lolek, :max_video_size_to_send_to_telegram, 800)
-    Application.put_env(:lolek, :max_audio_size_to_send_to_telegram, 200)
+    Application.put_env(:lolek, :max_video_size_to_send_to_telegram, 4)
+    Application.put_env(:lolek, :max_audio_size_to_send_to_telegram, 1)
     Application.put_env(:lolek, :max_file_size_to_compress, 100)
     Application.put_env(:lolek, :max_duration_to_compress, 100)
     Application.put_env(:lolek, :convert_command_timeout_seconds, 5)

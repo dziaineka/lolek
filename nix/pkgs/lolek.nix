@@ -8,7 +8,7 @@ let
   lib = pkgs.lib;
   mixBuilders = import ./mix-builders.nix { inherit pkgs; };
   inherit (mixBuilders) fetchMixDeps mixRelease;
-  version = "6.1.1";
+  version = "6.2.0";
   mkLolek =
     {
       curl ? pkgs.curl,
